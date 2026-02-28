@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.filter.outputs.apps }}
+      has_changes: ${{ steps.filter.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        name: Detect changed apps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CHANGED_FILES=$(gh pr view -R ${{ github.repository }} ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
+
+          VALID_APPS=()
+          for dir in apps/*/; do
+            APP_NAME=$(basename "$dir")
+            if echo "$CHANGED_FILES" | grep -q "^apps/$APP_NAME/"; then
+              VALID_APPS+=("$APP_NAME")
+            fi
+          done
+
+          if [ ${#VALID_APPS[@]} -eq 0 ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "apps=[]" >> $GITHUB_OUTPUT
+          else
+            JSON=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R . | jq -s -c .)
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "apps=$JSON" >> $GITHUB_OUTPUT
+            echo "Changed apps: $JSON"
+          fi
+
+  validate:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ fromJson(needs.detect-changes.outputs.apps) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: apps/${{ matrix.app }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: apps/${{ matrix.app }}
+        run: pnpm lint
+
+      - name: Build
+        working-directory: apps/${{ matrix.app }}
+        run: pnpm build
+
+  check-complete:
+    name: CI Check
+    needs: [detect-changes, validate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify results
+        run: |
+          if [ "${{ needs.detect-changes.outputs.has_changes }}" == "true" ] && [ "${{ needs.validate.result }}" != "success" ]; then
+            echo "Validation failed"; exit 1
+          fi
+          echo "All checks passed"
