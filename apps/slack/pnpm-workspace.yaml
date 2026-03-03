@@ -1,0 +1,2 @@
+overrides:
+  '@auxx/sdk': link:../../../auxxai/packages/sdk
