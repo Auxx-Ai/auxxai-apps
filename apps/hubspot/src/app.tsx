@@ -1,4 +1,4 @@
-// src/app.tsx
+// packages/sdk/template/src/app.tsx
 
 /**
  * Main app configuration for the Auxx extension.
@@ -9,9 +9,6 @@
  */
 
 import { TextBlock } from '@auxx/sdk/client'
-import { recordAction } from './hello-world-action'
-import { contactFormAction } from './contact-form-action'
-import { slackBlock } from './blocks/slack/slack.workflow'
 
 /**
  * App configuration object.
@@ -33,7 +30,7 @@ export const app = {
      * - label: User-facing text
      * - onTrigger: Function called when the action is clicked
      */
-    actions: [recordAction, contactFormAction],
+    actions: [],
 
     /**
      * Bulk actions that operate on multiple records at once.
@@ -86,7 +83,7 @@ export const app = {
      * Workflow blocks that perform actions within a workflow.
      * These appear in the workflow editor and can be dragged onto the canvas.
      */
-    blocks: [slackBlock],
+    blocks: [],
 
     /**
      * Workflow triggers that initiate workflows based on events.
@@ -114,38 +111,10 @@ export const app = {
 export function App() {
   return (
     <>
-      <TextBlock align="center">Welcome to Your Auxx Extension</TextBlock>
-
+      <TextBlock align="center">Notion</TextBlock>
       <TextBlock align="left">
         This extension demonstrates the various surfaces available in Auxx. Use the navigation to
         explore different features of your extension.
-      </TextBlock>
-
-      <TextBlock align="left">
-        Record Actions:Try the "Hello World" or "Send Contact Form" actions on any ticket record to
-        see how record-level actions work.
-      </TextBlock>
-
-      <TextBlock align="left">
-        Settings: Go to the Settings tab to configure your extension. Settings are defined in
-        src/app.settings.ts and automatically rendered by the platform with validation and
-        persistence.
-      </TextBlock>
-
-      <TextBlock align="left">
-        Form Examples: Check out src/contact-form-action.tsx to see how forms work in action
-        dialogs, and src/form-examples.tsx for more form patterns and use cases.
-      </TextBlock>
-
-      <TextBlock align="left">
-        Workflow Blocks: See src/send-email.workflow.ts for a complete example of a custom workflow
-        block. This demonstrates schema definition, node/panel components, and server-side execution
-        with the Workflow SDK.
-      </TextBlock>
-
-      <TextBlock align="left">
-        Development: This extension is running in development mode. Changes to your code will be
-        automatically reflected after rebuilding the extension.
       </TextBlock>
     </>
   )
