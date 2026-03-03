@@ -18,17 +18,26 @@ function resolveGetChannelId(input: any): string {
   switch (mode) {
     case 'list': {
       const channelId = input.getChannelList
-      if (!channelId) throw new BlockValidationError([{ field: 'getChannelList', message: 'Select a channel from the list.' }])
+      if (!channelId)
+        throw new BlockValidationError([
+          { field: 'getChannelList', message: 'Select a channel from the list.' },
+        ])
       return channelId
     }
     case 'id': {
       const channelId = input.getChannelId?.trim()
-      if (!channelId) throw new BlockValidationError([{ field: 'getChannelId', message: 'Channel ID is required.' }])
+      if (!channelId)
+        throw new BlockValidationError([
+          { field: 'getChannelId', message: 'Channel ID is required.' },
+        ])
       return channelId
     }
     case 'name': {
       const name = input.getChannelName?.trim().replace(/^#/, '')
-      if (!name) throw new BlockValidationError([{ field: 'getChannelName', message: 'Channel name is required.' }])
+      if (!name)
+        throw new BlockValidationError([
+          { field: 'getChannelName', message: 'Channel name is required.' },
+        ])
       return name
     }
     default:
@@ -36,7 +45,7 @@ function resolveGetChannelId(input: any): string {
   }
 }
 
-export async function executeChannel(operation: string, input: any): Promise<Record<string, string>> {
+export async function executeChannel(operation: string, input: any): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -44,7 +53,10 @@ export async function executeChannel(operation: string, input: any): Promise<Rec
   switch (operation) {
     case 'create': {
       const name = input.createChannelName?.trim()
-      if (!name) throw new BlockValidationError([{ field: 'createChannelName', message: 'Channel name is required.' }])
+      if (!name)
+        throw new BlockValidationError([
+          { field: 'createChannelName', message: 'Channel name is required.' },
+        ])
 
       const result = await slackApi('conversations.create', token, {
         name,

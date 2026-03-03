@@ -118,7 +118,14 @@ export function fileComputeOutputs(operation: string) {
       }
     case 'list':
       return {
-        files: Workflow.string({ label: 'Files (JSON)' }),
+        files: Workflow.array({
+          label: 'Files',
+          items: Workflow.struct({
+            name: Workflow.string({ label: 'Name' }),
+            path: Workflow.string({ label: 'Path' }),
+            type: Workflow.string({ label: 'Type' }),
+          }),
+        }),
         totalCount: Workflow.string({ label: 'Total Count' }),
       }
     default:

@@ -138,8 +138,8 @@ export function issueComputeOutputs(operation: string) {
         issueBody: Workflow.string({ label: 'Body' }),
         issueState: Workflow.string({ label: 'State' }),
         issueUrl: Workflow.string({ label: 'Issue URL' }),
-        issueLabels: Workflow.string({ label: 'Labels (JSON)' }),
-        issueAssignees: Workflow.string({ label: 'Assignees (JSON)' }),
+        issueLabels: Workflow.array({ label: 'Labels', items: Workflow.string() }),
+        issueAssignees: Workflow.array({ label: 'Assignees', items: Workflow.string() }),
         issueCreatedAt: Workflow.string({ label: 'Created At' }),
         issueUpdatedAt: Workflow.string({ label: 'Updated At' }),
       }

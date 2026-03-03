@@ -7,7 +7,10 @@
 
 import { Workflow, type WorkflowSchema } from '@auxx/sdk'
 import { ALL_OPERATIONS } from './resources/constants'
-import { databasePageInputs, databasePageComputeOutputs } from './resources/database-page/database-page-schema'
+import {
+  databasePageInputs,
+  databasePageComputeOutputs,
+} from './resources/database-page/database-page-schema'
 import { pageInputs, pageComputeOutputs } from './resources/page/page-schema'
 import { blockInputs, blockComputeOutputs } from './resources/block/block-schema'
 import { databaseInputs, databaseComputeOutputs } from './resources/database/database-schema'

@@ -24,7 +24,16 @@ import listUsers from './shared/list-users.server'
 export function SlackPanel() {
   const api = useWorkflow<typeof slackSchema>(slackSchema)
 
-  const { data, updateData, OptionsInput, VarFieldGroup, FieldRow, FieldDivider, Section, ConditionalRender } = api
+  const {
+    data,
+    updateData,
+    OptionsInput,
+    VarFieldGroup,
+    FieldRow,
+    FieldDivider,
+    Section,
+    ConditionalRender,
+  } = api
 
   // Guard: data may be undefined on first render before the platform populates it
   const resource = (data?.resource ?? 'message') as keyof typeof OPERATIONS
@@ -48,20 +57,16 @@ export function SlackPanel() {
     (resource === 'message' && operation === 'send' && sendTo === 'channel') ||
     (resource === 'message' && operation === 'delete')
 
-  const needsUsers =
-    resource === 'message' && operation === 'send' && sendTo === 'user'
+  const needsUsers = resource === 'message' && operation === 'send' && sendTo === 'user'
 
-  const { data: channels, loading: channelsLoading } = useSlackData(
-    'channels',
-    listChannels,
-    { enabled: needsChannels },
-  )
+  const { data: channels, loading: channelsLoading } = useSlackData('channels', listChannels, {
+    enabled: needsChannels,
+  })
 
-  const { data: users, loading: usersLoading } = useSlackData(
-    'users',
-    listUsers,
-    { delay: 400, enabled: needsUsers },
-  )
+  const { data: users, loading: usersLoading } = useSlackData('users', listUsers, {
+    delay: 400,
+    enabled: needsUsers,
+  })
 
   return (
     <WorkflowPanel>

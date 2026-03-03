@@ -7,6 +7,8 @@ import { FilePanel } from './resources/file/file-panel'
 import { RepositoryPanel } from './resources/repository/repository-panel'
 import { ReleasePanel } from './resources/release/release-panel'
 import { ReviewPanel } from './resources/review/review-panel'
+import { useGithubData } from './shared/use-github-data'
+import listRepos from './shared/list-repos.server'
 
 export function GitHubPanel() {
   const api = useWorkflow<typeof githubSchema>(githubSchema)
@@ -15,7 +17,6 @@ export function GitHubPanel() {
     updateData,
     StringInput,
     OptionsInput,
-    VarField,
     VarFieldGroup,
     FieldRow,
     FieldDivider,
@@ -25,6 +26,20 @@ export function GitHubPanel() {
 
   const resource = (data?.resource ?? 'issue') as keyof typeof OPERATIONS
   const operation = data?.operation ?? 'create'
+
+  const {
+    data: repos,
+    loading: reposLoading,
+    error: reposError,
+  } = useGithubData('repos', listRepos)
+
+  const repoOptions = reposLoading
+    ? [{ label: 'Loading repositories...', value: '' }]
+    : reposError
+      ? [{ label: `Error: ${reposError}`, value: '' }]
+      : repos.length === 0
+        ? [{ label: 'No repositories found', value: '' }]
+        : repos
 
   // Auto-reset operation when resource changes
   useEffect(() => {
@@ -88,12 +103,33 @@ export function GitHubPanel() {
 
       <Section title="Repository">
         <VarFieldGroup>
-          <VarField>
-            <StringInput name="owner" />
-          </VarField>
-          <VarField>
-            <StringInput name="repo" />
-          </VarField>
+          {/* From List */}
+          <ConditionalRender when={(d) => d.repoMode === 'list' || !d.repoMode}>
+            <FieldRow>
+              <OptionsInput name="repoMode" acceptsVariables={false} variant="outline" />
+              <FieldDivider />
+              <OptionsInput name="repoList" options={repoOptions} expand />
+            </FieldRow>
+          </ConditionalRender>
+
+          {/* By Owner/Repo */}
+          <ConditionalRender when={(d) => d.repoMode === 'owner-repo'}>
+            <FieldRow>
+              <OptionsInput name="repoMode" acceptsVariables={false} variant="outline" />
+              <FieldDivider />
+              <StringInput name="owner" />
+              <StringInput name="repo" />
+            </FieldRow>
+          </ConditionalRender>
+
+          {/* By Full Name */}
+          <ConditionalRender when={(d) => d.repoMode === 'full-name'}>
+            <FieldRow>
+              <OptionsInput name="repoMode" acceptsVariables={false} variant="outline" />
+              <FieldDivider />
+              <StringInput name="repoFullName" />
+            </FieldRow>
+          </ConditionalRender>
         </VarFieldGroup>
       </Section>
 

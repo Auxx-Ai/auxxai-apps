@@ -20,29 +20,27 @@ export const blockInputs = {
     label: 'Blocks',
     description: 'Blocks to append',
     items: Workflow.struct({
-      fields: {
-        blockType: Workflow.select({
-          label: 'Type',
-          options: BLOCK_TYPES as any,
-          default: 'paragraph',
-        }),
-        content: Workflow.string({
-          label: 'Content',
-          description: 'Text content of the block',
-          acceptsVariables: true,
-        }),
-        checked: Workflow.boolean({
-          label: 'Checked',
-          description: 'For to-do blocks: whether the checkbox is checked',
-          default: false,
-        }),
-        language: Workflow.select({
-          label: 'Language',
-          description: 'For code blocks: programming language',
-          options: CODE_LANGUAGES as any,
-          default: 'plain text',
-        }),
-      },
+      blockType: Workflow.select({
+        label: 'Type',
+        options: BLOCK_TYPES as any,
+        default: 'paragraph',
+      }),
+      content: Workflow.string({
+        label: 'Content',
+        description: 'Text content of the block',
+        acceptsVariables: true,
+      }),
+      checked: Workflow.boolean({
+        label: 'Checked',
+        description: 'For to-do blocks: whether the checkbox is checked',
+        default: false,
+      }),
+      language: Workflow.select({
+        label: 'Language',
+        description: 'For code blocks: programming language',
+        options: CODE_LANGUAGES as any,
+        default: 'plain text',
+      }),
     }),
   }),
 
@@ -70,13 +68,19 @@ export const blockInputs = {
 export function blockComputeOutputs(operation: string) {
   if (operation === 'append') {
     return {
-      blockIds: Workflow.string({ label: 'Block IDs (JSON)' }),
+      blockIds: Workflow.array({ label: 'Block IDs', items: Workflow.string() }),
       blockCount: Workflow.string({ label: 'Block Count' }),
     }
   }
   if (operation === 'getChildren') {
     return {
-      blocks: Workflow.string({ label: 'Blocks (JSON)' }),
+      blocks: Workflow.array({
+        label: 'Blocks',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          type: Workflow.string({ label: 'Type' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
       truncated: Workflow.string({ label: 'Truncated' }),
     }

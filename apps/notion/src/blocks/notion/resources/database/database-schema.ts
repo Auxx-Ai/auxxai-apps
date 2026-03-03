@@ -69,13 +69,27 @@ export function databaseComputeOutputs(operation: string) {
   }
   if (operation === 'getMany') {
     return {
-      databases: Workflow.string({ label: 'Databases (JSON)' }),
+      databases: Workflow.array({
+        label: 'Databases',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          title: Workflow.string({ label: 'Title' }),
+          url: Workflow.string({ label: 'URL' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
     }
   }
   if (operation === 'search') {
     return {
-      databases: Workflow.string({ label: 'Databases (JSON)' }),
+      databases: Workflow.array({
+        label: 'Databases',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          title: Workflow.string({ label: 'Title' }),
+          url: Workflow.string({ label: 'URL' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
       truncated: Workflow.string({ label: 'Truncated' }),
     }

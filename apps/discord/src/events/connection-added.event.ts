@@ -3,8 +3,8 @@
 import type { Connection } from '@auxx/sdk/server'
 
 /**
- * Airtable does not support webhooks, so this is a no-op.
+ * Discord uses a static Bot Token — no webhook setup needed on connection.
  */
 export default async function connectionAdded({ connection }: { connection: Connection }) {
-  // No-op — Airtable has no webhook system
+  // No-op — Discord bot tokens don't require webhook registration
 }

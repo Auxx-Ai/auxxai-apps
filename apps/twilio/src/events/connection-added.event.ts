@@ -3,8 +3,8 @@
 import type { Connection } from '@auxx/sdk/server'
 
 /**
- * Airtable does not support webhooks, so this is a no-op.
+ * Twilio auth tokens don't require webhook registration, so this is a no-op.
  */
 export default async function connectionAdded({ connection }: { connection: Connection }) {
-  // No-op — Airtable has no webhook system
+  // No-op — Twilio uses Basic Auth with Account SID + Auth Token
 }

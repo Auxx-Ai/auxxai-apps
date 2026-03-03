@@ -15,7 +15,7 @@ export interface DatabaseProperty {
  */
 export default async function listDatabaseProperties(
   databaseId: string,
-  { writableOnly = false }: { writableOnly?: boolean } = {},
+  { writableOnly = false }: { writableOnly?: boolean } = {}
 ): Promise<DatabaseProperty[]> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
@@ -42,7 +42,7 @@ export default async function listDatabaseProperties(
  */
 export async function getDatabaseSchema(
   token: string,
-  databaseId: string,
+  databaseId: string
 ): Promise<Record<string, { type: string }>> {
   const response = await notionApi('GET', `/databases/${databaseId}`, token)
   const properties = response.properties ?? {}

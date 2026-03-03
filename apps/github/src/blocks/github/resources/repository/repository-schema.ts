@@ -113,13 +113,27 @@ export function repositoryComputeOutputs(operation: string) {
       }
     case 'getIssues':
       return {
-        issues: Workflow.string({ label: 'Issues (JSON)' }),
+        issues: Workflow.array({
+          label: 'Issues',
+          items: Workflow.struct({
+            number: Workflow.string({ label: 'Number' }),
+            title: Workflow.string({ label: 'Title' }),
+            state: Workflow.string({ label: 'State' }),
+          }),
+        }),
         totalCount: Workflow.string({ label: 'Total Count' }),
         truncated: Workflow.string({ label: 'Truncated' }),
       }
     case 'getPullRequests':
       return {
-        pullRequests: Workflow.string({ label: 'Pull Requests (JSON)' }),
+        pullRequests: Workflow.array({
+          label: 'Pull Requests',
+          items: Workflow.struct({
+            number: Workflow.string({ label: 'Number' }),
+            title: Workflow.string({ label: 'Title' }),
+            state: Workflow.string({ label: 'State' }),
+          }),
+        }),
         totalCount: Workflow.string({ label: 'Total Count' }),
         truncated: Workflow.string({ label: 'Truncated' }),
       }

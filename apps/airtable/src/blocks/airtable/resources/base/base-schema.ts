@@ -33,13 +33,26 @@ export const baseInputs = {
 export function baseComputeOutputs(operation: string) {
   if (operation === 'getMany') {
     return {
-      bases: Workflow.string({ label: 'Bases (JSON)' }),
+      bases: Workflow.array({
+        label: 'Bases',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          name: Workflow.string({ label: 'Name' }),
+          permissionLevel: Workflow.string({ label: 'Permission Level' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
     }
   }
   if (operation === 'getSchema') {
     return {
-      tables: Workflow.string({ label: 'Tables (JSON)' }),
+      tables: Workflow.array({
+        label: 'Tables',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          name: Workflow.string({ label: 'Name' }),
+        }),
+      }),
       tableCount: Workflow.string({ label: 'Table Count' }),
     }
   }

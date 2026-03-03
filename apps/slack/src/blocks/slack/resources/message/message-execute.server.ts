@@ -16,7 +16,7 @@ function parseChannelIdFromUrl(url: string): string {
   const match = url.match(/\/([A-Z][A-Z0-9]+)\/?(?:\?.*)?$/)
   if (!match) {
     throw new Error(
-      'Invalid Slack channel URL. Expected format: https://app.slack.com/client/T.../C...',
+      'Invalid Slack channel URL. Expected format: https://app.slack.com/client/T.../C...'
     )
   }
   return match[1]
@@ -43,12 +43,18 @@ function resolveDeleteChannelId(input: any): string {
   switch (mode) {
     case 'list': {
       const channelId = input.deleteChannelList
-      if (!channelId) throw new BlockValidationError([{ field: 'deleteChannelList', message: 'Select a channel from the list.' }])
+      if (!channelId)
+        throw new BlockValidationError([
+          { field: 'deleteChannelList', message: 'Select a channel from the list.' },
+        ])
       return channelId
     }
     case 'id': {
       const channelId = input.deleteChannelId?.trim()
-      if (!channelId) throw new BlockValidationError([{ field: 'deleteChannelId', message: 'Channel ID is required.' }])
+      if (!channelId)
+        throw new BlockValidationError([
+          { field: 'deleteChannelId', message: 'Channel ID is required.' },
+        ])
       return channelId
     }
     default:
@@ -59,9 +65,9 @@ function resolveDeleteChannelId(input: any): string {
 /**
  * Send a message to a channel or user (existing logic from send-message.server.ts).
  */
-async function sendMessage(token: string, input: any): Promise<Record<string, string>> {
+async function sendMessage(token: string, input: any): Promise<Record<string, any>> {
   let targetChannelId: string
-  const dynamicOutputs: Record<string, string> = {}
+  const dynamicOutputs: Record<string, any> = {}
   const sendTo = input.sendTo ?? 'channel'
 
   if (sendTo === 'user') {
@@ -72,7 +78,9 @@ async function sendMessage(token: string, input: any): Promise<Record<string, st
       case 'list':
         userId = input.userList
         if (!userId)
-          throw new BlockValidationError([{ field: 'userList', message: 'Select a user from the list.' }])
+          throw new BlockValidationError([
+            { field: 'userList', message: 'Select a user from the list.' },
+          ])
         break
       case 'id':
         userId = input.user?.trim()
@@ -82,7 +90,9 @@ async function sendMessage(token: string, input: any): Promise<Record<string, st
       case 'email': {
         const email = input.userEmail?.trim()
         if (!email)
-          throw new BlockValidationError([{ field: 'userEmail', message: 'Email address is required.' }])
+          throw new BlockValidationError([
+            { field: 'userEmail', message: 'Email address is required.' },
+          ])
         const lookup = await slackApi('users.lookupByEmail', token, { email })
         if (!lookup.user?.id) throw new Error(`No Slack user found for email: ${email}`)
         userId = lookup.user.id
@@ -102,7 +112,9 @@ async function sendMessage(token: string, input: any): Promise<Record<string, st
       case 'list':
         targetChannelId = input.channelList
         if (!targetChannelId)
-          throw new BlockValidationError([{ field: 'channelList', message: 'Select a channel from the list.' }])
+          throw new BlockValidationError([
+            { field: 'channelList', message: 'Select a channel from the list.' },
+          ])
         break
       case 'id':
         targetChannelId = input.channel?.trim()
@@ -112,14 +124,18 @@ async function sendMessage(token: string, input: any): Promise<Record<string, st
       case 'name': {
         const name = input.channelName?.trim().replace(/^#/, '')
         if (!name)
-          throw new BlockValidationError([{ field: 'channelName', message: 'Channel name is required.' }])
+          throw new BlockValidationError([
+            { field: 'channelName', message: 'Channel name is required.' },
+          ])
         targetChannelId = name
         break
       }
       case 'url': {
         const url = input.channelUrl?.trim()
         if (!url)
-          throw new BlockValidationError([{ field: 'channelUrl', message: 'Channel URL is required.' }])
+          throw new BlockValidationError([
+            { field: 'channelUrl', message: 'Channel URL is required.' },
+          ])
         targetChannelId = parseChannelIdFromUrl(url)
         break
       }
@@ -145,7 +161,7 @@ async function sendMessage(token: string, input: any): Promise<Record<string, st
   }
 }
 
-export async function executeMessage(operation: string, input: any): Promise<Record<string, string>> {
+export async function executeMessage(operation: string, input: any): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -156,7 +172,10 @@ export async function executeMessage(operation: string, input: any): Promise<Rec
 
     case 'delete': {
       const messageTs = input.deleteMessageTs?.trim()
-      if (!messageTs) throw new BlockValidationError([{ field: 'deleteMessageTs', message: 'Message timestamp is required.' }])
+      if (!messageTs)
+        throw new BlockValidationError([
+          { field: 'deleteMessageTs', message: 'Message timestamp is required.' },
+        ])
 
       const channelId = resolveDeleteChannelId(input)
 
@@ -167,7 +186,9 @@ export async function executeMessage(operation: string, input: any): Promise<Rec
         })
       } catch (error: any) {
         if (error.message?.includes('cant_delete_message')) {
-          throw new Error('Cannot delete this message. Bot tokens can only delete messages the bot posted.')
+          throw new Error(
+            'Cannot delete this message. Bot tokens can only delete messages the bot posted.'
+          )
         }
         throw error
       }

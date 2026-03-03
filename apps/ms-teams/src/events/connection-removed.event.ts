@@ -3,8 +3,8 @@
 import type { Connection } from '@auxx/sdk/server'
 
 /**
- * Airtable does not support webhooks, so this is a no-op.
+ * No-op — Microsoft Teams webhook subscriptions may be added in a future release.
  */
 export default async function connectionRemoved({ connection }: { connection: Connection }) {
-  // No-op — Airtable has no webhook system
+  // No-op initially
 }

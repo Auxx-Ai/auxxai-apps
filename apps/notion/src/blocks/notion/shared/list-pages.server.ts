@@ -26,11 +26,9 @@ export default async function listPages(): Promise<{ label: string; value: strin
 
     for (const page of response.results ?? []) {
       const titleProp = Object.values(page.properties ?? {}).find(
-        (p: any) => p.type === 'title',
+        (p: any) => p.type === 'title'
       ) as any
-      const title =
-        titleProp?.title?.map((t: any) => t.plain_text).join('') ||
-        page.id
+      const title = titleProp?.title?.map((t: any) => t.plain_text).join('') || page.id
       pages.push({
         label: title,
         value: page.id,

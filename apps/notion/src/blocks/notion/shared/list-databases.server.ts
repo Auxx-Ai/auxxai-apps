@@ -25,8 +25,7 @@ export default async function listDatabases(): Promise<{ label: string; value: s
     const response = await notionApi('POST', '/search', token, { body })
 
     for (const db of response.results ?? []) {
-      const title =
-        db.title?.map((t: any) => t.plain_text).join('') || db.id
+      const title = db.title?.map((t: any) => t.plain_text).join('') || db.id
       databases.push({
         label: title,
         value: db.id,

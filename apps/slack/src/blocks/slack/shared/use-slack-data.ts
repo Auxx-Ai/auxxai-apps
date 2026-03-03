@@ -27,7 +27,7 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 export function useSlackData(
   key: string,
   fetcher: () => Promise<SelectOption[]>,
-  { delay = 0, enabled = true }: { delay?: number; enabled?: boolean } = {},
+  { delay = 0, enabled = true }: { delay?: number; enabled?: boolean } = {}
 ) {
   const [data, setData] = useState<SelectOption[]>(() => cache.get(key)?.data ?? [])
   const [loading, setLoading] = useState(false)
@@ -72,7 +72,7 @@ export function useSlackData(
         setLoading(false)
       }
     },
-    [key, fetcher],
+    [key, fetcher]
   )
 
   useEffect(() => {

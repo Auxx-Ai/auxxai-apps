@@ -66,7 +66,16 @@ function getCurrentTable(data: any): string | undefined {
 
 export function AirtablePanel() {
   const api = useWorkflow<typeof airtableSchema>(airtableSchema)
-  const { data, updateData, OptionsInput, VarFieldGroup, FieldRow, FieldDivider, Section, ConditionalRender } = api
+  const {
+    data,
+    updateData,
+    OptionsInput,
+    VarFieldGroup,
+    FieldRow,
+    FieldDivider,
+    Section,
+    ConditionalRender,
+  } = api
 
   const resource = (data?.resource ?? 'record') as keyof typeof OPERATIONS
   const operation = data?.operation ?? 'create'
@@ -85,8 +94,7 @@ export function AirtablePanel() {
   const currentTable = getCurrentTable(data)
 
   // Determine what data needs to be loaded
-  const needsBases =
-    resource === 'record' || (resource === 'base' && operation === 'getSchema')
+  const needsBases = resource === 'record' || (resource === 'base' && operation === 'getSchema')
 
   const needsTables = resource === 'record' && !!currentBase
 
@@ -100,40 +108,35 @@ export function AirtablePanel() {
     resource === 'record' && operation === 'search' && !!currentBase && !!currentTable
 
   // Data fetchers with composite cache keys
-  const { data: bases, loading: basesLoading } = useAirtableData(
-    'bases',
-    listBases,
-    { enabled: needsBases },
-  )
+  const { data: bases, loading: basesLoading } = useAirtableData('bases', listBases, {
+    enabled: needsBases,
+  })
 
-  const fetchTables = useCallback(
-    () => listTables(currentBase!),
-    [currentBase],
-  )
+  const fetchTables = useCallback(() => listTables(currentBase!), [currentBase])
   const { data: tables, loading: tablesLoading } = useAirtableData(
     `tables:${currentBase}`,
     fetchTables,
-    { enabled: needsTables },
+    { enabled: needsTables }
   )
 
   const fetchFields = useCallback(
     () => listFields(currentBase!, currentTable!, { writableOnly: true }),
-    [currentBase, currentTable],
+    [currentBase, currentTable]
   )
   const { data: fields, loading: fieldsLoading } = useAirtableData(
     `fields:${currentBase}:${currentTable}`,
     fetchFields,
-    { enabled: needsFields },
+    { enabled: needsFields }
   )
 
   const fetchViews = useCallback(
     () => listViews(currentBase!, currentTable!),
-    [currentBase, currentTable],
+    [currentBase, currentTable]
   )
   const { data: views, loading: viewsLoading } = useAirtableData(
     `views:${currentBase}:${currentTable}`,
     fetchViews,
-    { enabled: needsViews },
+    { enabled: needsViews }
   )
 
   return (

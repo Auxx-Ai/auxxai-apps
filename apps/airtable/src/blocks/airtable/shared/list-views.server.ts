@@ -5,7 +5,7 @@ import { airtableApi, throwConnectionNotFound } from './airtable-api'
 
 export default async function listViews(
   baseId: string,
-  tableId: string,
+  tableId: string
 ): Promise<{ label: string; value: string }[]> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()

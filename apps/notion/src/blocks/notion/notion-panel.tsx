@@ -50,7 +50,16 @@ function getCurrentDatabaseId(data: any): string | undefined {
 
 export function NotionPanel() {
   const api = useWorkflow<typeof notionSchema>(notionSchema)
-  const { data, updateData, OptionsInput, VarFieldGroup, FieldRow, FieldDivider, Section, ConditionalRender } = api
+  const {
+    data,
+    updateData,
+    OptionsInput,
+    VarFieldGroup,
+    FieldRow,
+    FieldDivider,
+    Section,
+    ConditionalRender,
+  } = api
 
   const resource = (data?.resource ?? 'databasePage') as keyof typeof OPERATIONS
   const operation = data?.operation ?? 'create'
@@ -69,8 +78,7 @@ export function NotionPanel() {
 
   // Determine what data needs to be loaded
   const needsDatabases =
-    resource === 'databasePage' ||
-    (resource === 'database' && operation === 'get')
+    resource === 'databasePage' || (resource === 'database' && operation === 'get')
 
   const needsProperties =
     resource === 'databasePage' &&
@@ -78,20 +86,18 @@ export function NotionPanel() {
     !!currentDatabaseId
 
   // Data fetchers with composite cache keys
-  const { data: databases, loading: databasesLoading } = useNotionData(
-    'databases',
-    listDatabases,
-    { enabled: needsDatabases },
-  )
+  const { data: databases, loading: databasesLoading } = useNotionData('databases', listDatabases, {
+    enabled: needsDatabases,
+  })
 
   const fetchProperties = useCallback(
     () => listDatabaseProperties(currentDatabaseId!, { writableOnly: true }),
-    [currentDatabaseId],
+    [currentDatabaseId]
   )
   const { data: properties, loading: propertiesLoading } = useNotionData(
     `properties:${currentDatabaseId}`,
     fetchProperties,
-    { enabled: needsProperties },
+    { enabled: needsProperties }
   )
 
   return (
@@ -161,11 +167,7 @@ export function NotionPanel() {
       </ConditionalRender>
 
       <ConditionalRender when={(d) => d.resource === 'database'}>
-        <DatabasePanel
-          api={api}
-          databases={databases}
-          databasesLoading={databasesLoading}
-        />
+        <DatabasePanel api={api} databases={databases} databasesLoading={databasesLoading} />
       </ConditionalRender>
 
       <ConditionalRender when={(d) => d.resource === 'user'}>

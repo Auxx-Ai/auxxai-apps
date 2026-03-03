@@ -3,8 +3,8 @@
 import type { Connection } from '@auxx/sdk/server'
 
 /**
- * Airtable does not support webhooks, so this is a no-op.
+ * No cleanup needed when Twilio connection is removed.
  */
 export default async function connectionRemoved({ connection }: { connection: Connection }) {
-  // No-op — Airtable has no webhook system
+  // No-op — Twilio has no registered webhooks to clean up
 }

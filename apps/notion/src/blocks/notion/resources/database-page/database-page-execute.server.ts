@@ -14,8 +14,8 @@ import { getDatabaseSchema } from '../../shared/list-database-properties.server'
 
 export async function executeDatabasePage(
   operation: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -36,13 +36,11 @@ export async function executeDatabasePage(
 
 async function createDatabasePage(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const databaseId = input.createDatabaseId?.trim()
   if (!databaseId) {
-    throw new BlockValidationError([
-      { field: 'createDatabaseId', message: 'Select a database.' },
-    ])
+    throw new BlockValidationError([{ field: 'createDatabaseId', message: 'Select a database.' }])
   }
 
   // Fetch database schema to identify title property and format properties
@@ -86,14 +84,14 @@ async function createDatabasePage(
     pageId: result.id ?? '',
     url: result.url ?? '',
     createdTime: result.created_time ?? '',
-    properties: JSON.stringify(result.properties ?? {}),
+    properties: result.properties ?? {},
   }
 }
 
 async function getDatabasePage(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const pageId = input.getPageId?.trim()
   if (!pageId) {
     throw new BlockValidationError([{ field: 'getPageId', message: 'Page ID is required.' }])
@@ -106,19 +104,17 @@ async function getDatabasePage(
     url: result.url ?? '',
     createdTime: result.created_time ?? '',
     lastEditedTime: result.last_edited_time ?? '',
-    properties: JSON.stringify(result.properties ?? {}),
+    properties: result.properties ?? {},
   }
 }
 
 async function getManyDatabasePages(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const databaseId = input.getManyDatabaseId?.trim()
   if (!databaseId) {
-    throw new BlockValidationError([
-      { field: 'getManyDatabaseId', message: 'Select a database.' },
-    ])
+    throw new BlockValidationError([{ field: 'getManyDatabaseId', message: 'Select a database.' }])
   }
 
   const returnAll = input.getManyReturnAll === true || input.getManyReturnAll === 'true'
@@ -178,11 +174,11 @@ async function getManyDatabasePages(
     'POST',
     `/databases/${databaseId}/query`,
     token,
-    { body, returnAll, limit },
+    { body, returnAll, limit }
   )
 
   return {
-    pages: JSON.stringify(results),
+    pages: results,
     totalCount: String(results.length),
     truncated: String(truncated),
   }
@@ -190,8 +186,8 @@ async function getManyDatabasePages(
 
 async function updateDatabasePage(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const pageId = input.updatePageId?.trim()
   if (!pageId) {
     throw new BlockValidationError([{ field: 'updatePageId', message: 'Page ID is required.' }])
@@ -221,6 +217,6 @@ async function updateDatabasePage(
     pageId: result.id ?? '',
     url: result.url ?? '',
     lastEditedTime: result.last_edited_time ?? '',
-    properties: JSON.stringify(result.properties ?? {}),
+    properties: result.properties ?? {},
   }
 }

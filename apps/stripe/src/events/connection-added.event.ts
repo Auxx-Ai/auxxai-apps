@@ -1,10 +1,6 @@
-// src/events/connection-added.event.ts
-
 import type { Connection } from '@auxx/sdk/server'
 
-/**
- * Airtable does not support webhooks, so this is a no-op.
- */
 export default async function connectionAdded({ connection }: { connection: Connection }) {
-  // No-op — Airtable has no webhook system
+  // No-op for initial implementation.
+  // Future: Set up Stripe webhook endpoints for trigger support.
 }

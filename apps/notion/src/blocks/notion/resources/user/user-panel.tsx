@@ -13,7 +13,15 @@ interface UserPanelProps {
 }
 
 export function UserPanel({ api }: UserPanelProps) {
-  const { StringInput, NumberInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    NumberInput,
+    BooleanInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>

@@ -6,8 +6,8 @@ import { notionApi, notionPaginatedRequest, throwConnectionNotFound } from '../.
 
 export async function executeUser(
   operation: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -22,10 +22,7 @@ export async function executeUser(
   }
 }
 
-async function getUser(
-  token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+async function getUser(token: string, input: Record<string, any>): Promise<Record<string, any>> {
   const userId = input.getUserId?.trim()
   if (!userId) {
     throw new BlockValidationError([{ field: 'getUserId', message: 'User ID is required.' }])
@@ -44,10 +41,9 @@ async function getUser(
 
 async function getManyUsers(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
-  const returnAll =
-    input.getManyUserReturnAll === true || input.getManyUserReturnAll === 'true'
+  input: Record<string, any>
+): Promise<Record<string, any>> {
+  const returnAll = input.getManyUserReturnAll === true || input.getManyUserReturnAll === 'true'
   const limit = returnAll ? undefined : Number(input.getManyUserLimit) || 100
 
   const { results } = await notionPaginatedRequest('GET', '/users', token, {
@@ -64,7 +60,7 @@ async function getManyUsers(
   }))
 
   return {
-    users: JSON.stringify(users),
+    users: users,
     totalCount: String(users.length),
   }
 }

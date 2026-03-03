@@ -57,8 +57,11 @@ function SlackNode() {
         else summary = data.user ? `@${data.user}` : undefined
       } else {
         if (data.channelMode === 'name')
-          summary = data.channelName ? `#${(data.channelName as string).replace(/^#/, '')}` : undefined
-        else if (data.channelMode === 'list') summary = data.channelList ? 'Channel selected' : undefined
+          summary = data.channelName
+            ? `#${(data.channelName as string).replace(/^#/, '')}`
+            : undefined
+        else if (data.channelMode === 'list')
+          summary = data.channelList ? 'Channel selected' : undefined
         else if (data.channelMode === 'url') summary = data.channelUrl ? 'From URL' : undefined
         else summary = data.channel ? `#${data.channel}` : undefined
       }
@@ -74,14 +77,14 @@ function SlackNode() {
       <WorkflowNodeRow label={label} />
 
       {summary && (
-        <WorkflowNodeText className="text-xs text-muted-foreground">
-          {summary}
-        </WorkflowNodeText>
+        <WorkflowNodeText className="text-xs text-muted-foreground">{summary}</WorkflowNodeText>
       )}
 
       {data.resource === 'message' && data.operation === 'send' && data.text && (
         <WorkflowNodeText className="text-xs">
-          {(data.text as string).length > 40 ? `${(data.text as string).substring(0, 40)}...` : data.text}
+          {(data.text as string).length > 40
+            ? `${(data.text as string).substring(0, 40)}...`
+            : data.text}
         </WorkflowNodeText>
       )}
 

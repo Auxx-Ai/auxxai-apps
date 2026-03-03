@@ -15,11 +15,9 @@ export const AIRTABLE_ERROR_MESSAGES: Record<string, string> = {
   NOT_AUTHORIZED: 'You do not have permission to access this base or table.',
   NOT_FOUND: 'The specified base, table, or record was not found.',
   INVALID_REQUEST_UNKNOWN: 'Invalid request. Please check your inputs.',
-  INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND:
-    'Base or table not found, or insufficient permissions.',
+  INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND: 'Base or table not found, or insufficient permissions.',
   MODEL_ID_NOT_FOUND: 'The specified record ID was not found.',
-  CANNOT_UPDATE_COMPUTED_FIELD:
-    'Cannot write to a computed field (formula, rollup, lookup, etc.).',
+  CANNOT_UPDATE_COMPUTED_FIELD: 'Cannot write to a computed field (formula, rollup, lookup, etc.).',
   INVALID_VALUE_FOR_COLUMN:
     'The value provided is not valid for this field type. Try enabling Typecast.',
   UNKNOWN_FIELD_NAME: 'One or more field names do not exist in this table.',
@@ -31,7 +29,7 @@ export const AIRTABLE_ERROR_MESSAGES: Record<string, string> = {
  */
 export function throwConnectionNotFound(): never {
   const err = new Error(
-    'Airtable not connected. Please reconnect in Settings → Apps → Airtable.',
+    'Airtable not connected. Please reconnect in Settings → Apps → Airtable.'
   ) as Error & { code: string; scope: string }
   err.code = 'CONNECTION_NOT_FOUND'
   err.scope = 'organization'
@@ -48,7 +46,7 @@ export async function airtableApi(
   options: {
     body?: Record<string, unknown>
     qs?: Record<string, string>
-  } = {},
+  } = {}
 ): Promise<any> {
   const url = new URL(`${AIRTABLE_API}${endpoint}`)
   if (options.qs) {
@@ -98,7 +96,7 @@ export async function airtablePaginatedGet(
   endpoint: string,
   token: string,
   params: Record<string, string>,
-  options: { returnAll: boolean; limit?: number },
+  options: { returnAll: boolean; limit?: number }
 ): Promise<{ records: any[]; truncated: boolean }> {
   const records: any[] = []
   let offset: string | undefined
@@ -127,7 +125,7 @@ export async function airtablePaginatedGet(
  * Used by create, update, and upsert operations.
  */
 export function toAirtableFields(
-  kvPairs: Array<{ fieldName: string; fieldValue: string }>,
+  kvPairs: Array<{ fieldName: string; fieldValue: string }>
 ): Record<string, string> {
   const fields: Record<string, string> = {}
   for (const { fieldName, fieldValue } of kvPairs) {
