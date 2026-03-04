@@ -6,8 +6,8 @@ import { airtableApi, throwConnectionNotFound } from '../../shared/airtable-api'
 
 export async function executeBase(
   operation: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -24,8 +24,8 @@ export async function executeBase(
 
 async function getManyBases(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const returnAll = input.getManyReturnAll === true || input.getManyReturnAll === 'true'
   const limit = returnAll ? undefined : Number(input.getManyLimit) || 100
 
@@ -59,15 +59,15 @@ async function getManyBases(
   const limited = returnAll ? bases : bases.slice(0, limit ?? 100)
 
   return {
-    bases: JSON.stringify(limited),
+    bases: limited,
     totalCount: String(limited.length),
   }
 }
 
 async function getBaseSchema(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const baseId = input.getSchemaBase?.trim()
   if (!baseId) {
     throw new BlockValidationError([{ field: 'getSchemaBase', message: 'Select a base.' }])
@@ -83,7 +83,7 @@ async function getBaseSchema(
   }))
 
   return {
-    tables: JSON.stringify(tables),
+    tables: tables,
     tableCount: String(tables.length),
   }
 }

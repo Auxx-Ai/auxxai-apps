@@ -10,8 +10,8 @@ import { executeRecord } from './resources/record/record-execute.server'
 import { executeBase } from './resources/base/base-execute.server'
 
 export default async function airtableExecute(
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const { resource, operation } = input
 
   const valid = VALID_OPERATIONS[resource]

@@ -96,7 +96,12 @@ export function pageComputeOutputs(operation: string) {
   }
   if (operation === 'search') {
     return {
-      results: Workflow.string({ label: 'Results (JSON)' }),
+      results: Workflow.array({
+        label: 'Results',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
       truncated: Workflow.string({ label: 'Truncated' }),
     }

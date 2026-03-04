@@ -43,7 +43,15 @@ export function userComputeOutputs(operation: string) {
   }
   if (operation === 'getMany') {
     return {
-      users: Workflow.string({ label: 'Users (JSON)' }),
+      users: Workflow.array({
+        label: 'Users',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          name: Workflow.string({ label: 'Name' }),
+          email: Workflow.string({ label: 'Email' }),
+          type: Workflow.string({ label: 'Type' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
     }
   }

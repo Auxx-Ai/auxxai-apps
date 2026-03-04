@@ -47,7 +47,9 @@ export function ChannelPanel({ api, channels, channelsLoading }: ChannelPanelPro
               <VarField>
                 <OptionsInput
                   name={'getChannelList'}
-                  options={channelsLoading ? [{ label: 'Loading channels...', value: '' }] : channels}
+                  options={
+                    channelsLoading ? [{ label: 'Loading channels...', value: '' }] : channels
+                  }
                 />
               </VarField>
             </ConditionalRender>

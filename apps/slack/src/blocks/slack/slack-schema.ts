@@ -11,7 +11,11 @@
 import { Workflow, type WorkflowSchema } from '@auxx/sdk'
 import { ALL_OPERATIONS } from './resources/constants'
 import { channelInputs, channelComputeOutputs } from './resources/channel/channel-schema'
-import { messageInputs, messageComputeOutputs, messageSendDynamicOutputs } from './resources/message/message-schema'
+import {
+  messageInputs,
+  messageComputeOutputs,
+  messageSendDynamicOutputs,
+} from './resources/message/message-schema'
 
 export const slackSchema = {
   inputs: {

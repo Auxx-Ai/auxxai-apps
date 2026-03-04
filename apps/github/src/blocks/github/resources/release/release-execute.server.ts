@@ -1,21 +1,17 @@
 import { getOrganizationConnection } from '@auxx/sdk/server'
 import { BlockValidationError } from '@auxx/sdk/shared'
 import { githubApi, githubPaginatedGet, throwConnectionNotFound } from '../../shared/github-api'
+import { resolveOwnerRepo } from '../../shared/github-helpers'
 
 export async function executeRelease(
   operation: string,
   input: Record<string, any>
-): Promise<Record<string, string>> {
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
 
-  const owner = input.owner?.trim()
-  const repo = input.repo?.trim()
-  if (!owner)
-    throw new BlockValidationError([{ field: 'owner', message: 'Repository owner is required.' }])
-  if (!repo)
-    throw new BlockValidationError([{ field: 'repo', message: 'Repository name is required.' }])
+  const { owner, repo } = resolveOwnerRepo(input)
 
   switch (operation) {
     case 'create': {
@@ -92,7 +88,7 @@ export async function executeRelease(
       )
 
       return {
-        releases: JSON.stringify(items),
+        releases: items,
         totalCount: String(totalCount),
         truncated: String(truncated),
       }

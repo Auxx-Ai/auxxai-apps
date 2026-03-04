@@ -6,8 +6,8 @@ import { notionApi, notionPaginatedRequest, throwConnectionNotFound } from '../.
 
 export async function executeBlock(
   operation: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -76,8 +76,8 @@ function toNotionBlock(item: {
 
 async function appendBlocks(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const blockId = input.appendBlockId?.trim()
   if (!blockId) {
     throw new BlockValidationError([
@@ -101,15 +101,15 @@ async function appendBlocks(
   const blockIds = (result.results ?? []).map((b: any) => b.id)
 
   return {
-    blockIds: JSON.stringify(blockIds),
+    blockIds: blockIds,
     blockCount: String(blockIds.length),
   }
 }
 
 async function getBlockChildren(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const blockId = input.getChildrenBlockId?.trim()
   if (!blockId) {
     throw new BlockValidationError([
@@ -117,19 +117,18 @@ async function getBlockChildren(
     ])
   }
 
-  const returnAll =
-    input.getChildrenReturnAll === true || input.getChildrenReturnAll === 'true'
+  const returnAll = input.getChildrenReturnAll === true || input.getChildrenReturnAll === 'true'
   const limit = returnAll ? undefined : Number(input.getChildrenLimit) || 100
 
   const { results, truncated } = await notionPaginatedRequest(
     'GET',
     `/blocks/${blockId}/children`,
     token,
-    { returnAll, limit },
+    { returnAll, limit }
   )
 
   return {
-    blocks: JSON.stringify(results),
+    blocks: results,
     totalCount: String(results.length),
     truncated: String(truncated),
   }

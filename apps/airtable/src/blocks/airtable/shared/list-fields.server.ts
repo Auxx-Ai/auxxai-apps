@@ -10,7 +10,7 @@ import { WRITABLE_FIELD_TYPES } from '../resources/constants'
 export default async function listFields(
   baseId: string,
   tableId: string,
-  { writableOnly = false }: { writableOnly?: boolean } = {},
+  { writableOnly = false }: { writableOnly?: boolean } = {}
 ): Promise<{ label: string; value: string }[]> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()

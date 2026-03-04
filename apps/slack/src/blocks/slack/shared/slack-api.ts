@@ -22,7 +22,8 @@ export const SLACK_ERROR_MESSAGES: Record<string, string> = {
   user_not_found: 'User not found. Verify the user ID or email.',
   users_not_found: 'No user found for the provided email address.',
   name_taken: 'A channel with this name already exists.',
-  cant_delete_message: 'Cannot delete this message. Bot tokens can only delete messages the bot posted.',
+  cant_delete_message:
+    'Cannot delete this message. Bot tokens can only delete messages the bot posted.',
 }
 
 export interface SlackApiResponse {
@@ -31,7 +32,16 @@ export interface SlackApiResponse {
   needed?: string
   provided?: string
   ts?: string
-  channel?: string | { id: string; name?: string; topic?: { value: string }; purpose?: { value: string }; num_members?: number; is_private?: boolean }
+  channel?:
+    | string
+    | {
+        id: string
+        name?: string
+        topic?: { value: string }
+        purpose?: { value: string }
+        num_members?: number
+        is_private?: boolean
+      }
   user?: { id: string }
   channels?: { id: string; name: string; is_private: boolean }[]
   members?: {
@@ -51,7 +61,7 @@ export interface SlackApiResponse {
  */
 export function throwConnectionNotFound(): never {
   const err = new Error(
-    'Slack workspace not connected. Please reconnect in Settings → Apps → Slack.',
+    'Slack workspace not connected. Please reconnect in Settings → Apps → Slack.'
   ) as Error & { code: string; scope: string }
   err.code = 'CONNECTION_NOT_FOUND'
   err.scope = 'organization'
@@ -64,7 +74,7 @@ export function throwConnectionNotFound(): never {
 export async function slackApi(
   method: string,
   token: string,
-  body: Record<string, unknown>,
+  body: Record<string, unknown>
 ): Promise<SlackApiResponse> {
   const response = await fetch(`${SLACK_API}/${method}`, {
     method: 'POST',

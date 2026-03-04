@@ -2,7 +2,11 @@
 
 import { getOrganizationConnection } from '@auxx/sdk/server'
 import { BlockValidationError } from '@auxx/sdk/shared'
-import { airtableApi, airtablePaginatedGet, throwConnectionNotFound } from '../../shared/airtable-api'
+import {
+  airtableApi,
+  airtablePaginatedGet,
+  throwConnectionNotFound,
+} from '../../shared/airtable-api'
 
 function parseFieldsJson(fieldsStr: string, fieldName: string): Record<string, string> {
   if (!fieldsStr?.trim()) return {}
@@ -16,7 +20,8 @@ function parseFieldsJson(fieldsStr: string, fieldName: string): Record<string, s
     throw new BlockValidationError([
       {
         field: fieldName,
-        message: 'Fields must be a valid JSON object. Example: {"Name": "John", "Email": "john@acme.com"}',
+        message:
+          'Fields must be a valid JSON object. Example: {"Name": "John", "Email": "john@acme.com"}',
       },
     ])
   }
@@ -24,8 +29,8 @@ function parseFieldsJson(fieldsStr: string, fieldName: string): Record<string, s
 
 export async function executeRecord(
   operation: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -50,8 +55,8 @@ export async function executeRecord(
 
 async function createRecord(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const baseId = input.createBase?.trim()
   if (!baseId) {
     throw new BlockValidationError([{ field: 'createBase', message: 'Select a base.' }])
@@ -74,14 +79,14 @@ async function createRecord(
   return {
     recordId: result.id ?? '',
     createdTime: result.createdTime ?? '',
-    fields: JSON.stringify(result.fields ?? {}),
+    fields: result.fields ?? {},
   }
 }
 
 async function deleteRecord(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const baseId = input.deleteBase?.trim()
   if (!baseId) {
     throw new BlockValidationError([{ field: 'deleteBase', message: 'Select a base.' }])
@@ -103,10 +108,7 @@ async function deleteRecord(
   }
 }
 
-async function getRecord(
-  token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+async function getRecord(token: string, input: Record<string, any>): Promise<Record<string, any>> {
   const baseId = input.getBase?.trim()
   if (!baseId) {
     throw new BlockValidationError([{ field: 'getBase', message: 'Select a base.' }])
@@ -125,14 +127,14 @@ async function getRecord(
   return {
     recordId: result.id ?? '',
     createdTime: result.createdTime ?? '',
-    fields: JSON.stringify(result.fields ?? {}),
+    fields: result.fields ?? {},
   }
 }
 
 async function searchRecords(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const baseId = input.searchBase?.trim()
   if (!baseId) {
     throw new BlockValidationError([{ field: 'searchBase', message: 'Select a base.' }])
@@ -159,7 +161,10 @@ async function searchRecords(
 
   const outputFields = input.searchOutputFields?.trim()
   if (outputFields) {
-    const fieldNames = outputFields.split(',').map((f: string) => f.trim()).filter(Boolean)
+    const fieldNames = outputFields
+      .split(',')
+      .map((f: string) => f.trim())
+      .filter(Boolean)
     fieldNames.forEach((name: string, i: number) => {
       params[`fields[${i}]`] = name
     })
@@ -172,11 +177,11 @@ async function searchRecords(
     `/${baseId}/${tableId}`,
     token,
     params,
-    { returnAll, limit },
+    { returnAll, limit }
   )
 
   return {
-    records: JSON.stringify(records),
+    records: records,
     totalCount: String(records.length),
     truncated: String(truncated),
   }
@@ -184,8 +189,8 @@ async function searchRecords(
 
 async function updateRecord(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const baseId = input.updateBase?.trim()
   if (!baseId) {
     throw new BlockValidationError([{ field: 'updateBase', message: 'Select a base.' }])
@@ -212,14 +217,14 @@ async function updateRecord(
   const updated = result.records?.[0]
   return {
     recordId: updated?.id ?? recordId,
-    fields: JSON.stringify(updated?.fields ?? {}),
+    fields: updated?.fields ?? {},
   }
 }
 
 async function upsertRecord(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const baseId = input.upsertBase?.trim()
   if (!baseId) {
     throw new BlockValidationError([{ field: 'upsertBase', message: 'Select a base.' }])
@@ -235,7 +240,10 @@ async function upsertRecord(
       { field: 'upsertMergeFields', message: 'At least one merge field is required for upsert.' },
     ])
   }
-  const fieldsToMergeOn = mergeFieldsStr.split(',').map((f: string) => f.trim()).filter(Boolean)
+  const fieldsToMergeOn = mergeFieldsStr
+    .split(',')
+    .map((f: string) => f.trim())
+    .filter(Boolean)
 
   const fields = parseFieldsJson(input.upsertFields, 'upsertFields')
   const typecast = input.upsertTypecast === true || input.upsertTypecast === 'true'
@@ -255,7 +263,7 @@ async function upsertRecord(
   return {
     recordId: record?.id ?? '',
     createdTime: record?.createdTime ?? '',
-    fields: JSON.stringify(record?.fields ?? {}),
+    fields: record?.fields ?? {},
     wasCreated: String(wasCreated),
   }
 }

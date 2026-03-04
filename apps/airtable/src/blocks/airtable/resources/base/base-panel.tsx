@@ -17,7 +17,15 @@ interface BasePanelProps {
 }
 
 export function BasePanel({ api, bases, basesLoading }: BasePanelProps) {
-  const { NumberInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    NumberInput,
+    BooleanInput,
+    OptionsInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   const loadingBases = basesLoading ? [{ label: 'Loading bases...', value: '' }] : bases
 

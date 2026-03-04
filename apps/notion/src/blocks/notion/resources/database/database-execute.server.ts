@@ -6,8 +6,8 @@ import { notionApi, notionPaginatedRequest, throwConnectionNotFound } from '../.
 
 export async function executeDatabase(
   operation: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -26,13 +26,11 @@ export async function executeDatabase(
 
 async function getDatabase(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const databaseId = input.getDatabaseId?.trim()
   if (!databaseId) {
-    throw new BlockValidationError([
-      { field: 'getDatabaseId', message: 'Select a database.' },
-    ])
+    throw new BlockValidationError([{ field: 'getDatabaseId', message: 'Select a database.' }])
   }
 
   const result = await notionApi('GET', `/databases/${databaseId}`, token)
@@ -43,14 +41,14 @@ async function getDatabase(
     databaseId: result.id ?? '',
     title,
     url: result.url ?? '',
-    properties: JSON.stringify(result.properties ?? {}),
+    properties: result.properties ?? {},
   }
 }
 
 async function getManyDatabases(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const returnAll = input.getManyDbReturnAll === true || input.getManyDbReturnAll === 'true'
   const limit = returnAll ? undefined : Number(input.getManyDbLimit) || 100
 
@@ -67,15 +65,15 @@ async function getManyDatabases(
   }))
 
   return {
-    databases: JSON.stringify(databases),
+    databases: databases,
     totalCount: String(databases.length),
   }
 }
 
 async function searchDatabases(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const returnAll = input.searchDbReturnAll === true || input.searchDbReturnAll === 'true'
   const limit = returnAll ? undefined : Number(input.searchDbLimit) || 100
 
@@ -102,7 +100,7 @@ async function searchDatabases(
   }))
 
   return {
-    databases: JSON.stringify(databases),
+    databases: databases,
     totalCount: String(databases.length),
     truncated: String(truncated),
   }

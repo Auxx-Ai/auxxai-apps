@@ -7,7 +7,7 @@ import { executeReview } from './resources/review/review-execute.server'
 
 export default async function githubExecute(
   input: Record<string, any>
-): Promise<Record<string, string>> {
+): Promise<Record<string, any>> {
   const { resource, operation } = input
 
   const valid = VALID_OPERATIONS[resource]

@@ -4,7 +4,7 @@ import { getOrganizationConnection } from '@auxx/sdk/server'
 import { airtableApi, throwConnectionNotFound } from './airtable-api'
 
 export default async function listTables(
-  baseId: string,
+  baseId: string
 ): Promise<{ label: string; value: string }[]> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()

@@ -49,8 +49,7 @@ export function DatabasePagePanel({
 
   // Get filter conditions based on selected property type
   const filterPropertyName = data?.getManyFilterProperty
-  const filterPropertyType =
-    properties.find((p) => p.value === filterPropertyName)?.type ?? ''
+  const filterPropertyType = properties.find((p) => p.value === filterPropertyName)?.type ?? ''
   const filterConditions = FILTER_CONDITIONS[filterPropertyType] ?? []
 
   return (
@@ -74,10 +73,7 @@ export function DatabasePagePanel({
         <Section title="Properties">
           <VarFieldGroup>
             <VarField>
-              <ArrayInput
-                name="createProperties"
-                propertyOptions={loadingProperties}
-              />
+              <ArrayInput name="createProperties" propertyOptions={loadingProperties} />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -175,10 +171,7 @@ export function DatabasePagePanel({
         <Section title="Properties">
           <VarFieldGroup>
             <VarField>
-              <ArrayInput
-                name="updateProperties"
-                propertyOptions={loadingProperties}
-              />
+              <ArrayInput name="updateProperties" propertyOptions={loadingProperties} />
             </VarField>
           </VarFieldGroup>
         </Section>

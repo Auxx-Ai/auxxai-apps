@@ -13,8 +13,8 @@ import { executeDatabase } from './resources/database/database-execute.server'
 import { executeUser } from './resources/user/user-execute.server'
 
 export default async function notionExecute(
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const { resource, operation } = input
 
   const valid = VALID_OPERATIONS[resource]

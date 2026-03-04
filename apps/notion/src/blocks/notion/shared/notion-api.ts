@@ -27,7 +27,7 @@ const ERROR_MESSAGES: Record<number, string> = {
  */
 export function throwConnectionNotFound(): never {
   const err = new Error(
-    'Notion not connected. Please add your integration token in Settings → Apps → Notion.',
+    'Notion not connected. Please add your integration token in Settings → Apps → Notion.'
   ) as Error & { code: string; scope: string }
   err.code = 'CONNECTION_NOT_FOUND'
   err.scope = 'organization'
@@ -44,7 +44,7 @@ export async function notionApi(
   options: {
     body?: Record<string, unknown>
     query?: Record<string, string>
-  } = {},
+  } = {}
 ): Promise<any> {
   const url = new URL(`${NOTION_API}${endpoint}`)
   if (options.query) {
@@ -102,7 +102,7 @@ export async function notionPaginatedRequest<T = any>(
     query?: Record<string, string>
     returnAll: boolean
     limit?: number
-  },
+  }
 ): Promise<{ results: T[]; truncated: boolean }> {
   const results: T[] = []
   let cursor: string | undefined
@@ -220,7 +220,7 @@ function formatPropertyValue(propType: string | undefined, value: string): any {
  */
 export function toNotionProperties(
   kvPairs: Array<{ propertyName: string; propertyValue: string }>,
-  schema: Record<string, { type: string }>,
+  schema: Record<string, { type: string }>
 ): Record<string, any> {
   const properties: Record<string, any> = {}
   for (const { propertyName, propertyValue } of kvPairs) {
@@ -251,7 +251,7 @@ export function buildSimpleFilter(
   propertyName: string,
   condition: string,
   value: string,
-  propertyType: string,
+  propertyType: string
 ): Record<string, any> {
   const filterType = getFilterType(propertyType)
   const filterValue = getFilterValue(condition, value, propertyType)
@@ -272,7 +272,11 @@ function getFilterType(propertyType: string): string {
     case 'url':
     case 'email':
     case 'phone_number':
-      return propertyType === 'title' ? 'title' : propertyType === 'rich_text' ? 'rich_text' : propertyType
+      return propertyType === 'title'
+        ? 'title'
+        : propertyType === 'rich_text'
+          ? 'rich_text'
+          : propertyType
     case 'number':
       return 'number'
     case 'checkbox':

@@ -18,8 +18,23 @@ interface MessagePanelProps {
   usersLoading: boolean
 }
 
-export function MessagePanel({ api, channels, channelsLoading, users, usersLoading }: MessagePanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, FieldRow, Section, ConditionalRender } = api
+export function MessagePanel({
+  api,
+  channels,
+  channelsLoading,
+  users,
+  usersLoading,
+}: MessagePanelProps) {
+  const {
+    StringInput,
+    OptionsInput,
+    BooleanInput,
+    VarField,
+    VarFieldGroup,
+    FieldRow,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>
@@ -48,7 +63,9 @@ export function MessagePanel({ api, channels, channelsLoading, users, usersLoadi
               <VarField>
                 <OptionsInput
                   name={'channelList'}
-                  options={channelsLoading ? [{ label: 'Loading channels...', value: '' }] : channels}
+                  options={
+                    channelsLoading ? [{ label: 'Loading channels...', value: '' }] : channels
+                  }
                 />
               </VarField>
             </ConditionalRender>
@@ -116,7 +133,10 @@ export function MessagePanel({ api, channels, channelsLoading, users, usersLoadi
 
       {/* Message: Delete */}
       <ConditionalRender when={(d) => d.operation === 'delete'}>
-        <Section title="Message to Delete" description="Only messages sent by the bot can be deleted.">
+        <Section
+          title="Message to Delete"
+          description="Only messages sent by the bot can be deleted."
+        >
           <VarFieldGroup>
             <VarField>
               <OptionsInput name={'deleteChannelMode'} />
@@ -126,7 +146,9 @@ export function MessagePanel({ api, channels, channelsLoading, users, usersLoadi
               <VarField>
                 <OptionsInput
                   name={'deleteChannelList'}
-                  options={channelsLoading ? [{ label: 'Loading channels...', value: '' }] : channels}
+                  options={
+                    channelsLoading ? [{ label: 'Loading channels...', value: '' }] : channels
+                  }
                 />
               </VarField>
             </ConditionalRender>

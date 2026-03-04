@@ -118,7 +118,14 @@ export function releaseComputeOutputs(operation: string) {
       }
     case 'getMany':
       return {
-        releases: Workflow.string({ label: 'Releases (JSON)' }),
+        releases: Workflow.array({
+          label: 'Releases',
+          items: Workflow.struct({
+            id: Workflow.string({ label: 'ID' }),
+            tagName: Workflow.string({ label: 'Tag Name' }),
+            name: Workflow.string({ label: 'Name' }),
+          }),
+        }),
         totalCount: Workflow.string({ label: 'Total Count' }),
         truncated: Workflow.string({ label: 'Truncated' }),
       }

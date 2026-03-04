@@ -92,7 +92,14 @@ export function reviewComputeOutputs(operation: string) {
       }
     case 'getMany':
       return {
-        reviews: Workflow.string({ label: 'Reviews (JSON)' }),
+        reviews: Workflow.array({
+          label: 'Reviews',
+          items: Workflow.struct({
+            id: Workflow.string({ label: 'ID' }),
+            state: Workflow.string({ label: 'State' }),
+            user: Workflow.string({ label: 'User' }),
+          }),
+        }),
         totalCount: Workflow.string({ label: 'Total Count' }),
       }
     case 'update':

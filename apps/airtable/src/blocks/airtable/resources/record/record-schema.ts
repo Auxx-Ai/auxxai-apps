@@ -27,7 +27,8 @@ export const recordInputs = {
   }),
   createTypecast: Workflow.boolean({
     label: 'Typecast',
-    description: 'Auto-convert string values to appropriate field types (linked records, selects, etc.)',
+    description:
+      'Auto-convert string values to appropriate field types (linked records, selects, etc.)',
     default: false,
   }),
 
@@ -80,7 +81,7 @@ export const recordInputs = {
   }),
   searchFilterFormula: Workflow.string({
     label: 'Filter Formula',
-    description: 'Airtable formula to filter records. E.g. NOT({Name} = \'\')',
+    description: "Airtable formula to filter records. E.g. NOT({Name} = '')",
     placeholder: 'NOT({Status} = "Done")',
     acceptsVariables: true,
   }),
@@ -163,7 +164,8 @@ export const recordInputs = {
   }),
   upsertMergeFields: Workflow.string({
     label: 'Fields to Match On',
-    description: 'Comma-separated field names to match existing records. E.g. "Email" or "Email, Name"',
+    description:
+      'Comma-separated field names to match existing records. E.g. "Email" or "Email, Name"',
     placeholder: 'Email',
     acceptsVariables: true,
   }),
@@ -203,7 +205,13 @@ export function recordComputeOutputs(operation: string) {
   }
   if (operation === 'search') {
     return {
-      records: Workflow.string({ label: 'Records (JSON)' }),
+      records: Workflow.array({
+        label: 'Records',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          createdTime: Workflow.string({ label: 'Created Time' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
       truncated: Workflow.string({ label: 'Truncated' }),
     }

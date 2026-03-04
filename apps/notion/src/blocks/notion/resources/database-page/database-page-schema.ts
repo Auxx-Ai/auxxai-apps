@@ -24,16 +24,14 @@ export const databasePageInputs = {
     label: 'Properties',
     description: 'Property values to set on the new page',
     items: Workflow.struct({
-      fields: {
-        propertyName: Workflow.select({
-          label: 'Property',
-          options: [] as { value: string; label: string }[],
-        }),
-        propertyValue: Workflow.string({
-          label: 'Value',
-          acceptsVariables: true,
-        }),
-      },
+      propertyName: Workflow.select({
+        label: 'Property',
+        options: [] as { value: string; label: string }[],
+      }),
+      propertyValue: Workflow.string({
+        label: 'Value',
+        acceptsVariables: true,
+      }),
     }),
   }),
   createContent: Workflow.string({
@@ -139,16 +137,14 @@ export const databasePageInputs = {
     label: 'Properties',
     description: 'Property values to update',
     items: Workflow.struct({
-      fields: {
-        propertyName: Workflow.select({
-          label: 'Property',
-          options: [] as { value: string; label: string }[],
-        }),
-        propertyValue: Workflow.string({
-          label: 'Value',
-          acceptsVariables: true,
-        }),
-      },
+      propertyName: Workflow.select({
+        label: 'Property',
+        options: [] as { value: string; label: string }[],
+      }),
+      propertyValue: Workflow.string({
+        label: 'Value',
+        acceptsVariables: true,
+      }),
     }),
   }),
 }
@@ -173,7 +169,13 @@ export function databasePageComputeOutputs(operation: string) {
   }
   if (operation === 'getMany') {
     return {
-      pages: Workflow.string({ label: 'Pages (JSON)' }),
+      pages: Workflow.array({
+        label: 'Pages',
+        items: Workflow.struct({
+          id: Workflow.string({ label: 'ID' }),
+          url: Workflow.string({ label: 'URL' }),
+        }),
+      }),
       totalCount: Workflow.string({ label: 'Total Count' }),
       truncated: Workflow.string({ label: 'Truncated' }),
     }

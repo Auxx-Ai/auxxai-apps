@@ -11,8 +11,8 @@ import {
 
 export async function executePage(
   operation: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
   const token = connection.value
@@ -31,8 +31,8 @@ export async function executePage(
 
 async function archivePage(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const pageId = input.archivePageId?.trim()
   if (!pageId) {
     throw new BlockValidationError([{ field: 'archivePageId', message: 'Page ID is required.' }])
@@ -48,10 +48,7 @@ async function archivePage(
   }
 }
 
-async function createPage(
-  token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+async function createPage(token: string, input: Record<string, any>): Promise<Record<string, any>> {
   const parentId = input.createPageParentId?.trim()
   if (!parentId) {
     throw new BlockValidationError([
@@ -61,9 +58,7 @@ async function createPage(
 
   const title = input.createPageTitle?.trim()
   if (!title) {
-    throw new BlockValidationError([
-      { field: 'createPageTitle', message: 'Title is required.' },
-    ])
+    throw new BlockValidationError([{ field: 'createPageTitle', message: 'Title is required.' }])
   }
 
   const body: Record<string, unknown> = {
@@ -96,8 +91,8 @@ async function createPage(
 
 async function searchPages(
   token: string,
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const returnAll = input.searchReturnAll === true || input.searchReturnAll === 'true'
   const limit = returnAll ? undefined : Number(input.searchLimit) || 100
 
@@ -114,15 +109,14 @@ async function searchPages(
   const sortDirection = input.searchSortDirection ?? 'descending'
   body.sort = { direction: sortDirection, timestamp: 'last_edited_time' }
 
-  const { results, truncated } = await notionPaginatedRequest(
-    'POST',
-    '/search',
-    token,
-    { body, returnAll, limit },
-  )
+  const { results, truncated } = await notionPaginatedRequest('POST', '/search', token, {
+    body,
+    returnAll,
+    limit,
+  })
 
   return {
-    results: JSON.stringify(results),
+    results: results,
     totalCount: String(results.length),
     truncated: String(truncated),
   }

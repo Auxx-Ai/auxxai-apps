@@ -10,8 +10,8 @@ import { executeChannel } from './resources/channel/channel-execute.server'
 import { executeMessage } from './resources/message/message-execute.server'
 
 export default async function slackExecute(
-  input: Record<string, any>,
-): Promise<Record<string, string>> {
+  input: Record<string, any>
+): Promise<Record<string, any>> {
   const { resource, operation } = input
 
   const valid = VALID_OPERATIONS[resource]
