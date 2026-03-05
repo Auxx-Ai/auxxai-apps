@@ -9,11 +9,21 @@ interface MemberPanelProps {
   api: UseWorkflowApi<typeof discordSchema>
   guilds: SelectOption[]
   guildsLoading: boolean
+  guildsError: string | null
   roles: SelectOption[]
   rolesLoading: boolean
+  rolesError: string | null
 }
 
-export function MemberPanel({ api, guilds, guildsLoading, roles, rolesLoading }: MemberPanelProps) {
+export function MemberPanel({
+  api,
+  guilds,
+  guildsLoading,
+  guildsError,
+  roles,
+  rolesLoading,
+  rolesError,
+}: MemberPanelProps) {
   const {
     StringInput,
     NumberInput,
@@ -25,8 +35,16 @@ export function MemberPanel({ api, guilds, guildsLoading, roles, rolesLoading }:
     ConditionalRender,
   } = api
 
-  const guildOptions = guildsLoading ? [{ label: 'Loading servers...', value: '' }] : guilds
-  const roleOptions = rolesLoading ? [{ label: 'Loading roles...', value: '' }] : roles
+  const guildOptions = guildsLoading
+    ? [{ label: 'Loading servers...', value: '' }]
+    : guildsError
+      ? [{ label: `Error: ${guildsError}`, value: '' }]
+      : guilds
+  const roleOptions = rolesLoading
+    ? [{ label: 'Loading roles...', value: '' }]
+    : rolesError
+      ? [{ label: `Error: ${rolesError}`, value: '' }]
+      : roles
 
   return (
     <>

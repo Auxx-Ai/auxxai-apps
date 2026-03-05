@@ -9,20 +9,26 @@ interface ChannelPanelProps {
   api: UseWorkflowApi<typeof discordSchema>
   guilds: SelectOption[]
   guildsLoading: boolean
+  guildsError: string | null
   channels: SelectOption[]
   channelsLoading: boolean
+  channelsError: string | null
   categories: SelectOption[]
   categoriesLoading: boolean
+  categoriesError: string | null
 }
 
 export function ChannelPanel({
   api,
   guilds,
   guildsLoading,
+  guildsError,
   channels,
   channelsLoading,
+  channelsError,
   categories,
   categoriesLoading,
+  categoriesError,
 }: ChannelPanelProps) {
   const {
     StringInput,
@@ -34,11 +40,21 @@ export function ChannelPanel({
     ConditionalRender,
   } = api
 
-  const guildOptions = guildsLoading ? [{ label: 'Loading servers...', value: '' }] : guilds
-  const channelOptions = channelsLoading ? [{ label: 'Loading channels...', value: '' }] : channels
+  const guildOptions = guildsLoading
+    ? [{ label: 'Loading servers...', value: '' }]
+    : guildsError
+      ? [{ label: `Error: ${guildsError}`, value: '' }]
+      : guilds
+  const channelOptions = channelsLoading
+    ? [{ label: 'Loading channels...', value: '' }]
+    : channelsError
+      ? [{ label: `Error: ${channelsError}`, value: '' }]
+      : channels
   const categoryOptions = categoriesLoading
     ? [{ label: 'Loading categories...', value: '' }]
-    : [{ label: 'None', value: '' }, ...categories]
+    : categoriesError
+      ? [{ label: `Error: ${categoriesError}`, value: '' }]
+      : [{ label: 'None', value: '' }, ...categories]
 
   return (
     <>

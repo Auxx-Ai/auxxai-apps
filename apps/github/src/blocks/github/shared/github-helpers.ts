@@ -14,25 +14,13 @@ export function resolveOwnerRepo(input: Record<string, any>): { owner: string; r
     return { owner, repo }
   }
 
-  if (mode === 'full-name') {
-    const fullName = input.repoFullName?.trim()
-    if (!fullName || !fullName.includes('/')) {
-      throw new BlockValidationError([
-        { field: 'repoFullName', message: 'Enter a repository in owner/repo format.' },
-      ])
-    }
-    const [owner, ...rest] = fullName.split('/')
-    return { owner, repo: rest.join('/') }
+  // mode === 'full-name'
+  const fullName = input.repoFullName?.trim()
+  if (!fullName || !fullName.includes('/')) {
+    throw new BlockValidationError([
+      { field: 'repoFullName', message: 'Enter a repository in owner/repo format.' },
+    ])
   }
-
-  // mode === 'owner-repo'
-  const owner = input.owner?.trim()
-  const repo = input.repo?.trim()
-  if (!owner) {
-    throw new BlockValidationError([{ field: 'owner', message: 'Repository owner is required.' }])
-  }
-  if (!repo) {
-    throw new BlockValidationError([{ field: 'repo', message: 'Repository name is required.' }])
-  }
-  return { owner, repo }
+  const [owner, ...rest] = fullName.split('/')
+  return { owner, repo: rest.join('/') }
 }

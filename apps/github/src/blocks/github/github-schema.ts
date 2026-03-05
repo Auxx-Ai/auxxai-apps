@@ -28,7 +28,6 @@ export const githubSchema = {
       description: 'How to specify the repository',
       options: [
         { value: 'list', label: 'From List' },
-        { value: 'owner-repo', label: 'By Owner/Repo' },
         { value: 'full-name', label: 'By Full Name' },
       ],
       default: 'list',
@@ -41,22 +40,10 @@ export const githubSchema = {
       options: [] as { value: string; label: string }[],
     }),
 
-    // Mode: By Owner/Repo — existing fields preserved
-    owner: Workflow.string({
-      label: 'Repository Owner',
-      placeholder: 'octocat',
-      acceptsVariables: true,
-    }),
-    repo: Workflow.string({
-      label: 'Repository Name',
-      placeholder: 'hello-world',
-      acceptsVariables: true,
-    }),
-
     // Mode: By Full Name — single combined field
     repoFullName: Workflow.string({
       label: 'Repository',
-      placeholder: 'octocat/hello-world',
+      placeholder: 'owner/repo',
       acceptsVariables: true,
     }),
 

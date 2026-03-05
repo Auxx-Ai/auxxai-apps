@@ -88,43 +88,49 @@ export function DiscordPanel() {
   const needsRoles =
     resource === 'member' && ['roleAdd', 'roleRemove'].includes(operation) && !!currentGuild
 
-  const { data: guilds, loading: guildsLoading } = useDiscordData('guilds', listGuilds, {
+  const {
+    data: guilds,
+    loading: guildsLoading,
+    error: guildsError,
+  } = useDiscordData('guilds', listGuilds, {
     enabled: needsGuilds,
   })
 
   const fetchChannels = useCallback(() => listChannels(currentGuild as string), [currentGuild])
-  const { data: channels, loading: channelsLoading } = useDiscordData(
-    `channels:${currentGuild}`,
-    fetchChannels,
-    { enabled: needsChannels }
-  )
+  const {
+    data: channels,
+    loading: channelsLoading,
+    error: channelsError,
+  } = useDiscordData(`channels:${currentGuild}`, fetchChannels, { enabled: needsChannels })
 
   const fetchTextChannels = useCallback(
     () => listChannels(currentGuild as string, 'text'),
     [currentGuild]
   )
-  const { data: textChannels, loading: textChannelsLoading } = useDiscordData(
-    `textChannels:${currentGuild}`,
-    fetchTextChannels,
-    { enabled: resource === 'message' && !!currentGuild }
-  )
+  const {
+    data: textChannels,
+    loading: textChannelsLoading,
+    error: textChannelsError,
+  } = useDiscordData(`textChannels:${currentGuild}`, fetchTextChannels, {
+    enabled: resource === 'message' && !!currentGuild,
+  })
 
   const fetchCategories = useCallback(
     () => listChannels(currentGuild as string, 'category'),
     [currentGuild]
   )
-  const { data: categories, loading: categoriesLoading } = useDiscordData(
-    `categories:${currentGuild}`,
-    fetchCategories,
-    { enabled: needsCategories }
-  )
+  const {
+    data: categories,
+    loading: categoriesLoading,
+    error: categoriesError,
+  } = useDiscordData(`categories:${currentGuild}`, fetchCategories, { enabled: needsCategories })
 
   const fetchRoles = useCallback(() => listRoles(currentGuild as string), [currentGuild])
-  const { data: roles, loading: rolesLoading } = useDiscordData(
-    `roles:${currentGuild}`,
-    fetchRoles,
-    { enabled: needsRoles }
-  )
+  const {
+    data: roles,
+    loading: rolesLoading,
+    error: rolesError,
+  } = useDiscordData(`roles:${currentGuild}`, fetchRoles, { enabled: needsRoles })
 
   return (
     <WorkflowPanel>
@@ -161,10 +167,13 @@ export function DiscordPanel() {
           api={api}
           guilds={guilds}
           guildsLoading={guildsLoading}
+          guildsError={guildsError}
           channels={channels}
           channelsLoading={channelsLoading}
+          channelsError={channelsError}
           categories={categories}
           categoriesLoading={categoriesLoading}
+          categoriesError={categoriesError}
         />
       </ConditionalRender>
 
@@ -173,8 +182,10 @@ export function DiscordPanel() {
           api={api}
           guilds={guilds}
           guildsLoading={guildsLoading}
+          guildsError={guildsError}
           channels={resource === 'message' ? textChannels : channels}
           channelsLoading={resource === 'message' ? textChannelsLoading : channelsLoading}
+          channelsError={resource === 'message' ? textChannelsError : channelsError}
         />
       </ConditionalRender>
 
@@ -183,8 +194,10 @@ export function DiscordPanel() {
           api={api}
           guilds={guilds}
           guildsLoading={guildsLoading}
+          guildsError={guildsError}
           roles={roles}
           rolesLoading={rolesLoading}
+          rolesError={rolesError}
         />
       </ConditionalRender>
     </WorkflowPanel>

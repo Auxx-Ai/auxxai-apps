@@ -112,22 +112,12 @@ export function GitHubPanel() {
             </FieldRow>
           </ConditionalRender>
 
-          {/* By Owner/Repo */}
-          <ConditionalRender when={(d) => d.repoMode === 'owner-repo'}>
-            <FieldRow>
-              <OptionsInput name="repoMode" acceptsVariables={false} variant="outline" />
-              <FieldDivider />
-              <StringInput name="owner" />
-              <StringInput name="repo" />
-            </FieldRow>
-          </ConditionalRender>
-
           {/* By Full Name */}
           <ConditionalRender when={(d) => d.repoMode === 'full-name'}>
             <FieldRow>
               <OptionsInput name="repoMode" acceptsVariables={false} variant="outline" />
               <FieldDivider />
-              <StringInput name="repoFullName" />
+              <StringInput name="repoFullName" placeholder="owner/repo" />
             </FieldRow>
           </ConditionalRender>
         </VarFieldGroup>
