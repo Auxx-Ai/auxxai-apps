@@ -8,7 +8,9 @@
     "dev": "auxx dev",
     "build": "auxx build",
     "lint": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@auxx/sdk": "link:/Users/mklooth/Sites/auxxai/packages/sdk",
@@ -22,6 +24,7 @@
     "@types/react": "19.1.8",
     "node-fetch": "3.3.2",
     "eslint": "^9.29.0",
-    "@typescript-eslint/parser": "^8.34.1"
+    "@typescript-eslint/parser": "^8.34.1",
+    "vitest": "^3.1.0"
   }
 }
