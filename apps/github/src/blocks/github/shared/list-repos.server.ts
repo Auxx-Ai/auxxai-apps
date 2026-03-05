@@ -1,3 +1,5 @@
+// src/blocks/github/shared/list-repos.server.ts
+
 import { getOrganizationConnection } from '@auxx/sdk/server'
 import { githubApi, throwConnectionNotFound } from './github-api'
 

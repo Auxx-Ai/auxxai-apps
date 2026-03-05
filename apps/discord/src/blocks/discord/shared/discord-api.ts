@@ -50,9 +50,24 @@ export async function discordApi<T = unknown>(
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
 
+  // Respect Discord rate limits
+  const remaining = Number(response.headers.get('x-ratelimit-remaining'))
+  const resetAfter = Number(response.headers.get('x-ratelimit-reset-after'))
+  if (remaining === 0 && resetAfter > 0) {
+    await sleep(resetAfter * 1000)
+  }
+
   // 204 No Content (e.g. reaction added, role added)
   if (response.status === 204) {
     return {} as T
+  }
+
+  // Rate limited — wait and retry once
+  if (response.status === 429) {
+    const retryData = await response.json()
+    const retryAfter = (retryData as any)?.retry_after ?? 1
+    await sleep(retryAfter * 1000)
+    return discordApi<T>(endpoint, token, options)
   }
 
   const data = await response.json()

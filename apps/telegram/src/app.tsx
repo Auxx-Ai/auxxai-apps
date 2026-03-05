@@ -1,5 +1,6 @@
 import { TextBlock } from '@auxx/sdk/client'
 import { telegramBlock } from './blocks/telegram/telegram.workflow'
+import { updateReceivedTrigger } from './blocks/telegram/triggers/update-received/update-received.workflow'
 
 export const app = {
   record: {
@@ -14,7 +15,7 @@ export const app = {
   },
   workflow: {
     blocks: [telegramBlock],
-    triggers: [],
+    triggers: [updateReceivedTrigger],
   },
 }
 
