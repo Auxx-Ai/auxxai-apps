@@ -12,7 +12,7 @@ interface FulfillmentPanelProps {
 }
 
 export function FulfillmentPanel({ api, locations, locationsLoading }: FulfillmentPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   const locationOptions = locationsLoading
     ? [{ label: 'Loading locations...', value: '' }]
@@ -95,7 +95,7 @@ export function FulfillmentPanel({ api, locations, locationsLoading }: Fulfillme
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getFields" />
+              <VarInput name="getFields" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -119,7 +119,7 @@ export function FulfillmentPanel({ api, locations, locationsLoading }: Fulfillme
               <StringInput name="getManyCreatedAtMax" />
             </VarField>
             <VarField>
-              <StringInput name="getManyFields" />
+              <VarInput name="getManyFields" />
             </VarField>
           </VarFieldGroup>
         </Section>

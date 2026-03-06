@@ -159,7 +159,7 @@ export function VariantPanel({ api }: VariantPanelProps) {
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getFields" />
+              <VarInput name="getFields" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -173,7 +173,7 @@ export function VariantPanel({ api }: VariantPanelProps) {
               <OptionsInput name="getManyLimit" />
             </VarField>
             <VarField>
-              <StringInput name="getManyFields" />
+              <VarInput name="getManyFields" />
             </VarField>
           </VarFieldGroup>
         </Section>

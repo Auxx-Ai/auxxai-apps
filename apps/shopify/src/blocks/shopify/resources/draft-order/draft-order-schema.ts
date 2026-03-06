@@ -2,10 +2,29 @@
 
 import { Workflow } from '@auxx/sdk'
 
+const draftOrderFieldOptions = [
+  { value: 'id', label: 'ID' },
+  { value: 'name', label: 'Name' },
+  { value: 'status', label: 'Status' },
+  { value: 'email', label: 'Email' },
+  { value: 'total_price', label: 'Total Price' },
+  { value: 'subtotal_price', label: 'Subtotal Price' },
+  { value: 'currency', label: 'Currency' },
+  { value: 'tags', label: 'Tags' },
+  { value: 'note', label: 'Note' },
+  { value: 'line_items', label: 'Line Items' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'order_id', label: 'Order ID' },
+  { value: 'invoice_url', label: 'Invoice URL' },
+  { value: 'created_at', label: 'Created At' },
+  { value: 'updated_at', label: 'Updated At' },
+] as const
+
 export const draftOrderInputs = {
   // --- Draft Order: Create ---
   createLineItems: Workflow.array({
     label: 'Line Items',
+    required: true,
     items: Workflow.struct({
       variantId: Workflow.string({ label: 'Variant ID', acceptsVariables: true }),
       title: Workflow.string({ label: 'Title (custom line item)', acceptsVariables: true }),
@@ -54,7 +73,7 @@ export const draftOrderInputs = {
   createShippingPhone: Workflow.phone({ label: 'Shipping Phone', acceptsVariables: true }),
 
   // --- Draft Order: Update ---
-  updateDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
+  updateDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
   updateNote: Workflow.string({ label: 'Note', acceptsVariables: true }),
   updateTags: Workflow.string({
     label: 'Tags',
@@ -64,11 +83,14 @@ export const draftOrderInputs = {
   updateEmail: Workflow.email({ label: 'Email', acceptsVariables: true }),
 
   // --- Draft Order: Get ---
-  getDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
-  getFields: Workflow.string({
+  getDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
+  getFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: draftOrderFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Draft Order: Get Many ---
@@ -93,17 +115,20 @@ export const draftOrderInputs = {
     ],
     default: '50',
   }),
-  getManyFields: Workflow.string({
+  getManyFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: draftOrderFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Draft Order: Delete ---
-  deleteDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
+  deleteDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
 
   // --- Draft Order: Complete ---
-  completeDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
+  completeDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
   completePaymentPending: Workflow.boolean({
     label: 'Payment Pending',
     description: 'Mark as payment pending instead of paid',
@@ -111,7 +136,7 @@ export const draftOrderInputs = {
   }),
 
   // --- Draft Order: Send Invoice ---
-  sendInvoiceDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
+  sendInvoiceDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
   sendInvoiceTo: Workflow.email({
     label: 'To Email',
     description: 'Recipient email (defaults to customer email)',

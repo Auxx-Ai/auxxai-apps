@@ -57,7 +57,7 @@ export async function executeCollection(
 
     case 'get': {
       const qs: Record<string, string> = {}
-      if (input.getFields) qs.fields = input.getFields
+      if (input.getFields?.length) qs.fields = input.getFields.join(',')
 
       // Try custom collection first, fall back to smart collection
       try {
@@ -85,7 +85,7 @@ export async function executeCollection(
       }
       if (input.getManyProductId) qs.product_id = input.getManyProductId
       if (input.getManyTitle) qs.title = input.getManyTitle
-      if (input.getManyFields) qs.fields = input.getManyFields
+      if (input.getManyFields?.length) qs.fields = input.getManyFields.join(',')
 
       const endpoint =
         input.getManyType === 'smart' ? '/smart_collections.json' : '/custom_collections.json'

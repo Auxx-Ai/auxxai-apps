@@ -9,11 +9,15 @@ export default async function contactTriggerExecute(
   if (!connection?.value) return { events: [], state }
 
   const token = connection.value
-  const triggerOn = input.triggerOn as string
+  const rawTriggerOn = input.triggerOn
+  const triggerOn: string[] = Array.isArray(rawTriggerOn) ? rawTriggerOn : [rawTriggerOn as string]
   const now = new Date().toISOString()
   const personFields = resolvePersonFields('*')
 
-  if (triggerOn === 'contactCreated' || triggerOn === 'contactUpdated') {
+  const events: Record<string, string>[] = []
+  let newState = { ...state }
+
+  if (triggerOn.includes('contactCreated') || triggerOn.includes('contactUpdated')) {
     const lastChecked = (state.lastChecked as string) || now
 
     const result = await contactsApiRequest(token, 'GET', '/people/me/connections', undefined, {
@@ -25,7 +29,6 @@ export default async function contactTriggerExecute(
 
     const contacts = result.connections || []
 
-    // Filter contacts modified since last poll
     const filtered = contacts.filter((c: any) => {
       const sources = c.metadata?.sources || []
       const updateTime = sources[0]?.updateTime
@@ -33,80 +36,81 @@ export default async function contactTriggerExecute(
       return updateTime >= lastChecked
     })
 
-    // For contactCreated, all modified contacts since last check are returned
-    // (the People API doesn't distinguish create vs update reliably)
-    const events = filtered.map((person: any) => mapTriggerContact(person))
+    for (const person of filtered) {
+      const mapped = mapTriggerContact(person)
+      if (triggerOn.includes('contactCreated')) {
+        events.push({ ...mapped, changeType: 'created' })
+      } else if (triggerOn.includes('contactUpdated')) {
+        events.push({ ...mapped, changeType: 'updated' })
+      }
+    }
 
-    return {
-      events,
-      state: {
-        ...state,
-        lastChecked: now,
-        syncToken: result.nextSyncToken || state.syncToken,
-      },
+    newState = {
+      ...newState,
+      lastChecked: now,
+      syncToken: result.nextSyncToken || state.syncToken,
     }
   }
 
-  if (triggerOn === 'contactDeleted') {
+  if (triggerOn.includes('contactDeleted')) {
     const syncToken = state.syncToken as string | undefined
 
     if (!syncToken) {
-      // First poll: get sync token without processing
       const result = await contactsApiRequest(token, 'GET', '/people/me/connections', undefined, {
         personFields: 'metadata',
         requestSyncToken: true,
         pageSize: 1,
       })
-      return {
-        events: [],
-        state: { ...state, syncToken: result.nextSyncToken, lastChecked: now },
-      }
-    }
-
-    try {
-      const result = await contactsApiRequest(token, 'GET', '/people/me/connections', undefined, {
-        personFields,
-        syncToken,
-        requestSyncToken: true,
-      })
-
-      const contacts = result.connections || []
-      const deleted = contacts.filter((c: any) => c.metadata?.deleted)
-
-      const events = deleted.map((person: any) => ({
-        contactId: person.resourceName?.split('/')[1] || '',
-        resourceName: person.resourceName || '',
-        givenName: '',
-        familyName: '',
-        displayName: '',
-        email: '',
-        phone: '',
-        company: '',
-        jobTitle: '',
-      }))
-
-      return {
-        events,
-        state: { ...state, syncToken: result.nextSyncToken, lastChecked: now },
-      }
-    } catch (err: any) {
-      // Sync token expired — reset and get a fresh one
-      if (err.message?.includes('410') || err.message?.includes('EXPIRED')) {
+      newState = { ...newState, syncToken: result.nextSyncToken, lastChecked: now }
+    } else {
+      try {
         const result = await contactsApiRequest(token, 'GET', '/people/me/connections', undefined, {
-          personFields: 'metadata',
+          personFields,
+          syncToken,
           requestSyncToken: true,
-          pageSize: 1,
         })
-        return {
-          events: [],
-          state: { ...state, syncToken: result.nextSyncToken, lastChecked: now },
+
+        const contacts = result.connections || []
+        const deleted = contacts.filter((c: any) => c.metadata?.deleted)
+
+        for (const person of deleted) {
+          events.push({
+            changeType: 'deleted',
+            contactId: person.resourceName?.split('/')[1] || '',
+            resourceName: person.resourceName || '',
+            givenName: '',
+            familyName: '',
+            displayName: '',
+            email: '',
+            phone: '',
+            company: '',
+            jobTitle: '',
+          })
+        }
+
+        newState = { ...newState, syncToken: result.nextSyncToken, lastChecked: now }
+      } catch (err: any) {
+        if (err.message?.includes('410') || err.message?.includes('EXPIRED')) {
+          const result = await contactsApiRequest(
+            token,
+            'GET',
+            '/people/me/connections',
+            undefined,
+            {
+              personFields: 'metadata',
+              requestSyncToken: true,
+              pageSize: 1,
+            }
+          )
+          newState = { ...newState, syncToken: result.nextSyncToken, lastChecked: now }
+        } else {
+          throw err
         }
       }
-      throw err
     }
   }
 
-  return { events: [], state: { ...state, lastChecked: now } }
+  return { events, state: newState }
 }
 
 function mapTriggerContact(person: any) {

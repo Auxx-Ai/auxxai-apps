@@ -4,30 +4,23 @@ import { Workflow, type WorkflowSchema } from '@auxx/sdk'
 
 export const updateReceivedSchema = {
   inputs: {
-    filterMessage: Workflow.boolean({
-      label: 'Messages',
-      description: 'Trigger on new messages',
-      default: true,
-    }),
-    filterEditedMessage: Workflow.boolean({
-      label: 'Edited Messages',
-      description: 'Trigger on edited messages',
-      default: true,
-    }),
-    filterCallbackQuery: Workflow.boolean({
-      label: 'Callback Queries',
-      description: 'Trigger on inline keyboard button presses',
-      default: true,
-    }),
-    filterChannelPost: Workflow.boolean({
-      label: 'Channel Posts',
-      description: 'Trigger on new channel posts',
-      default: true,
-    }),
-    filterEditedChannelPost: Workflow.boolean({
-      label: 'Edited Channel Posts',
-      description: 'Trigger on edited channel posts',
-      default: true,
+    updateTypes: Workflow.select({
+      label: 'Update Types',
+      multi: true,
+      options: [
+        { value: 'message', label: 'Messages' },
+        { value: 'edited_message', label: 'Edited Messages' },
+        { value: 'callback_query', label: 'Callback Queries' },
+        { value: 'channel_post', label: 'Channel Posts' },
+        { value: 'edited_channel_post', label: 'Edited Channel Posts' },
+      ],
+      default: [
+        'message',
+        'edited_message',
+        'callback_query',
+        'channel_post',
+        'edited_channel_post',
+      ],
     }),
     allowedChatIds: Workflow.string({
       label: 'Allowed Chat IDs',
@@ -52,7 +45,10 @@ export const updateReceivedSchema = {
       label: 'Chat Type',
       description: 'private, group, supergroup, or channel',
     }),
-    chatTitle: Workflow.string({ label: 'Chat Title', description: 'Chat title (groups/channels)' }),
+    chatTitle: Workflow.string({
+      label: 'Chat Title',
+      description: 'Chat title (groups/channels)',
+    }),
     fromUserId: Workflow.number({ label: 'From User ID' }),
     fromUsername: Workflow.string({ label: 'From Username' }),
     fromFirstName: Workflow.string({ label: 'From First Name' }),

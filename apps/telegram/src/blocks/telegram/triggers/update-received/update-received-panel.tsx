@@ -4,8 +4,8 @@ import { useEffect } from 'react'
 import { WorkflowPanel, useWorkflow } from '@auxx/sdk/client'
 import { updateReceivedSchema } from './update-received-schema'
 
-/** Map from schema input name → triggerData.updateType value */
-const UPDATE_TYPE_MAP: Record<string, string> = {
+/** Legacy boolean field → updateType value mapping for backwards compat */
+const LEGACY_BOOLEAN_MAP: Record<string, string> = {
   filterMessage: 'message',
   filterEditedMessage: 'edited_message',
   filterCallbackQuery: 'callback_query',
@@ -13,7 +13,8 @@ const UPDATE_TYPE_MAP: Record<string, string> = {
   filterEditedChannelPost: 'edited_channel_post',
 }
 
-/** Parse a comma-separated string into a trimmed, non-empty array of strings */
+const ALL_UPDATE_TYPES = Object.values(LEGACY_BOOLEAN_MAP)
+
 function parseCSV(value: string | undefined): string[] {
   if (!value) return []
   return value
@@ -22,27 +23,27 @@ function parseCSV(value: string | undefined): string[] {
     .filter(Boolean)
 }
 
-/**
- * Build triggerFilters from the panel input values.
- * Returns undefined if no filtering is needed (all types enabled, no ID filters).
- */
-function buildTriggerFilters(data: Record<string, any>): Record<string, string[]> | undefined {
-  const enabledTypes: string[] = []
-  let allEnabled = true
-
-  for (const [inputName, updateType] of Object.entries(UPDATE_TYPE_MAP)) {
-    // Default to true if not explicitly set
+function resolveUpdateTypes(data: Record<string, any>): string[] {
+  if (data.updateTypes !== undefined) {
+    return Array.isArray(data.updateTypes) ? data.updateTypes : [data.updateTypes]
+  }
+  // Backwards compat: derive from legacy boolean fields
+  const types: string[] = []
+  for (const [inputName, updateType] of Object.entries(LEGACY_BOOLEAN_MAP)) {
     if (data[inputName] !== false) {
-      enabledTypes.push(updateType)
-    } else {
-      allEnabled = false
+      types.push(updateType)
     }
   }
+  return types
+}
+
+function buildTriggerFilters(data: Record<string, any>): Record<string, string[]> | undefined {
+  const enabledTypes = resolveUpdateTypes(data)
+  const allEnabled = enabledTypes.length === ALL_UPDATE_TYPES.length
 
   const chatIds = parseCSV(data.allowedChatIds)
   const userIds = parseCSV(data.allowedUserIds)
 
-  // No filtering needed — all types enabled, no ID filters
   if (allEnabled && chatIds.length === 0 && userIds.length === 0) {
     return undefined
   }
@@ -63,55 +64,26 @@ function buildTriggerFilters(data: Record<string, any>): Record<string, string[]
 }
 
 export function UpdateReceivedPanel() {
-  const {
-    data,
-    updateData,
-    BooleanInput,
-    StringInput,
-    VarField,
-    VarFieldGroup,
-    Section,
-  } = useWorkflow<typeof updateReceivedSchema>(updateReceivedSchema)
+  const { data, updateData, OptionsInput, StringInput, VarField, VarFieldGroup, Section } =
+    useWorkflow<typeof updateReceivedSchema>(updateReceivedSchema)
 
-  // Recompute triggerFilters whenever filter inputs change
   useEffect(() => {
     const filters = buildTriggerFilters(data ?? {})
     const current = (data as any)?.triggerFilters
 
-    // Avoid infinite loop — only update if changed
     const filtersJson = JSON.stringify(filters)
     const currentJson = JSON.stringify(current)
     if (filtersJson !== currentJson) {
       updateData({ triggerFilters: filters } as any)
     }
-  }, [
-    data?.filterMessage,
-    data?.filterEditedMessage,
-    data?.filterCallbackQuery,
-    data?.filterChannelPost,
-    data?.filterEditedChannelPost,
-    data?.allowedChatIds,
-    data?.allowedUserIds,
-  ])
+  }, [data?.updateTypes, data?.allowedChatIds, data?.allowedUserIds])
 
   return (
     <WorkflowPanel>
       <Section title="Update Types">
         <VarFieldGroup>
           <VarField>
-            <BooleanInput name="filterMessage" />
-          </VarField>
-          <VarField>
-            <BooleanInput name="filterEditedMessage" />
-          </VarField>
-          <VarField>
-            <BooleanInput name="filterCallbackQuery" />
-          </VarField>
-          <VarField>
-            <BooleanInput name="filterChannelPost" />
-          </VarField>
-          <VarField>
-            <BooleanInput name="filterEditedChannelPost" />
+            <OptionsInput name="updateTypes" />
           </VarField>
         </VarFieldGroup>
       </Section>

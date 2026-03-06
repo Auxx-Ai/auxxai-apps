@@ -15,12 +15,12 @@ export const rowTriggerInputs = {
   }),
   triggerOn: Workflow.select({
     label: 'Trigger On',
+    multi: true,
     options: [
       { value: 'rowAdded', label: 'Row Added' },
       { value: 'rowUpdated', label: 'Row Updated' },
-      { value: 'anyUpdate', label: 'Row Added or Updated' },
     ],
-    default: 'anyUpdate',
+    default: ['rowAdded', 'rowUpdated'],
   }),
   headerRow: Workflow.string({
     label: 'Header Row',

@@ -4,30 +4,31 @@ import { useEffect } from 'react'
 import { WorkflowPanel, useWorkflow } from '@auxx/sdk/client'
 import { messageReceivedSchema } from './message-received-schema'
 
+function resolveEventTypes(data: Record<string, any>): string[] {
+  if (data.eventTypes !== undefined) {
+    return Array.isArray(data.eventTypes) ? data.eventTypes : [data.eventTypes]
+  }
+  // Backwards compat: derive from legacy boolean fields
+  const types: string[] = []
+  if (data.filterMessages !== false) types.push('message')
+  if (data.filterStatusUpdates === true) types.push('status')
+  return types
+}
+
 function buildTriggerFilters(data: Record<string, any>): Record<string, string[]> | undefined {
-  const enabledTypes: string[] = []
-  let hasAnyFilter = false
-
-  if (data.filterMessages !== false) {
-    enabledTypes.push('message')
-  } else {
-    hasAnyFilter = true
-  }
-
-  if (data.filterStatusUpdates === true) {
-    enabledTypes.push('status')
-  }
-
-  // If not filtering status updates and messages are enabled, no event type filter needed
-  const needsEventTypeFilter = hasAnyFilter || data.filterStatusUpdates === true
-
+  const enabledTypes = resolveEventTypes(data)
   const filters: Record<string, string[]> = {}
 
-  if (needsEventTypeFilter) {
+  const bothEnabled = enabledTypes.includes('message') && enabledTypes.includes('status')
+  const onlyMessages = enabledTypes.length === 1 && enabledTypes[0] === 'message'
+
+  if (!bothEnabled && !onlyMessages) {
+    filters.eventType = enabledTypes
+  } else if (bothEnabled) {
     filters.eventType = enabledTypes
   }
 
-  if (data.filterStatusUpdates && data.filterStatuses && data.filterStatuses !== 'all') {
+  if (enabledTypes.includes('status') && data.filterStatuses && data.filterStatuses !== 'all') {
     filters.statusType = [data.filterStatuses]
   }
 
@@ -35,16 +36,8 @@ function buildTriggerFilters(data: Record<string, any>): Record<string, string[]
 }
 
 export function MessageReceivedPanel() {
-  const {
-    data,
-    updateData,
-    BooleanInput,
-    OptionsInput,
-    VarField,
-    VarFieldGroup,
-    Section,
-    ConditionalRender,
-  } = useWorkflow<typeof messageReceivedSchema>(messageReceivedSchema)
+  const { data, updateData, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } =
+    useWorkflow<typeof messageReceivedSchema>(messageReceivedSchema)
 
   useEffect(() => {
     const filters = buildTriggerFilters(data ?? {})
@@ -55,22 +48,28 @@ export function MessageReceivedPanel() {
     if (filtersJson !== currentJson) {
       updateData({ triggerFilters: filters } as any)
     }
-  }, [data?.filterMessages, data?.filterStatusUpdates, data?.filterStatuses])
+  }, [data?.eventTypes, data?.filterStatuses])
 
   return (
     <WorkflowPanel>
       <Section title="Event Types">
         <VarFieldGroup>
           <VarField>
-            <BooleanInput name="filterMessages" />
-          </VarField>
-          <VarField>
-            <BooleanInput name="filterStatusUpdates" />
+            <OptionsInput name="eventTypes" />
           </VarField>
         </VarFieldGroup>
       </Section>
 
-      <ConditionalRender when={(d) => d.filterStatusUpdates === true}>
+      <ConditionalRender
+        when={(d) => {
+          const types = Array.isArray(d.eventTypes)
+            ? d.eventTypes
+            : d.eventTypes
+              ? [d.eventTypes]
+              : []
+          return types.includes('status')
+        }}
+      >
         <Section title="Status Filter">
           <VarFieldGroup>
             <VarField>

@@ -13,7 +13,12 @@ export default async function rowTriggerExecute(
   const token = connection.value
   const spreadsheetId = input.spreadsheetId as string
   const sheetName = input.sheetName as string
-  const triggerOn = input.triggerOn as string
+  const rawTriggerOn = input.triggerOn
+  const triggerOn: string[] = Array.isArray(rawTriggerOn)
+    ? rawTriggerOn
+    : rawTriggerOn === 'anyUpdate'
+      ? ['rowAdded', 'rowUpdated']
+      : [rawTriggerOn as string]
   const headerRowNum = Number(input.headerRow || 1)
   const columnsToWatch = input.columnsToWatch
     ? (input.columnsToWatch as string)
@@ -39,7 +44,7 @@ export default async function rowTriggerExecute(
   const previousDataRows = (state.previousDataRows as string[][] | undefined) || []
   const events: Record<string, string>[] = []
 
-  if (triggerOn === 'rowAdded' || triggerOn === 'anyUpdate') {
+  if (triggerOn.includes('rowAdded')) {
     const newRows = currentDataRows.slice(previousDataRows.length)
     for (let i = 0; i < newRows.length; i++) {
       const rowIdx = previousDataRows.length + headerIdx + 1 + i + 1 // 1-based
@@ -51,7 +56,7 @@ export default async function rowTriggerExecute(
     }
   }
 
-  if (triggerOn === 'rowUpdated' || triggerOn === 'anyUpdate') {
+  if (triggerOn.includes('rowUpdated')) {
     const overlapCount = Math.min(previousDataRows.length, currentDataRows.length)
     for (let i = 0; i < overlapCount; i++) {
       const prev = previousDataRows[i]

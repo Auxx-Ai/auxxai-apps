@@ -3,16 +3,18 @@ import { Workflow } from '@auxx/sdk'
 export const contactTriggerInputs = {
   triggerOn: Workflow.select({
     label: 'Trigger On',
+    multi: true,
     options: [
       { value: 'contactCreated', label: 'Contact Created' },
       { value: 'contactUpdated', label: 'Contact Updated' },
       { value: 'contactDeleted', label: 'Contact Deleted' },
     ],
-    default: 'contactCreated',
+    default: ['contactCreated'],
   }),
 }
 
 export const contactTriggerOutputs = {
+  changeType: Workflow.string({ label: 'Change Type' }),
   contactId: Workflow.string({ label: 'Contact ID' }),
   resourceName: Workflow.string({ label: 'Resource Name' }),
   givenName: Workflow.string({ label: 'First Name' }),

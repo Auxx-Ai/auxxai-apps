@@ -2,12 +2,28 @@
 
 import { Workflow } from '@auxx/sdk'
 
+const productFieldOptions = [
+  { value: 'id', label: 'ID' },
+  { value: 'title', label: 'Title' },
+  { value: 'body_html', label: 'Description (HTML)' },
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'product_type', label: 'Product Type' },
+  { value: 'handle', label: 'Handle' },
+  { value: 'tags', label: 'Tags' },
+  { value: 'status', label: 'Status' },
+  { value: 'variants', label: 'Variants' },
+  { value: 'images', label: 'Images' },
+  { value: 'created_at', label: 'Created At' },
+  { value: 'updated_at', label: 'Updated At' },
+] as const
+
 export const productInputs = {
   // --- Product: Create ---
   createTitle: Workflow.string({
     label: 'Title',
     description: 'Product name',
     placeholder: 'Classic T-Shirt',
+    required: true,
     acceptsVariables: true,
   }),
   createBodyHtml: Workflow.string({
@@ -77,6 +93,7 @@ export const productInputs = {
   deleteProductId: Workflow.string({
     label: 'Product ID',
     description: 'ID of the product to delete',
+    required: true,
     acceptsVariables: true,
   }),
 
@@ -84,13 +101,16 @@ export const productInputs = {
   getProductId: Workflow.string({
     label: 'Product ID',
     description: 'ID of the product to retrieve',
+    required: true,
     acceptsVariables: true,
   }),
-  getProductFields: Workflow.string({
+  getProductFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated list of fields to include (leave empty for all)',
-    placeholder: 'id,title,vendor',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: productFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Product: Get Many ---
@@ -158,17 +178,20 @@ export const productInputs = {
     label: 'Updated Before',
     acceptsVariables: true,
   }),
-  getProductManyFields: Workflow.string({
+  getProductManyFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated list of fields to include',
-    placeholder: 'id,title,vendor',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: productFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Product: Update ---
   updateProductId: Workflow.string({
     label: 'Product ID',
     description: 'ID of the product to update',
+    required: true,
     acceptsVariables: true,
   }),
   updateTitle: Workflow.string({

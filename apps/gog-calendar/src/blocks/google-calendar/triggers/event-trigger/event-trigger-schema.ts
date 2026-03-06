@@ -10,6 +10,7 @@ export const eventTriggerInputs = {
   }),
   triggerOn: Workflow.select({
     label: 'Trigger On',
+    multi: true,
     options: [
       { value: 'eventCreated', label: 'Event Created' },
       { value: 'eventUpdated', label: 'Event Updated' },
@@ -17,7 +18,7 @@ export const eventTriggerInputs = {
       { value: 'eventStarted', label: 'Event Started' },
       { value: 'eventEnded', label: 'Event Ended' },
     ],
-    default: 'eventCreated',
+    default: ['eventCreated'],
   }),
   matchTerm: Workflow.string({
     label: 'Filter Term',
@@ -28,6 +29,7 @@ export const eventTriggerInputs = {
 }
 
 export const eventTriggerOutputs = {
+  changeType: Workflow.string({ label: 'Change Type' }),
   eventId: Workflow.string({ label: 'Event ID' }),
   summary: Workflow.string({ label: 'Title' }),
   description: Workflow.string({ label: 'Description' }),

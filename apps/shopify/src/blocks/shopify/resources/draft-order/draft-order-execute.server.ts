@@ -90,7 +90,7 @@ export async function executeDraftOrder(
 
     case 'get': {
       const qs: Record<string, string> = {}
-      if (input.getFields) qs.fields = input.getFields
+      if (input.getFields?.length) qs.fields = input.getFields.join(',')
 
       const result = await shopifyApi<{ draft_order: any }>(
         shopDomain,
@@ -106,7 +106,7 @@ export async function executeDraftOrder(
         limit: input.getManyLimit || '50',
       }
       if (input.getManyStatus) qs.status = input.getManyStatus
-      if (input.getManyFields) qs.fields = input.getManyFields
+      if (input.getManyFields?.length) qs.fields = input.getManyFields.join(',')
 
       const result = await shopifyApi<{ draft_orders: any[] }>(
         shopDomain,

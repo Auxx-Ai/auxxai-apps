@@ -8,7 +8,7 @@ interface CollectionPanelProps {
 }
 
 export function CollectionPanel({ api }: CollectionPanelProps) {
-  const { StringInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, BooleanInput, OptionsInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -81,7 +81,7 @@ export function CollectionPanel({ api }: CollectionPanelProps) {
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getFields" />
+              <VarInput name="getFields" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -108,7 +108,7 @@ export function CollectionPanel({ api }: CollectionPanelProps) {
               <StringInput name="getManyTitle" />
             </VarField>
             <VarField>
-              <StringInput name="getManyFields" />
+              <VarInput name="getManyFields" />
             </VarField>
           </VarFieldGroup>
         </Section>

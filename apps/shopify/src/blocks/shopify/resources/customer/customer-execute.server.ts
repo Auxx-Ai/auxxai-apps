@@ -71,7 +71,7 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
 
     case 'get': {
       const qs: Record<string, string> = {}
-      if (input.getFields) qs.fields = input.getFields
+      if (input.getFields?.length) qs.fields = input.getFields.join(',')
 
       const result = await shopifyApi<{ customer: any }>(
         shopDomain,
@@ -90,7 +90,7 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
       if (input.getManyCreatedAtMax) qs.created_at_max = input.getManyCreatedAtMax
       if (input.getManyUpdatedAtMin) qs.updated_at_min = input.getManyUpdatedAtMin
       if (input.getManyUpdatedAtMax) qs.updated_at_max = input.getManyUpdatedAtMax
-      if (input.getManyFields) qs.fields = input.getManyFields
+      if (input.getManyFields?.length) qs.fields = input.getManyFields.join(',')
 
       const result = await shopifyApi<{ customers: any[] }>(shopDomain, token, '/customers.json', {
         qs,

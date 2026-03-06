@@ -8,7 +8,7 @@ interface CustomerPanelProps {
 }
 
 export function CustomerPanel({ api }: CustomerPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -124,7 +124,7 @@ export function CustomerPanel({ api }: CustomerPanelProps) {
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getFields" />
+              <VarInput name="getFields" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -154,7 +154,7 @@ export function CustomerPanel({ api }: CustomerPanelProps) {
               <StringInput name="getManyUpdatedAtMax" />
             </VarField>
             <VarField>
-              <StringInput name="getManyFields" />
+              <VarInput name="getManyFields" />
             </VarField>
           </VarFieldGroup>
         </Section>

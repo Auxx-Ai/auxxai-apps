@@ -29,11 +29,13 @@ const topicLabels: Record<string, string> = {
 
 function ShopifyTriggerNode() {
   const { data } = useWorkflowNode()
-  const label = topicLabels[data.topic] || 'Shopify Trigger'
+  const topics = Array.isArray(data.topic) ? data.topic : [data.topic]
+  const labels = topics.map((v: string) => topicLabels[v]).filter(Boolean)
+  const label = labels.length <= 2 ? labels.join(' & ') : `${labels.length} Events`
 
   return (
     <WorkflowNode>
-      <WorkflowNodeRow label={label} />
+      <WorkflowNodeRow label={label || 'Shopify Trigger'} />
       <WorkflowNodeHandle type="source" id="source" position="right" />
     </WorkflowNode>
   )

@@ -2,9 +2,19 @@
 
 import { Workflow } from '@auxx/sdk'
 
+const collectionFieldOptions = [
+  { value: 'id', label: 'ID' },
+  { value: 'title', label: 'Title' },
+  { value: 'body_html', label: 'Description (HTML)' },
+  { value: 'handle', label: 'Handle' },
+  { value: 'sort_order', label: 'Sort Order' },
+  { value: 'published_at', label: 'Published At' },
+  { value: 'updated_at', label: 'Updated At' },
+] as const
+
 export const collectionInputs = {
   // --- Collection: Create ---
-  createTitle: Workflow.string({ label: 'Title', acceptsVariables: true }),
+  createTitle: Workflow.string({ label: 'Title', required: true, acceptsVariables: true }),
   createBodyHtml: Workflow.string({ label: 'Description (HTML)', acceptsVariables: true }),
   createPublished: Workflow.boolean({
     label: 'Published',
@@ -32,7 +42,7 @@ export const collectionInputs = {
   createImageUrl: Workflow.url({ label: 'Image URL', acceptsVariables: true }),
 
   // --- Collection: Update ---
-  updateCollectionId: Workflow.string({ label: 'Collection ID', acceptsVariables: true }),
+  updateCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
   updateTitle: Workflow.string({ label: 'Title', acceptsVariables: true }),
   updateBodyHtml: Workflow.string({ label: 'Description (HTML)', acceptsVariables: true }),
   updatePublished: Workflow.select({
@@ -61,11 +71,14 @@ export const collectionInputs = {
   }),
 
   // --- Collection: Get ---
-  getCollectionId: Workflow.string({ label: 'Collection ID', acceptsVariables: true }),
-  getFields: Workflow.string({
+  getCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
+  getFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: collectionFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Collection: Get Many ---
@@ -98,23 +111,27 @@ export const collectionInputs = {
     description: 'Filter by title',
     acceptsVariables: true,
   }),
-  getManyFields: Workflow.string({
+  getManyFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: collectionFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Collection: Delete ---
-  deleteCollectionId: Workflow.string({ label: 'Collection ID', acceptsVariables: true }),
+  deleteCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
 
   // --- Collection: Add Product ---
-  addProductCollectionId: Workflow.string({ label: 'Collection ID', acceptsVariables: true }),
-  addProductProductId: Workflow.string({ label: 'Product ID', acceptsVariables: true }),
+  addProductCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
+  addProductProductId: Workflow.string({ label: 'Product ID', required: true, acceptsVariables: true }),
 
   // --- Collection: Remove Product ---
   removeProductCollectId: Workflow.string({
     label: 'Collect ID',
     description: 'The collect ID (join record between collection and product)',
+    required: true,
     acceptsVariables: true,
   }),
 }
