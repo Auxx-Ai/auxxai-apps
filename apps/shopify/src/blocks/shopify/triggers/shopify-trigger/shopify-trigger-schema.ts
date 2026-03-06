@@ -4,8 +4,9 @@ import { Workflow, type WorkflowSchema } from '@auxx/sdk'
 
 export const shopifyTriggerInputs = {
   topic: Workflow.select({
-    label: 'Event',
-    description: 'Shopify event to trigger on',
+    label: 'Events',
+    description: 'Shopify events to trigger on',
+    multi: true,
     options: [
       { value: 'orders/create', label: 'Order Created' },
       { value: 'orders/update', label: 'Order Updated' },
@@ -32,7 +33,7 @@ export const shopifyTriggerInputs = {
       { value: 'refunds/create', label: 'Refund Created' },
       { value: 'app/uninstalled', label: 'App Uninstalled' },
     ],
-    default: 'orders/create',
+    default: ['orders/create'],
   }),
 }
 

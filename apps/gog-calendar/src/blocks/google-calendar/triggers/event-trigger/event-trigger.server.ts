@@ -12,58 +12,118 @@ export default async function eventTriggerExecute(
 
   const token = connection.value
   const calendarId = encodeURIComponent(input.calendarId as string)
-  const triggerOn = input.triggerOn as string
+  const rawTriggerOn = input.triggerOn
+  const triggerOn: string[] = Array.isArray(rawTriggerOn) ? rawTriggerOn : [rawTriggerOn as string]
   const matchTerm = input.matchTerm as string | undefined
 
   const now = new Date().toISOString()
   const lastChecked = (state.lastChecked as string) || now
 
-  const qs: Record<string, string | number | boolean> = { showDeleted: false }
-  if (matchTerm) qs.q = matchTerm
-
-  if (
-    triggerOn === 'eventCreated' ||
-    triggerOn === 'eventUpdated' ||
-    triggerOn === 'eventCancelled'
-  ) {
-    qs.updatedMin = lastChecked
-    qs.orderBy = 'updated'
-    if (triggerOn === 'eventCancelled') qs.showDeleted = true
-  } else if (triggerOn === 'eventStarted' || triggerOn === 'eventEnded') {
-    qs.singleEvents = true
-    qs.timeMin = lastChecked
-    qs.timeMax = now
-    qs.orderBy = 'startTime'
-  }
-
-  const rawEvents = await gcalApiRequestAll(
-    token,
-    'GET',
-    `/calendar/v3/calendars/${calendarId}/events`,
-    undefined,
-    qs
+  const updateBased = ['eventCreated', 'eventUpdated', 'eventCancelled'].filter((t) =>
+    triggerOn.includes(t)
   )
+  const timeBased = ['eventStarted', 'eventEnded'].filter((t) => triggerOn.includes(t))
 
-  let filtered = rawEvents
-  if (triggerOn === 'eventCreated') {
-    filtered = rawEvents.filter((e: any) => e.created >= lastChecked && e.created <= now)
-  } else if (triggerOn === 'eventUpdated') {
-    filtered = rawEvents.filter((e: any) => e.created !== e.updated)
-  } else if (triggerOn === 'eventCancelled') {
-    filtered = rawEvents.filter((e: any) => e.status === 'cancelled' && e.created !== e.updated)
-  } else if (triggerOn === 'eventStarted') {
-    filtered = rawEvents.filter((e: any) => {
-      const start = e.start?.dateTime || e.start?.date
-      return start >= lastChecked && start <= now
-    })
-  } else if (triggerOn === 'eventEnded') {
-    filtered = rawEvents.filter((e: any) => {
-      const end = e.end?.dateTime || e.end?.date
-      return end >= lastChecked && end <= now
-    })
+  const seen = new Set<string>()
+  const allEvents: Record<string, string>[] = []
+
+  if (updateBased.length > 0) {
+    const qs: Record<string, string | number | boolean> = {
+      updatedMin: lastChecked,
+      orderBy: 'updated',
+      showDeleted: triggerOn.includes('eventCancelled'),
+    }
+    if (matchTerm) qs.q = matchTerm
+
+    const rawEvents = await gcalApiRequestAll(
+      token,
+      'GET',
+      `/calendar/v3/calendars/${calendarId}/events`,
+      undefined,
+      qs
+    )
+
+    for (const event of rawEvents) {
+      if (
+        triggerOn.includes('eventCancelled') &&
+        event.status === 'cancelled' &&
+        event.created !== event.updated
+      ) {
+        if (!seen.has(event.id)) {
+          seen.add(event.id)
+          allEvents.push(mapEvent(event, 'cancelled'))
+        }
+      }
+      if (
+        triggerOn.includes('eventCreated') &&
+        event.created >= lastChecked &&
+        event.created <= now
+      ) {
+        if (!seen.has(event.id)) {
+          seen.add(event.id)
+          allEvents.push(mapEvent(event, 'created'))
+        }
+      }
+      if (
+        triggerOn.includes('eventUpdated') &&
+        event.created !== event.updated &&
+        event.status !== 'cancelled'
+      ) {
+        if (!seen.has(event.id)) {
+          seen.add(event.id)
+          allEvents.push(mapEvent(event, 'updated'))
+        }
+      }
+    }
   }
 
-  const events = filtered.map((event: any) => ({
+  if (timeBased.length > 0) {
+    const qs: Record<string, string | number | boolean> = {
+      singleEvents: true,
+      timeMin: lastChecked,
+      timeMax: now,
+      orderBy: 'startTime',
+    }
+    if (matchTerm) qs.q = matchTerm
+
+    const rawEvents = await gcalApiRequestAll(
+      token,
+      'GET',
+      `/calendar/v3/calendars/${calendarId}/events`,
+      undefined,
+      qs
+    )
+
+    for (const event of rawEvents) {
+      if (seen.has(event.id)) continue
+
+      if (triggerOn.includes('eventStarted')) {
+        const start = event.start?.dateTime || event.start?.date
+        if (start >= lastChecked && start <= now) {
+          seen.add(event.id)
+          allEvents.push(mapEvent(event, 'started'))
+          continue
+        }
+      }
+      if (triggerOn.includes('eventEnded')) {
+        const end = event.end?.dateTime || event.end?.date
+        if (end >= lastChecked && end <= now) {
+          seen.add(event.id)
+          allEvents.push(mapEvent(event, 'ended'))
+        }
+      }
+    }
+  }
+
+  return {
+    events: allEvents,
+    state: { ...state, lastChecked: now },
+  }
+}
+
+function mapEvent(event: any, changeType: string): Record<string, string> {
+  return {
+    changeType,
     eventId: event.id || '',
     summary: event.summary || '',
     description: event.description || '',
@@ -76,10 +136,5 @@ export default async function eventTriggerExecute(
     organizer: event.organizer?.email || '',
     created: event.created || '',
     updated: event.updated || '',
-  }))
-
-  return {
-    events,
-    state: { ...state, lastChecked: now },
   }
 }

@@ -8,7 +8,7 @@ interface ProductPanelProps {
 }
 
 export function ProductPanel({ api }: ProductPanelProps) {
-  const { StringInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, BooleanInput, OptionsInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -85,7 +85,7 @@ export function ProductPanel({ api }: ProductPanelProps) {
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getProductFields" />
+              <VarInput name="getProductFields" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -133,7 +133,7 @@ export function ProductPanel({ api }: ProductPanelProps) {
               <StringInput name="getProductManyUpdatedAtMax" />
             </VarField>
             <VarField>
-              <StringInput name="getProductManyFields" />
+              <VarInput name="getProductManyFields" />
             </VarField>
           </VarFieldGroup>
         </Section>

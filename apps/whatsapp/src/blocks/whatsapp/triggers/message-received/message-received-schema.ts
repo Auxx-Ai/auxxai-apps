@@ -4,15 +4,14 @@ import { Workflow, type WorkflowSchema } from '@auxx/sdk'
 
 export const messageReceivedSchema = {
   inputs: {
-    filterMessages: Workflow.boolean({
-      label: 'Messages',
-      description: 'Trigger on incoming messages',
-      default: true,
-    }),
-    filterStatusUpdates: Workflow.boolean({
-      label: 'Status Updates',
-      description: 'Trigger on message status updates (sent, delivered, read)',
-      default: false,
+    eventTypes: Workflow.select({
+      label: 'Event Types',
+      multi: true,
+      options: [
+        { value: 'message', label: 'Messages' },
+        { value: 'status', label: 'Status Updates' },
+      ],
+      default: ['message'],
     }),
     filterStatuses: Workflow.select({
       label: 'Status Filter',

@@ -15,12 +15,13 @@ import rowTriggerExecute from './row-trigger.server'
 const triggerLabels: Record<string, string> = {
   rowAdded: 'Row Added',
   rowUpdated: 'Row Updated',
-  anyUpdate: 'Row Changed',
 }
 
 function RowTriggerNode() {
   const { data } = useWorkflowNode()
-  const label = triggerLabels[data.triggerOn as string] || 'Sheets Trigger'
+  const triggerOn = Array.isArray(data.triggerOn) ? data.triggerOn : [data.triggerOn]
+  const label =
+    triggerOn.map((v: string) => triggerLabels[v]).filter(Boolean).join(' & ') || 'Sheets Trigger'
 
   return (
     <WorkflowNode>

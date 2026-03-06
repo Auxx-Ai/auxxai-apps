@@ -18,7 +18,12 @@ const triggerLabels: Record<string, string> = {
 
 function ContactTriggerNode() {
   const { data } = useWorkflowNode()
-  const label = triggerLabels[data.triggerOn as string] || 'Contacts Trigger'
+  const triggerOn = Array.isArray(data.triggerOn) ? data.triggerOn : [data.triggerOn]
+  const label =
+    triggerOn
+      .map((v: string) => triggerLabels[v])
+      .filter(Boolean)
+      .join(' & ') || 'Contacts Trigger'
 
   return (
     <WorkflowNode>

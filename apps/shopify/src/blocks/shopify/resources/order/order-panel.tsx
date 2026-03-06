@@ -12,7 +12,7 @@ interface OrderPanelProps {
 }
 
 export function OrderPanel({ api, locations, locationsLoading }: OrderPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -148,7 +148,7 @@ export function OrderPanel({ api, locations, locationsLoading }: OrderPanelProps
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getFields" />
+              <VarInput name="getFields" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -187,7 +187,7 @@ export function OrderPanel({ api, locations, locationsLoading }: OrderPanelProps
               <StringInput name="getManyUpdatedAtMax" />
             </VarField>
             <VarField>
-              <StringInput name="getManyFields" />
+              <VarInput name="getManyFields" />
             </VarField>
           </VarFieldGroup>
         </Section>

@@ -59,7 +59,7 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
 
     case 'get': {
       const qs: Record<string, string> = {}
-      if (input.getProductFields) qs.fields = input.getProductFields
+      if (input.getProductFields?.length) qs.fields = input.getProductFields.join(',')
 
       const result = await shopifyApi<{ product: any }>(
         shopDomain,
@@ -85,7 +85,7 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
       if (input.getProductManyCreatedAtMax) qs.created_at_max = input.getProductManyCreatedAtMax
       if (input.getProductManyUpdatedAtMin) qs.updated_at_min = input.getProductManyUpdatedAtMin
       if (input.getProductManyUpdatedAtMax) qs.updated_at_max = input.getProductManyUpdatedAtMax
-      if (input.getProductManyFields) qs.fields = input.getProductManyFields
+      if (input.getProductManyFields?.length) qs.fields = input.getProductManyFields.join(',')
 
       const result = await shopifyApi<{ products: any[] }>(shopDomain, token, '/products.json', {
         qs,

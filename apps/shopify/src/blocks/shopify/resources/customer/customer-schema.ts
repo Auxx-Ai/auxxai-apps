@@ -2,6 +2,21 @@
 
 import { Workflow } from '@auxx/sdk'
 
+const customerFieldOptions = [
+  { value: 'id', label: 'ID' },
+  { value: 'first_name', label: 'First Name' },
+  { value: 'last_name', label: 'Last Name' },
+  { value: 'email', label: 'Email' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'tags', label: 'Tags' },
+  { value: 'note', label: 'Note' },
+  { value: 'orders_count', label: 'Orders Count' },
+  { value: 'total_spent', label: 'Total Spent' },
+  { value: 'addresses', label: 'Addresses' },
+  { value: 'created_at', label: 'Created At' },
+  { value: 'updated_at', label: 'Updated At' },
+] as const
+
 export const customerInputs = {
   // --- Customer: Create ---
   createFirstName: Workflow.string({ label: 'First Name', acceptsVariables: true }),
@@ -9,6 +24,7 @@ export const customerInputs = {
   createEmail: Workflow.email({
     label: 'Email',
     placeholder: 'customer@example.com',
+    required: true,
     acceptsVariables: true,
   }),
   createPhone: Workflow.phone({
@@ -43,7 +59,7 @@ export const customerInputs = {
   createCompany: Workflow.string({ label: 'Company', acceptsVariables: true }),
 
   // --- Customer: Update ---
-  updateCustomerId: Workflow.string({ label: 'Customer ID', acceptsVariables: true }),
+  updateCustomerId: Workflow.string({ label: 'Customer ID', required: true, acceptsVariables: true }),
   updateFirstName: Workflow.string({ label: 'First Name', acceptsVariables: true }),
   updateLastName: Workflow.string({ label: 'Last Name', acceptsVariables: true }),
   updateEmail: Workflow.email({ label: 'Email', acceptsVariables: true }),
@@ -65,11 +81,14 @@ export const customerInputs = {
   }),
 
   // --- Customer: Get ---
-  getCustomerId: Workflow.string({ label: 'Customer ID', acceptsVariables: true }),
-  getFields: Workflow.string({
+  getCustomerId: Workflow.string({ label: 'Customer ID', required: true, acceptsVariables: true }),
+  getFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields to include',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: customerFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Customer: Get Many ---
@@ -92,19 +111,23 @@ export const customerInputs = {
   getManyCreatedAtMax: Workflow.datetime({ label: 'Created Before', acceptsVariables: true }),
   getManyUpdatedAtMin: Workflow.datetime({ label: 'Updated After', acceptsVariables: true }),
   getManyUpdatedAtMax: Workflow.datetime({ label: 'Updated Before', acceptsVariables: true }),
-  getManyFields: Workflow.string({
+  getManyFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields to include',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: customerFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Customer: Delete ---
-  deleteCustomerId: Workflow.string({ label: 'Customer ID', acceptsVariables: true }),
+  deleteCustomerId: Workflow.string({ label: 'Customer ID', required: true, acceptsVariables: true }),
 
   // --- Customer: Search ---
   searchQuery: Workflow.string({
     label: 'Query',
     description: 'Search query (e.g., "email:test@example.com" or "first_name:John")',
+    required: true,
     acceptsVariables: true,
   }),
   searchLimit: Workflow.select({

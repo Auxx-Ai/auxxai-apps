@@ -2,11 +2,31 @@
 
 import { Workflow } from '@auxx/sdk'
 
+const orderFieldOptions = [
+  { value: 'id', label: 'ID' },
+  { value: 'order_number', label: 'Order Number' },
+  { value: 'name', label: 'Name' },
+  { value: 'email', label: 'Email' },
+  { value: 'total_price', label: 'Total Price' },
+  { value: 'subtotal_price', label: 'Subtotal Price' },
+  { value: 'currency', label: 'Currency' },
+  { value: 'financial_status', label: 'Financial Status' },
+  { value: 'fulfillment_status', label: 'Fulfillment Status' },
+  { value: 'tags', label: 'Tags' },
+  { value: 'note', label: 'Note' },
+  { value: 'line_items', label: 'Line Items' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'created_at', label: 'Created At' },
+  { value: 'updated_at', label: 'Updated At' },
+  { value: 'order_status_url', label: 'Order Status URL' },
+] as const
+
 export const orderInputs = {
   // --- Order: Create ---
   createLineItems: Workflow.array({
     label: 'Line Items',
     description: 'At least one line item is required',
+    required: true,
     items: Workflow.struct({
       productId: Workflow.string({ label: 'Product ID', acceptsVariables: true }),
       variantId: Workflow.string({ label: 'Variant ID', acceptsVariables: true }),
@@ -126,6 +146,7 @@ export const orderInputs = {
   deleteOrderId: Workflow.string({
     label: 'Order ID',
     description: 'ID of the order to delete',
+    required: true,
     acceptsVariables: true,
   }),
 
@@ -133,13 +154,16 @@ export const orderInputs = {
   getOrderId: Workflow.string({
     label: 'Order ID',
     description: 'ID of the order to retrieve',
+    required: true,
     acceptsVariables: true,
   }),
-  getFields: Workflow.string({
+  getFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated list of fields to include (leave empty for all)',
-    placeholder: 'id,name,total_price',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: orderFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Order: Get Many ---
@@ -213,17 +237,20 @@ export const orderInputs = {
     description: 'Show orders updated before date (ISO 8601)',
     acceptsVariables: true,
   }),
-  getManyFields: Workflow.string({
+  getManyFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated list of fields to include',
-    placeholder: 'id,name,total_price',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: orderFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Order: Update ---
   updateOrderId: Workflow.string({
     label: 'Order ID',
     description: 'ID of the order to update',
+    required: true,
     acceptsVariables: true,
   }),
   updateEmail: Workflow.email({

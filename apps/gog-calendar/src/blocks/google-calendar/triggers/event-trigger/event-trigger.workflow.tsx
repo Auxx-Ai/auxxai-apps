@@ -22,7 +22,12 @@ const triggerLabels: Record<string, string> = {
 
 function EventTriggerNode() {
   const { data } = useWorkflowNode()
-  const label = triggerLabels[data.triggerOn as string] || 'Calendar Trigger'
+  const triggerOn = Array.isArray(data.triggerOn) ? data.triggerOn : [data.triggerOn]
+  const label =
+    triggerOn
+      .map((v: string) => triggerLabels[v])
+      .filter(Boolean)
+      .join(' & ') || 'Calendar Trigger'
 
   return (
     <WorkflowNode>

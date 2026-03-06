@@ -8,7 +8,7 @@ interface DraftOrderPanelProps {
 }
 
 export function DraftOrderPanel({ api }: DraftOrderPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -109,7 +109,7 @@ export function DraftOrderPanel({ api }: DraftOrderPanelProps) {
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getFields" />
+              <VarInput name="getFields" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -130,7 +130,7 @@ export function DraftOrderPanel({ api }: DraftOrderPanelProps) {
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="getManyFields" />
+              <VarInput name="getManyFields" />
             </VarField>
           </VarFieldGroup>
         </Section>

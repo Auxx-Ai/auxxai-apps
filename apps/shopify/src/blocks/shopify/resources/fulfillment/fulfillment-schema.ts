@@ -2,9 +2,21 @@
 
 import { Workflow } from '@auxx/sdk'
 
+const fulfillmentFieldOptions = [
+  { value: 'id', label: 'ID' },
+  { value: 'order_id', label: 'Order ID' },
+  { value: 'status', label: 'Status' },
+  { value: 'tracking_number', label: 'Tracking Number' },
+  { value: 'tracking_company', label: 'Tracking Company' },
+  { value: 'tracking_url', label: 'Tracking URL' },
+  { value: 'line_items', label: 'Line Items' },
+  { value: 'created_at', label: 'Created At' },
+  { value: 'updated_at', label: 'Updated At' },
+] as const
+
 export const fulfillmentInputs = {
   // Shared
-  orderId: Workflow.string({ label: 'Order ID', acceptsVariables: true }),
+  orderId: Workflow.string({ label: 'Order ID', required: true, acceptsVariables: true }),
 
   // --- Fulfillment: Create ---
   createLocationId: Workflow.select({
@@ -32,7 +44,7 @@ export const fulfillmentInputs = {
   }),
 
   // --- Fulfillment: Update Tracking ---
-  updateFulfillmentId: Workflow.string({ label: 'Fulfillment ID', acceptsVariables: true }),
+  updateFulfillmentId: Workflow.string({ label: 'Fulfillment ID', required: true, acceptsVariables: true }),
   updateTrackingNumber: Workflow.string({ label: 'Tracking Number', acceptsVariables: true }),
   updateTrackingCompany: Workflow.string({ label: 'Tracking Company', acceptsVariables: true }),
   updateTrackingUrl: Workflow.url({ label: 'Tracking URL', acceptsVariables: true }),
@@ -42,11 +54,14 @@ export const fulfillmentInputs = {
   }),
 
   // --- Fulfillment: Get ---
-  getFulfillmentId: Workflow.string({ label: 'Fulfillment ID', acceptsVariables: true }),
-  getFields: Workflow.string({
+  getFulfillmentId: Workflow.string({ label: 'Fulfillment ID', required: true, acceptsVariables: true }),
+  getFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: fulfillmentFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Fulfillment: Get Many ---
@@ -63,14 +78,17 @@ export const fulfillmentInputs = {
   }),
   getManyCreatedAtMin: Workflow.datetime({ label: 'Created After', acceptsVariables: true }),
   getManyCreatedAtMax: Workflow.datetime({ label: 'Created Before', acceptsVariables: true }),
-  getManyFields: Workflow.string({
+  getManyFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: fulfillmentFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Fulfillment: Cancel ---
-  cancelFulfillmentId: Workflow.string({ label: 'Fulfillment ID', acceptsVariables: true }),
+  cancelFulfillmentId: Workflow.string({ label: 'Fulfillment ID', required: true, acceptsVariables: true }),
 }
 
 const fulfillmentFields = {

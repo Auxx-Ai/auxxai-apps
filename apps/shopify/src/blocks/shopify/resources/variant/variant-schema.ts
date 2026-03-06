@@ -2,9 +2,27 @@
 
 import { Workflow } from '@auxx/sdk'
 
+const variantFieldOptions = [
+  { value: 'id', label: 'ID' },
+  { value: 'title', label: 'Title' },
+  { value: 'price', label: 'Price' },
+  { value: 'compare_at_price', label: 'Compare At Price' },
+  { value: 'sku', label: 'SKU' },
+  { value: 'barcode', label: 'Barcode' },
+  { value: 'weight', label: 'Weight' },
+  { value: 'weight_unit', label: 'Weight Unit' },
+  { value: 'inventory_item_id', label: 'Inventory Item ID' },
+  { value: 'inventory_quantity', label: 'Inventory Quantity' },
+  { value: 'option1', label: 'Option 1' },
+  { value: 'option2', label: 'Option 2' },
+  { value: 'option3', label: 'Option 3' },
+  { value: 'created_at', label: 'Created At' },
+  { value: 'updated_at', label: 'Updated At' },
+] as const
+
 export const variantInputs = {
   // Shared
-  productId: Workflow.string({ label: 'Product ID', acceptsVariables: true }),
+  productId: Workflow.string({ label: 'Product ID', required: true, acceptsVariables: true }),
 
   // --- Variant: Create ---
   createTitle: Workflow.string({ label: 'Title', acceptsVariables: true }),
@@ -63,7 +81,7 @@ export const variantInputs = {
   createOption3: Workflow.string({ label: 'Option 3', acceptsVariables: true }),
 
   // --- Variant: Update ---
-  updateVariantId: Workflow.string({ label: 'Variant ID', acceptsVariables: true }),
+  updateVariantId: Workflow.string({ label: 'Variant ID', required: true, acceptsVariables: true }),
   updateTitle: Workflow.string({ label: 'Title', acceptsVariables: true }),
   updatePrice: Workflow.currency({ label: 'Price', acceptsVariables: true }),
   updateCompareAtPrice: Workflow.currency({ label: 'Compare At Price', acceptsVariables: true }),
@@ -104,11 +122,14 @@ export const variantInputs = {
   updateOption3: Workflow.string({ label: 'Option 3', acceptsVariables: true }),
 
   // --- Variant: Get ---
-  getVariantId: Workflow.string({ label: 'Variant ID', acceptsVariables: true }),
-  getFields: Workflow.string({
+  getVariantId: Workflow.string({ label: 'Variant ID', required: true, acceptsVariables: true }),
+  getFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: variantFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Variant: Get Many ---
@@ -123,14 +144,17 @@ export const variantInputs = {
     ],
     default: '50',
   }),
-  getManyFields: Workflow.string({
+  getManyFields: Workflow.array({
     label: 'Fields',
-    description: 'Comma-separated fields',
-    acceptsVariables: true,
+    description: 'Fields to include in the response (leave empty for all)',
+    items: Workflow.string({ label: 'Field' }),
+    options: variantFieldOptions,
+    canAdd: true,
+    canManage: false,
   }),
 
   // --- Variant: Delete ---
-  deleteVariantId: Workflow.string({ label: 'Variant ID', acceptsVariables: true }),
+  deleteVariantId: Workflow.string({ label: 'Variant ID', required: true, acceptsVariables: true }),
 }
 
 const variantFields = {

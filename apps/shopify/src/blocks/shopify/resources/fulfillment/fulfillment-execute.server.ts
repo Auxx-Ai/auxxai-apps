@@ -62,7 +62,7 @@ export async function executeFulfillment(
 
     case 'get': {
       const qs: Record<string, string> = {}
-      if (input.getFields) qs.fields = input.getFields
+      if (input.getFields?.length) qs.fields = input.getFields.join(',')
 
       const result = await shopifyApi<{ fulfillment: any }>(
         shopDomain,
@@ -79,7 +79,7 @@ export async function executeFulfillment(
       }
       if (input.getManyCreatedAtMin) qs.created_at_min = input.getManyCreatedAtMin
       if (input.getManyCreatedAtMax) qs.created_at_max = input.getManyCreatedAtMax
-      if (input.getManyFields) qs.fields = input.getManyFields
+      if (input.getManyFields?.length) qs.fields = input.getManyFields.join(',')
 
       const result = await shopifyApi<{ fulfillments: any[] }>(
         shopDomain,
