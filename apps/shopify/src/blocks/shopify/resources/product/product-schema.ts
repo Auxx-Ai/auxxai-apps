@@ -140,21 +140,21 @@ export const productInputs = {
     ],
     default: 'any',
   }),
-  getProductManyCreatedAtMin: Workflow.string({
+  getProductManyCreatedAtMin: Workflow.datetime({
     label: 'Created After',
     description: 'Show products created after date (ISO 8601)',
     acceptsVariables: true,
   }),
-  getProductManyCreatedAtMax: Workflow.string({
+  getProductManyCreatedAtMax: Workflow.datetime({
     label: 'Created Before',
     description: 'Show products created before date (ISO 8601)',
     acceptsVariables: true,
   }),
-  getProductManyUpdatedAtMin: Workflow.string({
+  getProductManyUpdatedAtMin: Workflow.datetime({
     label: 'Updated After',
     acceptsVariables: true,
   }),
-  getProductManyUpdatedAtMax: Workflow.string({
+  getProductManyUpdatedAtMax: Workflow.datetime({
     label: 'Updated Before',
     acceptsVariables: true,
   }),

@@ -32,6 +32,27 @@ export function extractTriggerData(
     email = payload.email || ''
     createdAt = payload.created_at || ''
     updatedAt = payload.updated_at || ''
+  } else if (resourceType === 'fulfillments') {
+    resourceId = String(payload.id ?? '')
+    resourceName = payload.tracking_company || ''
+    createdAt = payload.created_at || ''
+    updatedAt = payload.updated_at || ''
+  } else if (resourceType === 'draft_orders') {
+    resourceId = String(payload.id ?? '')
+    resourceName = payload.name || ''
+    email = payload.email || ''
+    totalPrice = payload.total_price || ''
+    createdAt = payload.created_at || ''
+    updatedAt = payload.updated_at || ''
+  } else if (resourceType === 'inventory_levels') {
+    resourceId = String(payload.inventory_item_id ?? '')
+    resourceName = `Item ${payload.inventory_item_id} @ Location ${payload.location_id}`
+    updatedAt = payload.updated_at || ''
+  } else if (resourceType === 'collections') {
+    resourceId = String(payload.id ?? '')
+    resourceName = payload.title || ''
+    createdAt = payload.created_at || ''
+    updatedAt = payload.updated_at || ''
   } else if (resourceType === 'refunds') {
     resourceId = String(payload.id ?? '')
     createdAt = payload.created_at || ''

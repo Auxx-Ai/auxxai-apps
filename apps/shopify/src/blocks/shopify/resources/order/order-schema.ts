@@ -203,24 +203,24 @@ export const orderInputs = {
     ],
     default: '50',
   }),
-  getManyCreatedAtMin: Workflow.string({
+  getManyCreatedAtMin: Workflow.datetime({
     label: 'Created After',
     description: 'Show orders created after date (ISO 8601)',
     placeholder: '2026-01-01T00:00:00Z',
     acceptsVariables: true,
   }),
-  getManyCreatedAtMax: Workflow.string({
+  getManyCreatedAtMax: Workflow.datetime({
     label: 'Created Before',
     description: 'Show orders created before date (ISO 8601)',
     placeholder: '2026-12-31T23:59:59Z',
     acceptsVariables: true,
   }),
-  getManyUpdatedAtMin: Workflow.string({
+  getManyUpdatedAtMin: Workflow.datetime({
     label: 'Updated After',
     description: 'Show orders updated after date (ISO 8601)',
     acceptsVariables: true,
   }),
-  getManyUpdatedAtMax: Workflow.string({
+  getManyUpdatedAtMax: Workflow.datetime({
     label: 'Updated Before',
     description: 'Show orders updated before date (ISO 8601)',
     acceptsVariables: true,
