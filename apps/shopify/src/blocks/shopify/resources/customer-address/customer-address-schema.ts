@@ -13,17 +13,13 @@ export const customerAddressInputs = {
   createProvince: Workflow.string({ label: 'Province/State', acceptsVariables: true }),
   createCountry: Workflow.string({ label: 'Country', acceptsVariables: true }),
   createZip: Workflow.string({ label: 'Zip/Postal Code', acceptsVariables: true }),
-  createPhone: Workflow.string({ label: 'Phone', acceptsVariables: true }),
+  createPhone: Workflow.phone({ label: 'Phone', acceptsVariables: true }),
   createCompany: Workflow.string({ label: 'Company', acceptsVariables: true }),
   createFirstName: Workflow.string({ label: 'First Name', acceptsVariables: true }),
   createLastName: Workflow.string({ label: 'Last Name', acceptsVariables: true }),
-  createIsDefault: Workflow.select({
+  createIsDefault: Workflow.boolean({
     label: 'Set as Default',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
 
   // --- Address: Update ---
@@ -34,7 +30,7 @@ export const customerAddressInputs = {
   updateProvince: Workflow.string({ label: 'Province/State', acceptsVariables: true }),
   updateCountry: Workflow.string({ label: 'Country', acceptsVariables: true }),
   updateZip: Workflow.string({ label: 'Zip/Postal Code', acceptsVariables: true }),
-  updatePhone: Workflow.string({ label: 'Phone', acceptsVariables: true }),
+  updatePhone: Workflow.phone({ label: 'Phone', acceptsVariables: true }),
   updateCompany: Workflow.string({ label: 'Company', acceptsVariables: true }),
   updateFirstName: Workflow.string({ label: 'First Name', acceptsVariables: true }),
   updateLastName: Workflow.string({ label: 'Last Name', acceptsVariables: true }),
@@ -62,6 +58,21 @@ export const customerAddressInputs = {
   setDefaultAddressId: Workflow.string({ label: 'Address ID', acceptsVariables: true }),
 }
 
+const customerAddressFields = {
+  addressId: Workflow.string(),
+  address1: Workflow.string(),
+  address2: Workflow.string(),
+  city: Workflow.string(),
+  province: Workflow.string(),
+  country: Workflow.string(),
+  zip: Workflow.string(),
+  phone: Workflow.phone(),
+  company: Workflow.string(),
+  firstName: Workflow.string(),
+  lastName: Workflow.string(),
+  isDefault: Workflow.boolean(),
+}
+
 export function customerAddressComputeOutputs(operation: string) {
   if (
     operation === 'create' ||
@@ -70,29 +81,21 @@ export function customerAddressComputeOutputs(operation: string) {
     operation === 'setDefault'
   ) {
     return {
-      addressId: Workflow.string({ label: 'Address ID' }),
-      address1: Workflow.string({ label: 'Address Line 1' }),
-      address2: Workflow.string({ label: 'Address Line 2' }),
-      city: Workflow.string({ label: 'City' }),
-      province: Workflow.string({ label: 'Province' }),
-      country: Workflow.string({ label: 'Country' }),
-      zip: Workflow.string({ label: 'Zip' }),
-      phone: Workflow.string({ label: 'Phone' }),
-      company: Workflow.string({ label: 'Company' }),
-      firstName: Workflow.string({ label: 'First Name' }),
-      lastName: Workflow.string({ label: 'Last Name' }),
-      isDefault: Workflow.string({ label: 'Is Default' }),
+      address: Workflow.struct(customerAddressFields, { label: 'address' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      addresses: Workflow.string({ label: 'Addresses (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      addresses: Workflow.array({
+        label: 'addresses',
+        items: Workflow.struct(customerAddressFields, { label: 'address' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

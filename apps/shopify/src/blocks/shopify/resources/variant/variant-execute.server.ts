@@ -12,6 +12,14 @@ function getConnectionInfo() {
   }
 }
 
+function centsToDecimal(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
+function decimalToCents(decimal: string | number): number {
+  return Math.round(parseFloat(String(decimal)) * 100)
+}
+
 export async function executeVariant(operation: string, input: any): Promise<Record<string, any>> {
   const { token, shopDomain } = getConnectionInfo()
 
@@ -19,20 +27,21 @@ export async function executeVariant(operation: string, input: any): Promise<Rec
     case 'create': {
       const variant: any = {}
       if (input.createTitle) variant.title = input.createTitle
-      if (input.createPrice) variant.price = input.createPrice
-      if (input.createCompareAtPrice) variant.compare_at_price = input.createCompareAtPrice
+      if (input.createPrice != null) variant.price = centsToDecimal(input.createPrice)
+      if (input.createCompareAtPrice != null)
+        variant.compare_at_price = centsToDecimal(input.createCompareAtPrice)
       if (input.createSku) variant.sku = input.createSku
       if (input.createBarcode) variant.barcode = input.createBarcode
-      if (input.createWeight) variant.weight = Number(input.createWeight)
+      if (input.createWeight != null) variant.weight = input.createWeight
       if (input.createWeightUnit) variant.weight_unit = input.createWeightUnit
-      if (input.createInventoryQuantity)
-        variant.inventory_quantity = Number(input.createInventoryQuantity)
+      if (input.createInventoryQuantity != null)
+        variant.inventory_quantity = input.createInventoryQuantity
       if (input.createInventoryPolicy) variant.inventory_policy = input.createInventoryPolicy
       if (input.createFulfillmentService)
         variant.fulfillment_service = input.createFulfillmentService
-      if (input.createRequiresShipping)
-        variant.requires_shipping = input.createRequiresShipping === 'true'
-      if (input.createTaxable) variant.taxable = input.createTaxable === 'true'
+      if (input.createRequiresShipping != null)
+        variant.requires_shipping = input.createRequiresShipping
+      if (input.createTaxable != null) variant.taxable = input.createTaxable
       if (input.createOption1) variant.option1 = input.createOption1
       if (input.createOption2) variant.option2 = input.createOption2
       if (input.createOption3) variant.option3 = input.createOption3
@@ -43,17 +52,18 @@ export async function executeVariant(operation: string, input: any): Promise<Rec
         `/products/${input.productId}/variants.json`,
         { method: 'POST', body: { variant } }
       )
-      return mapVariantResponse(result.variant)
+      return { variant: mapVariantResponse(result.variant) }
     }
 
     case 'update': {
       const variant: any = {}
       if (input.updateTitle) variant.title = input.updateTitle
-      if (input.updatePrice) variant.price = input.updatePrice
-      if (input.updateCompareAtPrice) variant.compare_at_price = input.updateCompareAtPrice
+      if (input.updatePrice != null) variant.price = centsToDecimal(input.updatePrice)
+      if (input.updateCompareAtPrice != null)
+        variant.compare_at_price = centsToDecimal(input.updateCompareAtPrice)
       if (input.updateSku) variant.sku = input.updateSku
       if (input.updateBarcode) variant.barcode = input.updateBarcode
-      if (input.updateWeight) variant.weight = Number(input.updateWeight)
+      if (input.updateWeight != null) variant.weight = input.updateWeight
       if (input.updateWeightUnit) variant.weight_unit = input.updateWeightUnit
       if (input.updateInventoryPolicy) variant.inventory_policy = input.updateInventoryPolicy
       if (input.updateTaxable === 'true') variant.taxable = true
@@ -68,7 +78,7 @@ export async function executeVariant(operation: string, input: any): Promise<Rec
         `/variants/${input.updateVariantId}.json`,
         { method: 'PUT', body: { variant } }
       )
-      return mapVariantResponse(result.variant)
+      return { variant: mapVariantResponse(result.variant) }
     }
 
     case 'get': {
@@ -81,7 +91,7 @@ export async function executeVariant(operation: string, input: any): Promise<Rec
         `/variants/${input.getVariantId}.json`,
         { qs }
       )
-      return mapVariantResponse(result.variant)
+      return { variant: mapVariantResponse(result.variant) }
     }
 
     case 'getMany': {
@@ -96,10 +106,10 @@ export async function executeVariant(operation: string, input: any): Promise<Rec
         `/products/${input.productId}/variants.json`,
         { qs }
       )
-      const variants = result.variants || []
+      const variants = (result.variants || []).map(mapVariantResponse)
       return {
         variants,
-        count: String(variants.length),
+        count: variants.length,
       }
     }
 
@@ -110,7 +120,7 @@ export async function executeVariant(operation: string, input: any): Promise<Rec
         `/products/${input.productId}/variants/${input.deleteVariantId}.json`,
         { method: 'DELETE' }
       )
-      return { success: 'true' }
+      return { success: true }
     }
 
     default:
@@ -122,14 +132,14 @@ function mapVariantResponse(variant: any) {
   return {
     variantId: String(variant.id ?? ''),
     title: variant.title || '',
-    price: variant.price || '',
-    compareAtPrice: variant.compare_at_price || '',
+    price: decimalToCents(variant.price || '0'),
+    compareAtPrice: decimalToCents(variant.compare_at_price || '0'),
     sku: variant.sku || '',
     barcode: variant.barcode || '',
-    weight: String(variant.weight ?? ''),
+    weight: variant.weight ?? 0,
     weightUnit: variant.weight_unit || '',
     inventoryItemId: String(variant.inventory_item_id ?? ''),
-    inventoryQuantity: String(variant.inventory_quantity ?? '0'),
+    inventoryQuantity: variant.inventory_quantity ?? 0,
     option1: variant.option1 || '',
     option2: variant.option2 || '',
     option3: variant.option3 || '',

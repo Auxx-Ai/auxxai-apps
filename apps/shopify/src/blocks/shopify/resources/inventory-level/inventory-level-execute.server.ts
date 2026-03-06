@@ -32,10 +32,10 @@ export async function executeInventoryLevel(
         '/inventory_levels.json',
         { qs }
       )
-      const levels = result.inventory_levels || []
+      const levels = (result.inventory_levels || []).map(mapInventoryLevelResponse)
       return {
         inventoryLevels: levels,
-        count: String(levels.length),
+        count: levels.length,
       }
     }
 
@@ -49,12 +49,12 @@ export async function executeInventoryLevel(
           body: {
             inventory_item_id: Number(input.setInventoryItemId),
             location_id: Number(input.setLocationId),
-            available: Number(input.setAvailable),
-            disconnect_if_necessary: input.setDisconnectIfNecessary === 'true',
+            available: input.setAvailable,
+            disconnect_if_necessary: !!input.setDisconnectIfNecessary,
           },
         }
       )
-      return mapInventoryLevelResponse(result.inventory_level)
+      return { inventoryLevel: mapInventoryLevelResponse(result.inventory_level) }
     }
 
     case 'adjust': {
@@ -67,11 +67,11 @@ export async function executeInventoryLevel(
           body: {
             inventory_item_id: Number(input.adjustInventoryItemId),
             location_id: Number(input.adjustLocationId),
-            available_adjustment: Number(input.adjustAvailableAdjustment),
+            available_adjustment: input.adjustAvailableAdjustment,
           },
         }
       )
-      return mapInventoryLevelResponse(result.inventory_level)
+      return { inventoryLevel: mapInventoryLevelResponse(result.inventory_level) }
     }
 
     case 'connect': {
@@ -87,7 +87,7 @@ export async function executeInventoryLevel(
           },
         }
       )
-      return mapInventoryLevelResponse(result.inventory_level)
+      return { inventoryLevel: mapInventoryLevelResponse(result.inventory_level) }
     }
 
     case 'delete': {
@@ -100,7 +100,7 @@ export async function executeInventoryLevel(
         method: 'DELETE',
         qs,
       })
-      return { success: 'true' }
+      return { success: true }
     }
 
     default:
@@ -112,7 +112,7 @@ function mapInventoryLevelResponse(level: any) {
   return {
     inventoryItemId: String(level.inventory_item_id ?? ''),
     locationId: String(level.location_id ?? ''),
-    available: String(level.available ?? '0'),
+    available: level.available ?? 0,
     updatedAt: level.updated_at || '',
   }
 }

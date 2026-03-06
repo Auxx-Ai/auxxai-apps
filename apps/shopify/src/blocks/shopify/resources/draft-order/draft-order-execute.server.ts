@@ -12,6 +12,14 @@ function getConnectionInfo() {
   }
 }
 
+function centsToDecimal(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
+function decimalToCents(decimal: string | number): number {
+  return Math.round(parseFloat(String(decimal)) * 100)
+}
+
 export async function executeDraftOrder(
   operation: string,
   input: any
@@ -27,8 +35,8 @@ export async function executeDraftOrder(
           const item: any = {}
           if (li.variantId) item.variant_id = Number(li.variantId)
           if (li.title) item.title = li.title
-          if (li.quantity) item.quantity = Number(li.quantity)
-          if (li.price) item.price = li.price
+          if (li.quantity) item.quantity = li.quantity
+          if (li.price != null) item.price = centsToDecimal(li.price)
           return item
         })
       }
@@ -37,12 +45,12 @@ export async function executeDraftOrder(
       if (input.createEmail) draftOrder.email = input.createEmail
       if (input.createNote) draftOrder.note = input.createNote
       if (input.createTags) draftOrder.tags = input.createTags
-      if (input.createTaxExempt === 'true') draftOrder.tax_exempt = true
-      if (input.createUseCustomerDefaultAddress === 'true') {
+      if (input.createTaxExempt) draftOrder.tax_exempt = true
+      if (input.createUseCustomerDefaultAddress) {
         draftOrder.use_customer_default_address = true
       }
 
-      if (input.createUseCustomerDefaultAddress !== 'true') {
+      if (!input.createUseCustomerDefaultAddress) {
         const shipping: any = {}
         if (input.createShippingFirstName) shipping.first_name = input.createShippingFirstName
         if (input.createShippingLastName) shipping.last_name = input.createShippingLastName
@@ -62,7 +70,7 @@ export async function executeDraftOrder(
         '/draft_orders.json',
         { method: 'POST', body: { draft_order: draftOrder } }
       )
-      return mapDraftOrderResponse(result.draft_order)
+      return { draftOrder: mapDraftOrderResponse(result.draft_order) }
     }
 
     case 'update': {
@@ -77,7 +85,7 @@ export async function executeDraftOrder(
         `/draft_orders/${input.updateDraftOrderId}.json`,
         { method: 'PUT', body: { draft_order: draftOrder } }
       )
-      return mapDraftOrderResponse(result.draft_order)
+      return { draftOrder: mapDraftOrderResponse(result.draft_order) }
     }
 
     case 'get': {
@@ -90,7 +98,7 @@ export async function executeDraftOrder(
         `/draft_orders/${input.getDraftOrderId}.json`,
         { qs }
       )
-      return mapDraftOrderResponse(result.draft_order)
+      return { draftOrder: mapDraftOrderResponse(result.draft_order) }
     }
 
     case 'getMany': {
@@ -106,10 +114,10 @@ export async function executeDraftOrder(
         '/draft_orders.json',
         { qs }
       )
-      const draftOrders = result.draft_orders || []
+      const draftOrders = (result.draft_orders || []).map(mapDraftOrderResponse)
       return {
         draftOrders,
-        count: String(draftOrders.length),
+        count: draftOrders.length,
       }
     }
 
@@ -117,12 +125,12 @@ export async function executeDraftOrder(
       await shopifyApi(shopDomain, token, `/draft_orders/${input.deleteDraftOrderId}.json`, {
         method: 'DELETE',
       })
-      return { success: 'true' }
+      return { success: true }
     }
 
     case 'complete': {
       const qs: Record<string, string> = {}
-      if (input.completePaymentPending === 'true') qs.payment_pending = 'true'
+      if (input.completePaymentPending) qs.payment_pending = 'true'
 
       const result = await shopifyApi<{ draft_order: any }>(
         shopDomain,
@@ -130,7 +138,7 @@ export async function executeDraftOrder(
         `/draft_orders/${input.completeDraftOrderId}/complete.json`,
         { method: 'PUT', qs }
       )
-      return mapDraftOrderResponse(result.draft_order)
+      return { draftOrder: mapDraftOrderResponse(result.draft_order) }
     }
 
     case 'sendInvoice': {
@@ -164,8 +172,8 @@ function mapDraftOrderResponse(draftOrder: any) {
     name: draftOrder.name || '',
     status: draftOrder.status || '',
     email: draftOrder.email || '',
-    totalPrice: draftOrder.total_price || '',
-    subtotalPrice: draftOrder.subtotal_price || '',
+    totalPrice: decimalToCents(draftOrder.total_price || '0'),
+    subtotalPrice: decimalToCents(draftOrder.subtotal_price || '0'),
     currency: draftOrder.currency || '',
     tags: draftOrder.tags || '',
     note: draftOrder.note || '',

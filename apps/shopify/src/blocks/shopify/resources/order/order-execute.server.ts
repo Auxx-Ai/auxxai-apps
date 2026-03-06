@@ -12,6 +12,14 @@ function getConnectionInfo() {
   }
 }
 
+function centsToDecimal(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
+function decimalToCents(decimal: string | number): number {
+  return Math.round(parseFloat(String(decimal)) * 100)
+}
+
 export async function executeOrder(operation: string, input: any): Promise<Record<string, any>> {
   const { token, shopDomain } = getConnectionInfo()
 
@@ -22,8 +30,8 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
         if (item.productId) li.product_id = Number(item.productId)
         if (item.variantId) li.variant_id = Number(item.variantId)
         if (item.title) li.title = item.title
-        if (item.quantity) li.quantity = Number(item.quantity)
-        if (item.price) li.price = item.price
+        if (item.quantity) li.quantity = item.quantity
+        if (item.price != null) li.price = centsToDecimal(item.price)
         return li
       })
 
@@ -33,12 +41,12 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
       if (input.createFulfillmentStatus) order.fulfillment_status = input.createFulfillmentStatus
       if (input.createNote) order.note = input.createNote
       if (input.createTags) order.tags = input.createTags
-      if (input.createSendReceipt === 'true') order.send_receipt = true
-      if (input.createSendFulfillmentReceipt === 'true') order.send_fulfillment_receipt = true
+      if (input.createSendReceipt) order.send_receipt = true
+      if (input.createSendFulfillmentReceipt) order.send_fulfillment_receipt = true
       if (input.createInventoryBehaviour) order.inventory_behaviour = input.createInventoryBehaviour
       if (input.createLocationId) order.location_id = Number(input.createLocationId)
       if (input.createSourceName) order.source_name = input.createSourceName
-      if (input.createTest === 'true') order.test = true
+      if (input.createTest) order.test = true
 
       const shipping = buildAddress(input, 'createShipping')
       if (Object.keys(shipping).length > 0) order.shipping_address = shipping
@@ -49,7 +57,7 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
       if (input.createDiscountCodes?.length) {
         order.discount_codes = input.createDiscountCodes.map((dc: any) => ({
           code: dc.code,
-          amount: dc.amount,
+          amount: dc.amount != null ? centsToDecimal(dc.amount) : undefined,
           type: dc.type,
         }))
       }
@@ -58,14 +66,14 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
         method: 'POST',
         body: { order },
       })
-      return mapOrderResponse(result.order)
+      return { order: mapOrderResponse(result.order) }
     }
 
     case 'delete': {
       await shopifyApi(shopDomain, token, `/orders/${input.deleteOrderId}.json`, {
         method: 'DELETE',
       })
-      return { success: 'true' }
+      return { success: true }
     }
 
     case 'get': {
@@ -78,7 +86,7 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
         `/orders/${input.getOrderId}.json`,
         { qs }
       )
-      return mapOrderResponse(result.order)
+      return { order: mapOrderResponse(result.order) }
     }
 
     case 'getMany': {
@@ -96,10 +104,10 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
       if (input.getManyFields) qs.fields = input.getManyFields
 
       const result = await shopifyApi<{ orders: any[] }>(shopDomain, token, '/orders.json', { qs })
-      const orders = result.orders || []
+      const orders = (result.orders || []).map(mapOrderResponse)
       return {
         orders,
-        count: String(orders.length),
+        count: orders.length,
       }
     }
 
@@ -121,7 +129,7 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
         `/orders/${input.updateOrderId}.json`,
         { method: 'PUT', body: { order } }
       )
-      return mapOrderResponse(result.order)
+      return { order: mapOrderResponse(result.order) }
     }
 
     default:
@@ -149,8 +157,8 @@ function mapOrderResponse(order: any) {
     orderNumber: String(order.order_number ?? ''),
     name: order.name || '',
     email: order.email || '',
-    totalPrice: order.total_price || '',
-    subtotalPrice: order.subtotal_price || '',
+    totalPrice: decimalToCents(order.total_price || '0'),
+    subtotalPrice: decimalToCents(order.subtotal_price || '0'),
     currency: order.currency || '',
     financialStatus: order.financial_status || '',
     fulfillmentStatus: order.fulfillment_status || '',

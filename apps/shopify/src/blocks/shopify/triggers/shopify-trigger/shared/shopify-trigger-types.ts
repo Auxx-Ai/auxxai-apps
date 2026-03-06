@@ -1,5 +1,9 @@
 // src/blocks/shopify/triggers/shopify-trigger/shared/shopify-trigger-types.ts
 
+function decimalToCents(decimal: string | number): number {
+  return Math.round(parseFloat(String(decimal)) * 100)
+}
+
 export function extractTriggerData(
   topic: string,
   shopDomain: string,
@@ -10,7 +14,7 @@ export function extractTriggerData(
   let resourceId = ''
   let resourceName = ''
   let email = ''
-  let totalPrice = ''
+  let totalPrice = 0
   let createdAt = ''
   let updatedAt = ''
 
@@ -18,7 +22,7 @@ export function extractTriggerData(
     resourceId = String(payload.id ?? '')
     resourceName = payload.name || ''
     email = payload.email || ''
-    totalPrice = payload.total_price || ''
+    totalPrice = decimalToCents(payload.total_price || '0')
     createdAt = payload.created_at || ''
     updatedAt = payload.updated_at || ''
   } else if (resourceType === 'products') {
@@ -41,7 +45,7 @@ export function extractTriggerData(
     resourceId = String(payload.id ?? '')
     resourceName = payload.name || ''
     email = payload.email || ''
-    totalPrice = payload.total_price || ''
+    totalPrice = decimalToCents(payload.total_price || '0')
     createdAt = payload.created_at || ''
     updatedAt = payload.updated_at || ''
   } else if (resourceType === 'inventory_levels') {

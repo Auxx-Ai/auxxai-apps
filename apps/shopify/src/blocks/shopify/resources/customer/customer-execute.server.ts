@@ -12,6 +12,10 @@ function getConnectionInfo() {
   }
 }
 
+function decimalToCents(decimal: string | number): number {
+  return Math.round(parseFloat(String(decimal)) * 100)
+}
+
 export async function executeCustomer(operation: string, input: any): Promise<Record<string, any>> {
   const { token, shopDomain } = getConnectionInfo()
 
@@ -24,9 +28,9 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
       if (input.createPhone) customer.phone = input.createPhone
       if (input.createTags) customer.tags = input.createTags
       if (input.createNote) customer.note = input.createNote
-      if (input.createVerifiedEmail) customer.verified_email = input.createVerifiedEmail === 'true'
-      if (input.createSendEmailInvite === 'true') customer.send_email_invite = true
-      if (input.createTaxExempt === 'true') customer.tax_exempt = true
+      if (input.createVerifiedEmail != null) customer.verified_email = input.createVerifiedEmail
+      if (input.createSendEmailInvite) customer.send_email_invite = true
+      if (input.createTaxExempt) customer.tax_exempt = true
 
       const address: any = {}
       if (input.createAddress1) address.address1 = input.createAddress1
@@ -42,7 +46,7 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
         method: 'POST',
         body: { customer },
       })
-      return mapCustomerResponse(result.customer)
+      return { customer: mapCustomerResponse(result.customer) }
     }
 
     case 'update': {
@@ -62,7 +66,7 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
         `/customers/${input.updateCustomerId}.json`,
         { method: 'PUT', body: { customer } }
       )
-      return mapCustomerResponse(result.customer)
+      return { customer: mapCustomerResponse(result.customer) }
     }
 
     case 'get': {
@@ -75,7 +79,7 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
         `/customers/${input.getCustomerId}.json`,
         { qs }
       )
-      return mapCustomerResponse(result.customer)
+      return { customer: mapCustomerResponse(result.customer) }
     }
 
     case 'getMany': {
@@ -91,10 +95,10 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
       const result = await shopifyApi<{ customers: any[] }>(shopDomain, token, '/customers.json', {
         qs,
       })
-      const customers = result.customers || []
+      const customers = (result.customers || []).map(mapCustomerResponse)
       return {
         customers,
-        count: String(customers.length),
+        count: customers.length,
       }
     }
 
@@ -102,7 +106,7 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
       await shopifyApi(shopDomain, token, `/customers/${input.deleteCustomerId}.json`, {
         method: 'DELETE',
       })
-      return { success: 'true' }
+      return { success: true }
     }
 
     case 'search': {
@@ -117,10 +121,10 @@ export async function executeCustomer(operation: string, input: any): Promise<Re
         '/customers/search.json',
         { qs }
       )
-      const customers = result.customers || []
+      const customers = (result.customers || []).map(mapCustomerResponse)
       return {
         customers,
-        count: String(customers.length),
+        count: customers.length,
       }
     }
 
@@ -138,8 +142,8 @@ function mapCustomerResponse(customer: any) {
     phone: customer.phone || '',
     tags: customer.tags || '',
     note: customer.note || '',
-    ordersCount: String(customer.orders_count ?? '0'),
-    totalSpent: customer.total_spent || '0.00',
+    ordersCount: customer.orders_count ?? 0,
+    totalSpent: decimalToCents(customer.total_spent || '0'),
     addresses: customer.addresses || [],
     createdAt: customer.created_at || '',
     updatedAt: customer.updated_at || '',

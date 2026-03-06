@@ -12,6 +12,14 @@ function getConnectionInfo() {
   }
 }
 
+function centsToDecimal(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
+function decimalToCents(decimal: string | number): number {
+  return Math.round(parseFloat(String(decimal)) * 100)
+}
+
 export async function executeInventoryItem(
   operation: string,
   input: any
@@ -25,7 +33,7 @@ export async function executeInventoryItem(
         token,
         `/inventory_items/${input.getInventoryItemId}.json`
       )
-      return mapInventoryItemResponse(result.inventory_item)
+      return { inventoryItem: mapInventoryItemResponse(result.inventory_item) }
     }
 
     case 'getMany': {
@@ -40,16 +48,16 @@ export async function executeInventoryItem(
         '/inventory_items.json',
         { qs }
       )
-      const items = result.inventory_items || []
+      const items = (result.inventory_items || []).map(mapInventoryItemResponse)
       return {
         inventoryItems: items,
-        count: String(items.length),
+        count: items.length,
       }
     }
 
     case 'update': {
       const inventoryItem: any = {}
-      if (input.updateCost) inventoryItem.cost = input.updateCost
+      if (input.updateCost != null) inventoryItem.cost = centsToDecimal(input.updateCost)
       if (input.updateTracked === 'true') inventoryItem.tracked = true
       else if (input.updateTracked === 'false') inventoryItem.tracked = false
       if (input.updateCountryCodeOfOrigin)
@@ -63,7 +71,7 @@ export async function executeInventoryItem(
         `/inventory_items/${input.updateInventoryItemId}.json`,
         { method: 'PUT', body: { inventory_item: inventoryItem } }
       )
-      return mapInventoryItemResponse(result.inventory_item)
+      return { inventoryItem: mapInventoryItemResponse(result.inventory_item) }
     }
 
     default:
@@ -75,8 +83,8 @@ function mapInventoryItemResponse(item: any) {
   return {
     inventoryItemId: String(item.id ?? ''),
     sku: item.sku || '',
-    cost: item.cost || '',
-    tracked: String(item.tracked ?? false),
+    cost: decimalToCents(item.cost || '0'),
+    tracked: item.tracked ?? false,
     countryCodeOfOrigin: item.country_code_of_origin || '',
     harmonizedSystemCode: item.harmonized_system_code || '',
     createdAt: item.created_at || '',

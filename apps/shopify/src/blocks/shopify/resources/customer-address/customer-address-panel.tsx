@@ -8,7 +8,7 @@ interface CustomerAddressPanelProps {
 }
 
 export function CustomerAddressPanel({ api }: CustomerAddressPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -56,7 +56,7 @@ export function CustomerAddressPanel({ api }: CustomerAddressPanelProps) {
               <StringInput name="createPhone" />
             </VarField>
             <VarField>
-              <OptionsInput name="createIsDefault" />
+              <BooleanInput name="createIsDefault" />
             </VarField>
           </VarFieldGroup>
         </Section>

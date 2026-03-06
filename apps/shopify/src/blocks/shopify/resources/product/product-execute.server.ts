@@ -26,13 +26,13 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
       if (input.createProductType) product.product_type = input.createProductType
       if (input.createTags) product.tags = input.createTags
       if (input.createHandle) product.handle = input.createHandle
-      if (input.createPublished === 'false') product.published_at = null
+      if (input.createPublished === false) product.published_at = null
       if (input.createPublishedScope) product.published_scope = input.createPublishedScope
       if (input.createTemplateSuffix) product.template_suffix = input.createTemplateSuffix
       if (input.createImages?.length) {
         product.images = input.createImages.map((img: any) => {
           const image: any = { src: img.src }
-          if (img.position) image.position = Number(img.position)
+          if (img.position != null) image.position = img.position
           return image
         })
       }
@@ -47,14 +47,14 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
         method: 'POST',
         body: { product },
       })
-      return mapProductResponse(result.product)
+      return { product: mapProductResponse(result.product) }
     }
 
     case 'delete': {
       await shopifyApi(shopDomain, token, `/products/${input.deleteProductId}.json`, {
         method: 'DELETE',
       })
-      return { success: 'true' }
+      return { success: true }
     }
 
     case 'get': {
@@ -67,7 +67,7 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
         `/products/${input.getProductId}.json`,
         { qs }
       )
-      return mapProductResponse(result.product)
+      return { product: mapProductResponse(result.product) }
     }
 
     case 'getMany': {
@@ -90,10 +90,10 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
       const result = await shopifyApi<{ products: any[] }>(shopDomain, token, '/products.json', {
         qs,
       })
-      const products = result.products || []
+      const products = (result.products || []).map(mapProductResponse)
       return {
         products,
-        count: String(products.length),
+        count: products.length,
       }
     }
 
@@ -113,7 +113,7 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
       if (input.updateImages?.length) {
         product.images = input.updateImages.map((img: any) => {
           const image: any = { src: img.src }
-          if (img.position) image.position = Number(img.position)
+          if (img.position != null) image.position = img.position
           return image
         })
       }
@@ -130,7 +130,7 @@ export async function executeProduct(operation: string, input: any): Promise<Rec
         `/products/${input.updateProductId}.json`,
         { method: 'PUT', body: { product } }
       )
-      return mapProductResponse(result.product)
+      return { product: mapProductResponse(result.product) }
     }
 
     default:

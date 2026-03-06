@@ -30,15 +30,15 @@ export const inventoryLevelInputs = {
     label: 'Location',
     options: [] as { value: string; label: string }[],
   }),
-  setAvailable: Workflow.string({ label: 'Available Quantity', acceptsVariables: true }),
-  setDisconnectIfNecessary: Workflow.select({
+  setAvailable: Workflow.number({
+    label: 'Available Quantity',
+    integer: true,
+    acceptsVariables: true,
+  }),
+  setDisconnectIfNecessary: Workflow.boolean({
     label: 'Disconnect if Necessary',
     description: 'Whether to disconnect from other locations if needed',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
 
   // --- Inventory Level: Adjust ---
@@ -47,10 +47,10 @@ export const inventoryLevelInputs = {
     label: 'Location',
     options: [] as { value: string; label: string }[],
   }),
-  adjustAvailableAdjustment: Workflow.string({
+  adjustAvailableAdjustment: Workflow.number({
     label: 'Adjustment',
     description: 'Amount to adjust by (positive or negative)',
-    placeholder: '-5',
+    integer: true,
     acceptsVariables: true,
   }),
 
@@ -69,24 +69,31 @@ export const inventoryLevelInputs = {
   }),
 }
 
+const inventoryLevelFields = {
+  inventoryItemId: Workflow.string(),
+  locationId: Workflow.string(),
+  available: Workflow.number({ integer: true }),
+  updatedAt: Workflow.datetime(),
+}
+
 export function inventoryLevelComputeOutputs(operation: string) {
   if (operation === 'set' || operation === 'adjust' || operation === 'connect') {
     return {
-      inventoryItemId: Workflow.string({ label: 'Inventory Item ID' }),
-      locationId: Workflow.string({ label: 'Location ID' }),
-      available: Workflow.string({ label: 'Available' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      inventoryLevel: Workflow.struct(inventoryLevelFields, { label: 'inventoryLevel' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      inventoryLevels: Workflow.string({ label: 'Inventory Levels (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      inventoryLevels: Workflow.array({
+        label: 'inventoryLevels',
+        items: Workflow.struct(inventoryLevelFields, { label: 'inventoryLevel' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

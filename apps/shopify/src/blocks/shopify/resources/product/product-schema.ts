@@ -38,13 +38,9 @@ export const productInputs = {
     placeholder: 'classic-t-shirt',
     acceptsVariables: true,
   }),
-  createPublished: Workflow.select({
+  createPublished: Workflow.boolean({
     label: 'Published',
-    options: [
-      { value: 'true', label: 'Yes' },
-      { value: 'false', label: 'No (Draft)' },
-    ],
-    default: 'true',
+    default: true,
   }),
   createPublishedScope: Workflow.select({
     label: 'Published Scope',
@@ -62,8 +58,12 @@ export const productInputs = {
   createImages: Workflow.array({
     label: 'Images',
     items: Workflow.struct({
-      src: Workflow.string({ label: 'Image URL', acceptsVariables: true }),
-      position: Workflow.string({ label: 'Position (1 = main)', acceptsVariables: true }),
+      src: Workflow.url({ label: 'Image URL', acceptsVariables: true }),
+      position: Workflow.number({
+        label: 'Position (1 = main)',
+        integer: true,
+        acceptsVariables: true,
+      }),
     }),
   }),
   createOptions: Workflow.string({
@@ -221,8 +221,8 @@ export const productInputs = {
   updateImages: Workflow.array({
     label: 'Images',
     items: Workflow.struct({
-      src: Workflow.string({ label: 'Image URL', acceptsVariables: true }),
-      position: Workflow.string({ label: 'Position', acceptsVariables: true }),
+      src: Workflow.url({ label: 'Image URL', acceptsVariables: true }),
+      position: Workflow.number({ label: 'Position', integer: true, acceptsVariables: true }),
     }),
   }),
   updateOptions: Workflow.string({
@@ -232,32 +232,39 @@ export const productInputs = {
   }),
 }
 
+const productFields = {
+  productId: Workflow.string(),
+  title: Workflow.string(),
+  bodyHtml: Workflow.string(),
+  vendor: Workflow.string(),
+  productType: Workflow.string(),
+  handle: Workflow.string(),
+  tags: Workflow.string(),
+  status: Workflow.string(),
+  variants: Workflow.string(),
+  images: Workflow.string(),
+  createdAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+}
+
 export function productComputeOutputs(operation: string) {
   if (operation === 'create' || operation === 'get' || operation === 'update') {
     return {
-      productId: Workflow.string({ label: 'Product ID' }),
-      title: Workflow.string({ label: 'Title' }),
-      bodyHtml: Workflow.string({ label: 'Description (HTML)' }),
-      vendor: Workflow.string({ label: 'Vendor' }),
-      productType: Workflow.string({ label: 'Product Type' }),
-      handle: Workflow.string({ label: 'Handle' }),
-      tags: Workflow.string({ label: 'Tags' }),
-      status: Workflow.string({ label: 'Status' }),
-      variants: Workflow.string({ label: 'Variants (JSON)' }),
-      images: Workflow.string({ label: 'Images (JSON)' }),
-      createdAt: Workflow.string({ label: 'Created At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      product: Workflow.struct(productFields, { label: 'product' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      products: Workflow.string({ label: 'Products (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      products: Workflow.array({
+        label: 'products',
+        items: Workflow.struct(productFields, { label: 'product' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

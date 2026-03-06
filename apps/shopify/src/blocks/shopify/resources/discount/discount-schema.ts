@@ -54,37 +54,35 @@ export const discountInputs = {
     ],
     default: 'all',
   }),
-  createStartsAt: Workflow.string({
+  createStartsAt: Workflow.datetime({
     label: 'Starts At',
     placeholder: '2026-01-01T00:00:00Z',
     acceptsVariables: true,
   }),
-  createEndsAt: Workflow.string({
+  createEndsAt: Workflow.datetime({
     label: 'Ends At',
     description: 'Leave empty for no end date',
     acceptsVariables: true,
   }),
-  createUsageLimit: Workflow.string({
+  createUsageLimit: Workflow.number({
     label: 'Usage Limit',
     description: 'Max total uses (leave empty for unlimited)',
+    integer: true,
     acceptsVariables: true,
   }),
-  createOncePerCustomer: Workflow.select({
+  createOncePerCustomer: Workflow.boolean({
     label: 'Once Per Customer',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
-  createMinSubtotal: Workflow.string({
+  createMinSubtotal: Workflow.currency({
     label: 'Minimum Subtotal',
     description: 'Minimum order subtotal for discount',
     acceptsVariables: true,
   }),
-  createMinQuantity: Workflow.string({
+  createMinQuantity: Workflow.number({
     label: 'Minimum Quantity',
     description: 'Minimum item quantity for discount',
+    integer: true,
     acceptsVariables: true,
   }),
 
@@ -93,8 +91,12 @@ export const discountInputs = {
   updateDiscountCodeId: Workflow.string({ label: 'Discount Code ID', acceptsVariables: true }),
   updateCode: Workflow.string({ label: 'Discount Code', acceptsVariables: true }),
   updateValue: Workflow.string({ label: 'Value', acceptsVariables: true }),
-  updateEndsAt: Workflow.string({ label: 'Ends At', acceptsVariables: true }),
-  updateUsageLimit: Workflow.string({ label: 'Usage Limit', acceptsVariables: true }),
+  updateEndsAt: Workflow.datetime({ label: 'Ends At', acceptsVariables: true }),
+  updateUsageLimit: Workflow.number({
+    label: 'Usage Limit',
+    integer: true,
+    acceptsVariables: true,
+  }),
 
   // --- Discount: Get ---
   getPriceRuleId: Workflow.string({ label: 'Price Rule ID', acceptsVariables: true }),
@@ -127,39 +129,51 @@ export const discountInputs = {
   }),
 }
 
+const discountFields = {
+  priceRuleId: Workflow.string(),
+  discountCodeId: Workflow.string(),
+  code: Workflow.string(),
+  value: Workflow.string(),
+  valueType: Workflow.string(),
+  targetType: Workflow.string(),
+  startsAt: Workflow.datetime(),
+  endsAt: Workflow.datetime(),
+  usageLimit: Workflow.number({ integer: true }),
+  timesUsed: Workflow.number({ integer: true }),
+}
+
 export function discountComputeOutputs(operation: string) {
   if (operation === 'create' || operation === 'get') {
     return {
-      priceRuleId: Workflow.string({ label: 'Price Rule ID' }),
-      discountCodeId: Workflow.string({ label: 'Discount Code ID' }),
-      code: Workflow.string({ label: 'Discount Code' }),
-      value: Workflow.string({ label: 'Value' }),
-      valueType: Workflow.string({ label: 'Value Type' }),
-      targetType: Workflow.string({ label: 'Target Type' }),
-      startsAt: Workflow.string({ label: 'Starts At' }),
-      endsAt: Workflow.string({ label: 'Ends At' }),
-      usageLimit: Workflow.string({ label: 'Usage Limit' }),
-      timesUsed: Workflow.string({ label: 'Times Used' }),
+      discount: Workflow.struct(discountFields, { label: 'discount' }),
     }
   }
   if (operation === 'update') {
     return {
-      priceRuleId: Workflow.string({ label: 'Price Rule ID' }),
-      discountCodeId: Workflow.string({ label: 'Discount Code ID' }),
-      code: Workflow.string({ label: 'Discount Code' }),
-      value: Workflow.string({ label: 'Value' }),
+      discount: Workflow.struct({
+        priceRuleId: Workflow.string(),
+        discountCodeId: Workflow.string(),
+        code: Workflow.string(),
+        value: Workflow.string(),
+      }, { label: 'discount' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      priceRules: Workflow.string({ label: 'Price Rules (JSON)' }),
-      discountCodes: Workflow.string({ label: 'Discount Codes (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      priceRules: Workflow.array({
+        label: 'priceRules',
+        items: Workflow.struct(discountFields, { label: 'priceRule' }),
+      }),
+      discountCodes: Workflow.array({
+        label: 'discountCodes',
+        items: Workflow.struct(discountFields, { label: 'discountCode' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

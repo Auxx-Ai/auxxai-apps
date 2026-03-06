@@ -25,7 +25,7 @@ export const inventoryItemInputs = {
 
   // --- Inventory Item: Update ---
   updateInventoryItemId: Workflow.string({ label: 'Inventory Item ID', acceptsVariables: true }),
-  updateCost: Workflow.string({
+  updateCost: Workflow.currency({
     label: 'Cost',
     description: 'Unit cost of the item',
     acceptsVariables: true,
@@ -52,23 +52,30 @@ export const inventoryItemInputs = {
   }),
 }
 
+const inventoryItemFields = {
+  inventoryItemId: Workflow.string(),
+  sku: Workflow.string(),
+  cost: Workflow.currency(),
+  tracked: Workflow.boolean(),
+  countryCodeOfOrigin: Workflow.string(),
+  harmonizedSystemCode: Workflow.string(),
+  createdAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+}
+
 export function inventoryItemComputeOutputs(operation: string) {
   if (operation === 'get' || operation === 'update') {
     return {
-      inventoryItemId: Workflow.string({ label: 'Inventory Item ID' }),
-      sku: Workflow.string({ label: 'SKU' }),
-      cost: Workflow.string({ label: 'Cost' }),
-      tracked: Workflow.string({ label: 'Tracked' }),
-      countryCodeOfOrigin: Workflow.string({ label: 'Country Code of Origin' }),
-      harmonizedSystemCode: Workflow.string({ label: 'HS Code' }),
-      createdAt: Workflow.string({ label: 'Created At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      inventoryItem: Workflow.struct(inventoryItemFields, { label: 'inventoryItem' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      inventoryItems: Workflow.string({ label: 'Inventory Items (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      inventoryItems: Workflow.array({
+        label: 'inventoryItems',
+        items: Workflow.struct(inventoryItemFields, { label: 'inventoryItem' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

@@ -109,29 +109,36 @@ export const metafieldInputs = {
   deleteMetafieldId: Workflow.string({ label: 'Metafield ID', acceptsVariables: true }),
 }
 
+const metafieldFields = {
+  metafieldId: Workflow.string(),
+  namespace: Workflow.string(),
+  key: Workflow.string(),
+  value: Workflow.string(),
+  type: Workflow.string(),
+  ownerResource: Workflow.string(),
+  ownerId: Workflow.string(),
+  createdAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+}
+
 export function metafieldComputeOutputs(operation: string) {
   if (operation === 'create' || operation === 'get' || operation === 'update') {
     return {
-      metafieldId: Workflow.string({ label: 'Metafield ID' }),
-      namespace: Workflow.string({ label: 'Namespace' }),
-      key: Workflow.string({ label: 'Key' }),
-      value: Workflow.string({ label: 'Value' }),
-      type: Workflow.string({ label: 'Type' }),
-      ownerResource: Workflow.string({ label: 'Owner Resource' }),
-      ownerId: Workflow.string({ label: 'Owner ID' }),
-      createdAt: Workflow.string({ label: 'Created At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      metafield: Workflow.struct(metafieldFields, { label: 'metafield' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      metafields: Workflow.string({ label: 'Metafields (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      metafields: Workflow.array({
+        label: 'metafields',
+        items: Workflow.struct(metafieldFields, { label: 'metafield' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

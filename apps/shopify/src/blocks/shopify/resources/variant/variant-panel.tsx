@@ -8,7 +8,17 @@ interface VariantPanelProps {
 }
 
 export function VariantPanel({ api }: VariantPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    OptionsInput,
+    BooleanInput,
+    NumberInput,
+    VarInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>
@@ -29,10 +39,10 @@ export function VariantPanel({ api }: VariantPanelProps) {
               <StringInput name="createTitle" />
             </VarField>
             <VarField>
-              <StringInput name="createPrice" />
+              <VarInput name="createPrice" />
             </VarField>
             <VarField>
-              <StringInput name="createCompareAtPrice" />
+              <VarInput name="createCompareAtPrice" />
             </VarField>
             <VarField>
               <StringInput name="createSku" />
@@ -58,13 +68,13 @@ export function VariantPanel({ api }: VariantPanelProps) {
               <StringInput name="createBarcode" />
             </VarField>
             <VarField>
-              <StringInput name="createWeight" />
+              <NumberInput name="createWeight" />
             </VarField>
             <VarField>
               <OptionsInput name="createWeightUnit" />
             </VarField>
             <VarField>
-              <StringInput name="createInventoryQuantity" />
+              <NumberInput name="createInventoryQuantity" />
             </VarField>
             <VarField>
               <OptionsInput name="createInventoryPolicy" />
@@ -73,10 +83,10 @@ export function VariantPanel({ api }: VariantPanelProps) {
               <StringInput name="createFulfillmentService" />
             </VarField>
             <VarField>
-              <OptionsInput name="createRequiresShipping" />
+              <BooleanInput name="createRequiresShipping" />
             </VarField>
             <VarField>
-              <OptionsInput name="createTaxable" />
+              <BooleanInput name="createTaxable" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -97,10 +107,10 @@ export function VariantPanel({ api }: VariantPanelProps) {
               <StringInput name="updateTitle" />
             </VarField>
             <VarField>
-              <StringInput name="updatePrice" />
+              <VarInput name="updatePrice" />
             </VarField>
             <VarField>
-              <StringInput name="updateCompareAtPrice" />
+              <VarInput name="updateCompareAtPrice" />
             </VarField>
             <VarField>
               <StringInput name="updateSku" />
@@ -109,7 +119,7 @@ export function VariantPanel({ api }: VariantPanelProps) {
               <StringInput name="updateBarcode" />
             </VarField>
             <VarField>
-              <StringInput name="updateWeight" />
+              <NumberInput name="updateWeight" />
             </VarField>
             <VarField>
               <OptionsInput name="updateWeightUnit" />
