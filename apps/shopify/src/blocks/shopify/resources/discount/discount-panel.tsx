@@ -8,7 +8,7 @@ interface DiscountPanelProps {
 }
 
 export function DiscountPanel({ api }: DiscountPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, NumberInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -52,20 +52,20 @@ export function DiscountPanel({ api }: DiscountPanelProps) {
               <StringInput name="createEndsAt" />
             </VarField>
             <VarField>
-              <StringInput name="createUsageLimit" />
+              <NumberInput name="createUsageLimit" />
             </VarField>
             <VarField>
-              <OptionsInput name="createOncePerCustomer" />
+              <BooleanInput name="createOncePerCustomer" />
             </VarField>
           </VarFieldGroup>
         </Section>
         <Section title="Prerequisites" collapsible>
           <VarFieldGroup>
             <VarField>
-              <StringInput name="createMinSubtotal" />
+              <VarInput name="createMinSubtotal" />
             </VarField>
             <VarField>
-              <StringInput name="createMinQuantity" />
+              <NumberInput name="createMinQuantity" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -95,7 +95,7 @@ export function DiscountPanel({ api }: DiscountPanelProps) {
               <StringInput name="updateEndsAt" />
             </VarField>
             <VarField>
-              <StringInput name="updateUsageLimit" />
+              <NumberInput name="updateUsageLimit" />
             </VarField>
           </VarFieldGroup>
         </Section>

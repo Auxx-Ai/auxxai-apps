@@ -8,7 +8,7 @@ interface ProductPanelProps {
 }
 
 export function ProductPanel({ api }: ProductPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -43,7 +43,7 @@ export function ProductPanel({ api }: ProductPanelProps) {
         <Section title="Publishing" collapsible>
           <VarFieldGroup>
             <VarField>
-              <OptionsInput name="createPublished" />
+              <BooleanInput name="createPublished" />
             </VarField>
             <VarField>
               <OptionsInput name="createPublishedScope" />

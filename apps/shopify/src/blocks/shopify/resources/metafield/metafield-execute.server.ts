@@ -52,7 +52,7 @@ export async function executeMetafield(
         `${ownerPath}/metafields.json`,
         { method: 'POST', body: { metafield } }
       )
-      return mapMetafieldResponse(result.metafield)
+      return { metafield: mapMetafieldResponse(result.metafield) }
     }
 
     case 'update': {
@@ -66,7 +66,7 @@ export async function executeMetafield(
         `/metafields/${input.updateMetafieldId}.json`,
         { method: 'PUT', body: { metafield } }
       )
-      return mapMetafieldResponse(result.metafield)
+      return { metafield: mapMetafieldResponse(result.metafield) }
     }
 
     case 'get': {
@@ -75,7 +75,7 @@ export async function executeMetafield(
         token,
         `/metafields/${input.getMetafieldId}.json`
       )
-      return mapMetafieldResponse(result.metafield)
+      return { metafield: mapMetafieldResponse(result.metafield) }
     }
 
     case 'getMany': {
@@ -92,10 +92,10 @@ export async function executeMetafield(
         `${ownerPath}/metafields.json`,
         { qs }
       )
-      const metafields = result.metafields || []
+      const metafields = (result.metafields || []).map(mapMetafieldResponse)
       return {
         metafields,
-        count: String(metafields.length),
+        count: metafields.length,
       }
     }
 

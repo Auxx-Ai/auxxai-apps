@@ -43,10 +43,10 @@ export const shopifyTriggerOutputs = {
   payload: Workflow.string({ label: 'Payload (JSON)' }),
   resourceId: Workflow.string({ label: 'Resource ID' }),
   resourceName: Workflow.string({ label: 'Resource Name' }),
-  email: Workflow.string({ label: 'Email' }),
-  totalPrice: Workflow.string({ label: 'Total Price' }),
-  createdAt: Workflow.string({ label: 'Created At' }),
-  updatedAt: Workflow.string({ label: 'Updated At' }),
+  email: Workflow.email({ label: 'Email' }),
+  totalPrice: Workflow.currency({ label: 'Total Price' }),
+  createdAt: Workflow.datetime({ label: 'Created At' }),
+  updatedAt: Workflow.datetime({ label: 'Updated At' }),
 }
 
 export const shopifyTriggerSchema = {

@@ -24,7 +24,7 @@ export async function executeCollection(
         title: input.createTitle,
       }
       if (input.createBodyHtml) collection.body_html = input.createBodyHtml
-      if (input.createPublished === 'false') collection.published = false
+      if (input.createPublished === false) collection.published = false
       if (input.createSortOrder) collection.sort_order = input.createSortOrder
       if (input.createTemplateSuffix) collection.template_suffix = input.createTemplateSuffix
       if (input.createImageUrl) collection.image = { src: input.createImageUrl }
@@ -35,7 +35,7 @@ export async function executeCollection(
         '/custom_collections.json',
         { method: 'POST', body: { custom_collection: collection } }
       )
-      return mapCollectionResponse(result.custom_collection)
+      return { collection: mapCollectionResponse(result.custom_collection) }
     }
 
     case 'update': {
@@ -52,7 +52,7 @@ export async function executeCollection(
         `/custom_collections/${input.updateCollectionId}.json`,
         { method: 'PUT', body: { custom_collection: collection } }
       )
-      return mapCollectionResponse(result.custom_collection)
+      return { collection: mapCollectionResponse(result.custom_collection) }
     }
 
     case 'get': {
@@ -67,7 +67,7 @@ export async function executeCollection(
           `/custom_collections/${input.getCollectionId}.json`,
           { qs }
         )
-        return mapCollectionResponse(result.custom_collection)
+        return { collection: mapCollectionResponse(result.custom_collection) }
       } catch {
         const result = await shopifyApi<{ smart_collection: any }>(
           shopDomain,
@@ -75,7 +75,7 @@ export async function executeCollection(
           `/smart_collections/${input.getCollectionId}.json`,
           { qs }
         )
-        return mapCollectionResponse(result.smart_collection)
+        return { collection: mapCollectionResponse(result.smart_collection) }
       }
     }
 
@@ -92,10 +92,10 @@ export async function executeCollection(
       const key = input.getManyType === 'smart' ? 'smart_collections' : 'custom_collections'
 
       const result = await shopifyApi<Record<string, any[]>>(shopDomain, token, endpoint, { qs })
-      const collections = result[key] || []
+      const collections = (result[key] || []).map(mapCollectionResponse)
       return {
         collections,
-        count: String(collections.length),
+        count: collections.length,
       }
     }
 
@@ -103,7 +103,7 @@ export async function executeCollection(
       await shopifyApi(shopDomain, token, `/custom_collections/${input.deleteCollectionId}.json`, {
         method: 'DELETE',
       })
-      return { success: 'true' }
+      return { success: true }
     }
 
     case 'addProduct': {
@@ -127,7 +127,7 @@ export async function executeCollection(
       await shopifyApi(shopDomain, token, `/collects/${input.removeProductCollectId}.json`, {
         method: 'DELETE',
       })
-      return { success: 'true' }
+      return { success: true }
     }
 
     default:

@@ -11,11 +11,11 @@ export const orderInputs = {
       productId: Workflow.string({ label: 'Product ID', acceptsVariables: true }),
       variantId: Workflow.string({ label: 'Variant ID', acceptsVariables: true }),
       title: Workflow.string({ label: 'Title', acceptsVariables: true }),
-      quantity: Workflow.string({ label: 'Quantity', default: '1', acceptsVariables: true }),
-      price: Workflow.string({ label: 'Price', acceptsVariables: true }),
+      quantity: Workflow.number({ label: 'Quantity', integer: true, acceptsVariables: true }),
+      price: Workflow.currency({ label: 'Price', acceptsVariables: true }),
     }),
   }),
-  createEmail: Workflow.string({
+  createEmail: Workflow.email({
     label: 'Email',
     description: 'Customer email address',
     placeholder: 'customer@example.com',
@@ -42,21 +42,13 @@ export const orderInputs = {
     placeholder: 'vip, rush',
     acceptsVariables: true,
   }),
-  createSendReceipt: Workflow.select({
+  createSendReceipt: Workflow.boolean({
     label: 'Send Receipt',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
-  createSendFulfillmentReceipt: Workflow.select({
+  createSendFulfillmentReceipt: Workflow.boolean({
     label: 'Send Fulfillment Receipt',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
   createInventoryBehaviour: Workflow.select({
     label: 'Inventory Behaviour',
@@ -79,13 +71,9 @@ export const orderInputs = {
     placeholder: 'web',
     acceptsVariables: true,
   }),
-  createTest: Workflow.select({
+  createTest: Workflow.boolean({
     label: 'Test Order',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
   // Shipping Address
   createShippingFirstName: Workflow.string({
@@ -102,7 +90,7 @@ export const orderInputs = {
   }),
   createShippingCountry: Workflow.string({ label: 'Shipping Country', acceptsVariables: true }),
   createShippingZip: Workflow.string({ label: 'Shipping Zip', acceptsVariables: true }),
-  createShippingPhone: Workflow.string({ label: 'Shipping Phone', acceptsVariables: true }),
+  createShippingPhone: Workflow.phone({ label: 'Shipping Phone', acceptsVariables: true }),
   // Billing Address
   createBillingFirstName: Workflow.string({ label: 'Billing First Name', acceptsVariables: true }),
   createBillingLastName: Workflow.string({ label: 'Billing Last Name', acceptsVariables: true }),
@@ -115,13 +103,13 @@ export const orderInputs = {
   }),
   createBillingCountry: Workflow.string({ label: 'Billing Country', acceptsVariables: true }),
   createBillingZip: Workflow.string({ label: 'Billing Zip', acceptsVariables: true }),
-  createBillingPhone: Workflow.string({ label: 'Billing Phone', acceptsVariables: true }),
+  createBillingPhone: Workflow.phone({ label: 'Billing Phone', acceptsVariables: true }),
   // Discount Codes
   createDiscountCodes: Workflow.array({
     label: 'Discount Codes',
     items: Workflow.struct({
       code: Workflow.string({ label: 'Code', acceptsVariables: true }),
-      amount: Workflow.string({ label: 'Amount', acceptsVariables: true }),
+      amount: Workflow.currency({ label: 'Amount', acceptsVariables: true }),
       type: Workflow.select({
         label: 'Type',
         options: [
@@ -238,7 +226,7 @@ export const orderInputs = {
     description: 'ID of the order to update',
     acceptsVariables: true,
   }),
-  updateEmail: Workflow.string({
+  updateEmail: Workflow.email({
     label: 'Email',
     acceptsVariables: true,
   }),
@@ -283,39 +271,46 @@ export const orderInputs = {
   }),
   updateShippingCountry: Workflow.string({ label: 'Shipping Country', acceptsVariables: true }),
   updateShippingZip: Workflow.string({ label: 'Shipping Zip', acceptsVariables: true }),
-  updateShippingPhone: Workflow.string({ label: 'Shipping Phone', acceptsVariables: true }),
+  updateShippingPhone: Workflow.phone({ label: 'Shipping Phone', acceptsVariables: true }),
+}
+
+const orderFields = {
+  orderId: Workflow.string(),
+  orderNumber: Workflow.string(),
+  name: Workflow.string(),
+  email: Workflow.email(),
+  totalPrice: Workflow.currency(),
+  subtotalPrice: Workflow.currency(),
+  currency: Workflow.string(),
+  financialStatus: Workflow.string(),
+  fulfillmentStatus: Workflow.string(),
+  tags: Workflow.string(),
+  note: Workflow.string(),
+  lineItems: Workflow.string(),
+  customer: Workflow.string(),
+  createdAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+  orderStatusUrl: Workflow.url(),
 }
 
 export function orderComputeOutputs(operation: string) {
   if (operation === 'create' || operation === 'get' || operation === 'update') {
     return {
-      orderId: Workflow.string({ label: 'Order ID' }),
-      orderNumber: Workflow.string({ label: 'Order Number' }),
-      name: Workflow.string({ label: 'Name' }),
-      email: Workflow.string({ label: 'Email' }),
-      totalPrice: Workflow.string({ label: 'Total Price' }),
-      subtotalPrice: Workflow.string({ label: 'Subtotal Price' }),
-      currency: Workflow.string({ label: 'Currency' }),
-      financialStatus: Workflow.string({ label: 'Financial Status' }),
-      fulfillmentStatus: Workflow.string({ label: 'Fulfillment Status' }),
-      tags: Workflow.string({ label: 'Tags' }),
-      note: Workflow.string({ label: 'Note' }),
-      lineItems: Workflow.string({ label: 'Line Items (JSON)' }),
-      customer: Workflow.string({ label: 'Customer (JSON)' }),
-      createdAt: Workflow.string({ label: 'Created At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
-      orderStatusUrl: Workflow.string({ label: 'Status URL' }),
+      order: Workflow.struct(orderFields, { label: 'order' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      orders: Workflow.string({ label: 'Orders (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      orders: Workflow.array({
+        label: 'orders',
+        items: Workflow.struct(orderFields, { label: 'order' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

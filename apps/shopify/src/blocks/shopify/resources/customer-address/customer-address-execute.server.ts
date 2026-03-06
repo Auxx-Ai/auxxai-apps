@@ -41,16 +41,16 @@ export async function executeCustomerAddress(
       )
 
       const addr = result.customer_address
-      if (input.createIsDefault === 'true' && addr?.id) {
+      if (input.createIsDefault && addr?.id) {
         const defaultResult = await shopifyApi<{ customer_address: any }>(
           shopDomain,
           token,
           `/customers/${customerId}/addresses/${addr.id}/default.json`,
           { method: 'PUT' }
         )
-        return mapAddressResponse(defaultResult.customer_address)
+        return { address: mapAddressResponse(defaultResult.customer_address) }
       }
-      return mapAddressResponse(addr)
+      return { address: mapAddressResponse(addr) }
     }
 
     case 'update': {
@@ -72,7 +72,7 @@ export async function executeCustomerAddress(
         `/customers/${customerId}/addresses/${input.updateAddressId}.json`,
         { method: 'PUT', body: { address } }
       )
-      return mapAddressResponse(result.customer_address)
+      return { address: mapAddressResponse(result.customer_address) }
     }
 
     case 'get': {
@@ -81,7 +81,7 @@ export async function executeCustomerAddress(
         token,
         `/customers/${customerId}/addresses/${input.getAddressId}.json`
       )
-      return mapAddressResponse(result.customer_address)
+      return { address: mapAddressResponse(result.customer_address) }
     }
 
     case 'getMany': {
@@ -95,10 +95,10 @@ export async function executeCustomerAddress(
         `/customers/${customerId}/addresses.json`,
         { qs }
       )
-      const addresses = result.addresses || []
+      const addresses = (result.addresses || []).map(mapAddressResponse)
       return {
         addresses,
-        count: String(addresses.length),
+        count: addresses.length,
       }
     }
 
@@ -109,7 +109,7 @@ export async function executeCustomerAddress(
         `/customers/${customerId}/addresses/${input.deleteAddressId}.json`,
         { method: 'DELETE' }
       )
-      return { success: 'true' }
+      return { success: true }
     }
 
     case 'setDefault': {
@@ -119,7 +119,7 @@ export async function executeCustomerAddress(
         `/customers/${customerId}/addresses/${input.setDefaultAddressId}/default.json`,
         { method: 'PUT' }
       )
-      return mapAddressResponse(result.customer_address)
+      return { address: mapAddressResponse(result.customer_address) }
     }
 
     default:
@@ -140,6 +140,6 @@ function mapAddressResponse(address: any) {
     company: address.company || '',
     firstName: address.first_name || '',
     lastName: address.last_name || '',
-    isDefault: String(address.default ?? false),
+    isDefault: address.default ?? false,
   }
 }

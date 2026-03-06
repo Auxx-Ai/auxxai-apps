@@ -17,21 +17,17 @@ export const fulfillmentInputs = {
     placeholder: 'UPS, FedEx, USPS, etc.',
     acceptsVariables: true,
   }),
-  createTrackingUrl: Workflow.string({ label: 'Tracking URL', acceptsVariables: true }),
-  createNotifyCustomer: Workflow.select({
+  createTrackingUrl: Workflow.url({ label: 'Tracking URL', acceptsVariables: true }),
+  createNotifyCustomer: Workflow.boolean({
     label: 'Notify Customer',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
   createLineItems: Workflow.array({
     label: 'Line Items (optional, leave empty for all)',
     description: 'Specific line items to fulfill. Empty = fulfill all unfulfilled items.',
     items: Workflow.struct({
       id: Workflow.string({ label: 'Line Item ID', acceptsVariables: true }),
-      quantity: Workflow.string({ label: 'Quantity', acceptsVariables: true }),
+      quantity: Workflow.number({ label: 'Quantity', integer: true, acceptsVariables: true }),
     }),
   }),
 
@@ -39,14 +35,10 @@ export const fulfillmentInputs = {
   updateFulfillmentId: Workflow.string({ label: 'Fulfillment ID', acceptsVariables: true }),
   updateTrackingNumber: Workflow.string({ label: 'Tracking Number', acceptsVariables: true }),
   updateTrackingCompany: Workflow.string({ label: 'Tracking Company', acceptsVariables: true }),
-  updateTrackingUrl: Workflow.string({ label: 'Tracking URL', acceptsVariables: true }),
-  updateNotifyCustomer: Workflow.select({
+  updateTrackingUrl: Workflow.url({ label: 'Tracking URL', acceptsVariables: true }),
+  updateNotifyCustomer: Workflow.boolean({
     label: 'Notify Customer',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
 
   // --- Fulfillment: Get ---
@@ -81,6 +73,18 @@ export const fulfillmentInputs = {
   cancelFulfillmentId: Workflow.string({ label: 'Fulfillment ID', acceptsVariables: true }),
 }
 
+const fulfillmentFields = {
+  fulfillmentId: Workflow.string(),
+  orderId: Workflow.string(),
+  status: Workflow.string(),
+  trackingNumber: Workflow.string(),
+  trackingCompany: Workflow.string(),
+  trackingUrl: Workflow.url(),
+  lineItems: Workflow.string(),
+  createdAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+}
+
 export function fulfillmentComputeOutputs(operation: string) {
   if (
     operation === 'create' ||
@@ -89,21 +93,16 @@ export function fulfillmentComputeOutputs(operation: string) {
     operation === 'cancel'
   ) {
     return {
-      fulfillmentId: Workflow.string({ label: 'Fulfillment ID' }),
-      orderId: Workflow.string({ label: 'Order ID' }),
-      status: Workflow.string({ label: 'Status' }),
-      trackingNumber: Workflow.string({ label: 'Tracking Number' }),
-      trackingCompany: Workflow.string({ label: 'Tracking Company' }),
-      trackingUrl: Workflow.string({ label: 'Tracking URL' }),
-      lineItems: Workflow.string({ label: 'Line Items (JSON)' }),
-      createdAt: Workflow.string({ label: 'Created At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      fulfillment: Workflow.struct(fulfillmentFields, { label: 'fulfillment' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      fulfillments: Workflow.string({ label: 'Fulfillments (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      fulfillments: Workflow.array({
+        label: 'fulfillments',
+        items: Workflow.struct(fulfillmentFields, { label: 'fulfillment' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

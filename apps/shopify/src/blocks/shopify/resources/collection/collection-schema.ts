@@ -6,13 +6,9 @@ export const collectionInputs = {
   // --- Collection: Create ---
   createTitle: Workflow.string({ label: 'Title', acceptsVariables: true }),
   createBodyHtml: Workflow.string({ label: 'Description (HTML)', acceptsVariables: true }),
-  createPublished: Workflow.select({
+  createPublished: Workflow.boolean({
     label: 'Published',
-    options: [
-      { value: 'true', label: 'Yes' },
-      { value: 'false', label: 'No' },
-    ],
-    default: 'true',
+    default: true,
   }),
   createSortOrder: Workflow.select({
     label: 'Sort Order',
@@ -33,7 +29,7 @@ export const collectionInputs = {
     description: 'Liquid template suffix',
     acceptsVariables: true,
   }),
-  createImageUrl: Workflow.string({ label: 'Image URL', acceptsVariables: true }),
+  createImageUrl: Workflow.url({ label: 'Image URL', acceptsVariables: true }),
 
   // --- Collection: Update ---
   updateCollectionId: Workflow.string({ label: 'Collection ID', acceptsVariables: true }),
@@ -123,39 +119,46 @@ export const collectionInputs = {
   }),
 }
 
+const collectionFields = {
+  collectionId: Workflow.string(),
+  title: Workflow.string(),
+  bodyHtml: Workflow.string(),
+  handle: Workflow.string(),
+  sortOrder: Workflow.string(),
+  publishedAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+}
+
 export function collectionComputeOutputs(operation: string) {
   if (operation === 'create' || operation === 'get' || operation === 'update') {
     return {
-      collectionId: Workflow.string({ label: 'Collection ID' }),
-      title: Workflow.string({ label: 'Title' }),
-      bodyHtml: Workflow.string({ label: 'Description (HTML)' }),
-      handle: Workflow.string({ label: 'Handle' }),
-      sortOrder: Workflow.string({ label: 'Sort Order' }),
-      publishedAt: Workflow.string({ label: 'Published At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      collection: Workflow.struct(collectionFields, { label: 'collection' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      collections: Workflow.string({ label: 'Collections (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      collections: Workflow.array({
+        label: 'collections',
+        items: Workflow.struct(collectionFields, { label: 'collection' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   if (operation === 'addProduct') {
     return {
-      collectId: Workflow.string({ label: 'Collect ID' }),
-      collectionId: Workflow.string({ label: 'Collection ID' }),
-      productId: Workflow.string({ label: 'Product ID' }),
+      collectId: Workflow.string(),
+      collectionId: Workflow.string(),
+      productId: Workflow.string(),
     }
   }
   if (operation === 'removeProduct') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   return {}

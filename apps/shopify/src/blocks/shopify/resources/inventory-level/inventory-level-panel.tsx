@@ -16,7 +16,7 @@ export function InventoryLevelPanel({
   locations,
   locationsLoading,
 }: InventoryLevelPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, NumberInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   const locationOptions = locationsLoading
     ? [{ label: 'Loading locations...', value: '' }]
@@ -52,10 +52,10 @@ export function InventoryLevelPanel({
               <OptionsInput name="setLocationId" options={locationOptions} />
             </VarField>
             <VarField>
-              <StringInput name="setAvailable" />
+              <NumberInput name="setAvailable" />
             </VarField>
             <VarField>
-              <OptionsInput name="setDisconnectIfNecessary" />
+              <BooleanInput name="setDisconnectIfNecessary" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -72,7 +72,7 @@ export function InventoryLevelPanel({
               <OptionsInput name="adjustLocationId" options={locationOptions} />
             </VarField>
             <VarField>
-              <StringInput name="adjustAvailableAdjustment" />
+              <NumberInput name="adjustAvailableAdjustment" />
             </VarField>
           </VarFieldGroup>
         </Section>

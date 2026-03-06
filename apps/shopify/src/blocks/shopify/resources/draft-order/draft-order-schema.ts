@@ -9,8 +9,8 @@ export const draftOrderInputs = {
     items: Workflow.struct({
       variantId: Workflow.string({ label: 'Variant ID', acceptsVariables: true }),
       title: Workflow.string({ label: 'Title (custom line item)', acceptsVariables: true }),
-      quantity: Workflow.string({ label: 'Quantity', default: '1', acceptsVariables: true }),
-      price: Workflow.string({ label: 'Price (custom line item)', acceptsVariables: true }),
+      quantity: Workflow.number({ label: 'Quantity', integer: true, acceptsVariables: true }),
+      price: Workflow.currency({ label: 'Price (custom line item)', acceptsVariables: true }),
     }),
   }),
   createCustomerId: Workflow.string({
@@ -18,7 +18,7 @@ export const draftOrderInputs = {
     description: 'Existing customer to associate',
     acceptsVariables: true,
   }),
-  createEmail: Workflow.string({
+  createEmail: Workflow.email({
     label: 'Email',
     description: 'Required if no customer ID',
     acceptsVariables: true,
@@ -29,21 +29,13 @@ export const draftOrderInputs = {
     description: 'Comma-separated',
     acceptsVariables: true,
   }),
-  createTaxExempt: Workflow.select({
+  createTaxExempt: Workflow.boolean({
     label: 'Tax Exempt',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
-  createUseCustomerDefaultAddress: Workflow.select({
+  createUseCustomerDefaultAddress: Workflow.boolean({
     label: 'Use Customer Default Address',
-    options: [
-      { value: 'true', label: 'Yes' },
-      { value: 'false', label: 'No' },
-    ],
-    default: 'true',
+    default: true,
   }),
   createShippingFirstName: Workflow.string({
     label: 'Shipping First Name',
@@ -59,7 +51,7 @@ export const draftOrderInputs = {
   }),
   createShippingCountry: Workflow.string({ label: 'Shipping Country', acceptsVariables: true }),
   createShippingZip: Workflow.string({ label: 'Shipping Zip', acceptsVariables: true }),
-  createShippingPhone: Workflow.string({ label: 'Shipping Phone', acceptsVariables: true }),
+  createShippingPhone: Workflow.phone({ label: 'Shipping Phone', acceptsVariables: true }),
 
   // --- Draft Order: Update ---
   updateDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
@@ -69,7 +61,7 @@ export const draftOrderInputs = {
     description: 'Comma-separated (replaces existing)',
     acceptsVariables: true,
   }),
-  updateEmail: Workflow.string({ label: 'Email', acceptsVariables: true }),
+  updateEmail: Workflow.email({ label: 'Email', acceptsVariables: true }),
 
   // --- Draft Order: Get ---
   getDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
@@ -112,19 +104,15 @@ export const draftOrderInputs = {
 
   // --- Draft Order: Complete ---
   completeDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
-  completePaymentPending: Workflow.select({
+  completePaymentPending: Workflow.boolean({
     label: 'Payment Pending',
     description: 'Mark as payment pending instead of paid',
-    options: [
-      { value: 'false', label: 'No (mark as paid)' },
-      { value: 'true', label: 'Yes (payment pending)' },
-    ],
-    default: 'false',
+    default: false,
   }),
 
   // --- Draft Order: Send Invoice ---
   sendInvoiceDraftOrderId: Workflow.string({ label: 'Draft Order ID', acceptsVariables: true }),
-  sendInvoiceTo: Workflow.string({
+  sendInvoiceTo: Workflow.email({
     label: 'To Email',
     description: 'Recipient email (defaults to customer email)',
     acceptsVariables: true,
@@ -138,6 +126,24 @@ export const draftOrderInputs = {
   }),
 }
 
+const draftOrderFields = {
+  draftOrderId: Workflow.string(),
+  name: Workflow.string(),
+  status: Workflow.string(),
+  email: Workflow.email(),
+  totalPrice: Workflow.currency(),
+  subtotalPrice: Workflow.currency(),
+  currency: Workflow.string(),
+  tags: Workflow.string(),
+  note: Workflow.string(),
+  lineItems: Workflow.string(),
+  customer: Workflow.string(),
+  orderId: Workflow.string(),
+  invoiceUrl: Workflow.url(),
+  createdAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+}
+
 export function draftOrderComputeOutputs(operation: string) {
   if (
     operation === 'create' ||
@@ -146,37 +152,26 @@ export function draftOrderComputeOutputs(operation: string) {
     operation === 'complete'
   ) {
     return {
-      draftOrderId: Workflow.string({ label: 'Draft Order ID' }),
-      name: Workflow.string({ label: 'Name' }),
-      status: Workflow.string({ label: 'Status' }),
-      email: Workflow.string({ label: 'Email' }),
-      totalPrice: Workflow.string({ label: 'Total Price' }),
-      subtotalPrice: Workflow.string({ label: 'Subtotal Price' }),
-      currency: Workflow.string({ label: 'Currency' }),
-      tags: Workflow.string({ label: 'Tags' }),
-      note: Workflow.string({ label: 'Note' }),
-      lineItems: Workflow.string({ label: 'Line Items (JSON)' }),
-      customer: Workflow.string({ label: 'Customer (JSON)' }),
-      orderId: Workflow.string({ label: 'Order ID (after completion)' }),
-      invoiceUrl: Workflow.string({ label: 'Invoice URL' }),
-      createdAt: Workflow.string({ label: 'Created At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      draftOrder: Workflow.struct(draftOrderFields, { label: 'draftOrder' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany') {
     return {
-      draftOrders: Workflow.string({ label: 'Draft Orders (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      draftOrders: Workflow.array({
+        label: 'draftOrders',
+        items: Workflow.struct(draftOrderFields, { label: 'draftOrder' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   if (operation === 'sendInvoice') {
     return {
-      draftOrderInvoice: Workflow.string({ label: 'Invoice (JSON)' }),
+      draftOrderInvoice: Workflow.string(),
     }
   }
   return {}

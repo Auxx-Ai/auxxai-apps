@@ -8,7 +8,7 @@ interface CollectionPanelProps {
 }
 
 export function CollectionPanel({ api }: CollectionPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -27,7 +27,7 @@ export function CollectionPanel({ api }: CollectionPanelProps) {
         <Section title="Options" collapsible>
           <VarFieldGroup>
             <VarField>
-              <OptionsInput name="createPublished" />
+              <BooleanInput name="createPublished" />
             </VarField>
             <VarField>
               <OptionsInput name="createSortOrder" />

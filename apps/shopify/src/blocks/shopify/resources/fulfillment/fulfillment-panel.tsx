@@ -12,7 +12,7 @@ interface FulfillmentPanelProps {
 }
 
 export function FulfillmentPanel({ api, locations, locationsLoading }: FulfillmentPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   const locationOptions = locationsLoading
     ? [{ label: 'Loading locations...', value: '' }]
@@ -37,7 +37,7 @@ export function FulfillmentPanel({ api, locations, locationsLoading }: Fulfillme
               <OptionsInput name="createLocationId" options={locationOptions} />
             </VarField>
             <VarField>
-              <OptionsInput name="createNotifyCustomer" />
+              <BooleanInput name="createNotifyCustomer" />
             </VarField>
           </VarFieldGroup>
         </Section>
@@ -77,7 +77,7 @@ export function FulfillmentPanel({ api, locations, locationsLoading }: Fulfillme
               <StringInput name="updateTrackingUrl" />
             </VarField>
             <VarField>
-              <OptionsInput name="updateNotifyCustomer" />
+              <BooleanInput name="updateNotifyCustomer" />
             </VarField>
           </VarFieldGroup>
         </Section>

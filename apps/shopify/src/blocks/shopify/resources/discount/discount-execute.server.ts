@@ -12,6 +12,10 @@ function getConnectionInfo() {
   }
 }
 
+function centsToDecimal(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
 export async function executeDiscount(operation: string, input: any): Promise<Record<string, any>> {
   const { token, shopDomain } = getConnectionInfo()
 
@@ -29,16 +33,16 @@ export async function executeDiscount(operation: string, input: any): Promise<Re
         starts_at: input.createStartsAt || new Date().toISOString(),
       }
       if (input.createEndsAt) priceRule.ends_at = input.createEndsAt
-      if (input.createUsageLimit) priceRule.usage_limit = Number(input.createUsageLimit)
-      if (input.createOncePerCustomer === 'true') priceRule.once_per_customer = true
-      if (input.createMinSubtotal) {
+      if (input.createUsageLimit != null) priceRule.usage_limit = input.createUsageLimit
+      if (input.createOncePerCustomer) priceRule.once_per_customer = true
+      if (input.createMinSubtotal != null) {
         priceRule.prerequisite_subtotal_range = {
-          greater_than_or_equal_to: input.createMinSubtotal,
+          greater_than_or_equal_to: centsToDecimal(input.createMinSubtotal),
         }
       }
-      if (input.createMinQuantity) {
+      if (input.createMinQuantity != null) {
         priceRule.prerequisite_quantity_range = {
-          greater_than_or_equal_to: Number(input.createMinQuantity),
+          greater_than_or_equal_to: input.createMinQuantity,
         }
       }
 
@@ -59,26 +63,28 @@ export async function executeDiscount(operation: string, input: any): Promise<Re
       )
 
       return {
-        priceRuleId: String(priceRuleId),
-        discountCodeId: String(codeResult.discount_code.id ?? ''),
-        code: codeResult.discount_code.code || '',
-        value: priceRuleResult.price_rule.value || '',
-        valueType: priceRuleResult.price_rule.value_type || '',
-        targetType: priceRuleResult.price_rule.target_type || '',
-        startsAt: priceRuleResult.price_rule.starts_at || '',
-        endsAt: priceRuleResult.price_rule.ends_at || '',
-        usageLimit: String(priceRuleResult.price_rule.usage_limit ?? ''),
-        timesUsed: '0',
+        discount: {
+          priceRuleId: String(priceRuleId),
+          discountCodeId: String(codeResult.discount_code.id ?? ''),
+          code: codeResult.discount_code.code || '',
+          value: priceRuleResult.price_rule.value || '',
+          valueType: priceRuleResult.price_rule.value_type || '',
+          targetType: priceRuleResult.price_rule.target_type || '',
+          startsAt: priceRuleResult.price_rule.starts_at || '',
+          endsAt: priceRuleResult.price_rule.ends_at || '',
+          usageLimit: priceRuleResult.price_rule.usage_limit ?? 0,
+          timesUsed: 0,
+        },
       }
     }
 
     case 'update': {
       // Update price rule if value fields provided
-      if (input.updateValue || input.updateEndsAt || input.updateUsageLimit) {
+      if (input.updateValue || input.updateEndsAt || input.updateUsageLimit != null) {
         const priceRule: any = {}
         if (input.updateValue) priceRule.value = input.updateValue
         if (input.updateEndsAt) priceRule.ends_at = input.updateEndsAt
-        if (input.updateUsageLimit) priceRule.usage_limit = Number(input.updateUsageLimit)
+        if (input.updateUsageLimit != null) priceRule.usage_limit = input.updateUsageLimit
 
         await shopifyApi(shopDomain, token, `/price_rules/${input.updatePriceRuleId}.json`, {
           method: 'PUT',
@@ -99,10 +105,12 @@ export async function executeDiscount(operation: string, input: any): Promise<Re
       }
 
       return {
-        priceRuleId: String(input.updatePriceRuleId),
-        discountCodeId: String(input.updateDiscountCodeId || discountCode.id || ''),
-        code: input.updateCode || discountCode.code || '',
-        value: input.updateValue || '',
+        discount: {
+          priceRuleId: String(input.updatePriceRuleId),
+          discountCodeId: String(input.updateDiscountCodeId || discountCode.id || ''),
+          code: input.updateCode || discountCode.code || '',
+          value: input.updateValue || '',
+        },
       }
     }
 
@@ -124,16 +132,18 @@ export async function executeDiscount(operation: string, input: any): Promise<Re
       }
 
       return {
-        priceRuleId: String(priceRuleResult.price_rule.id ?? ''),
-        discountCodeId: String(discountCode.id ?? ''),
-        code: discountCode.code || '',
-        value: priceRuleResult.price_rule.value || '',
-        valueType: priceRuleResult.price_rule.value_type || '',
-        targetType: priceRuleResult.price_rule.target_type || '',
-        startsAt: priceRuleResult.price_rule.starts_at || '',
-        endsAt: priceRuleResult.price_rule.ends_at || '',
-        usageLimit: String(priceRuleResult.price_rule.usage_limit ?? ''),
-        timesUsed: String(discountCode.usage_count ?? '0'),
+        discount: {
+          priceRuleId: String(priceRuleResult.price_rule.id ?? ''),
+          discountCodeId: String(discountCode.id ?? ''),
+          code: discountCode.code || '',
+          value: priceRuleResult.price_rule.value || '',
+          valueType: priceRuleResult.price_rule.value_type || '',
+          targetType: priceRuleResult.price_rule.target_type || '',
+          startsAt: priceRuleResult.price_rule.starts_at || '',
+          endsAt: priceRuleResult.price_rule.ends_at || '',
+          usageLimit: priceRuleResult.price_rule.usage_limit ?? 0,
+          timesUsed: discountCode.usage_count ?? 0,
+        },
       }
     }
 
@@ -154,7 +164,7 @@ export async function executeDiscount(operation: string, input: any): Promise<Re
         return {
           priceRules: [],
           discountCodes: codes,
-          count: String(codes.length),
+          count: codes.length,
         }
       }
 
@@ -169,7 +179,7 @@ export async function executeDiscount(operation: string, input: any): Promise<Re
       return {
         priceRules: rules,
         discountCodes: [],
-        count: String(rules.length),
+        count: rules.length,
       }
     }
 
@@ -186,7 +196,7 @@ export async function executeDiscount(operation: string, input: any): Promise<Re
           method: 'DELETE',
         })
       }
-      return { success: 'true' }
+      return { success: true }
     }
 
     default:

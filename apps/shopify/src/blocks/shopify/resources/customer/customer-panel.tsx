@@ -8,7 +8,7 @@ interface CustomerPanelProps {
 }
 
 export function CustomerPanel({ api }: CustomerPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -39,13 +39,13 @@ export function CustomerPanel({ api }: CustomerPanelProps) {
               <StringInput name="createNote" />
             </VarField>
             <VarField>
-              <OptionsInput name="createVerifiedEmail" />
+              <BooleanInput name="createVerifiedEmail" />
             </VarField>
             <VarField>
-              <OptionsInput name="createSendEmailInvite" />
+              <BooleanInput name="createSendEmailInvite" />
             </VarField>
             <VarField>
-              <OptionsInput name="createTaxExempt" />
+              <BooleanInput name="createTaxExempt" />
             </VarField>
           </VarFieldGroup>
         </Section>

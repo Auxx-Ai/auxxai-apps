@@ -6,12 +6,12 @@ export const customerInputs = {
   // --- Customer: Create ---
   createFirstName: Workflow.string({ label: 'First Name', acceptsVariables: true }),
   createLastName: Workflow.string({ label: 'Last Name', acceptsVariables: true }),
-  createEmail: Workflow.string({
+  createEmail: Workflow.email({
     label: 'Email',
     placeholder: 'customer@example.com',
     acceptsVariables: true,
   }),
-  createPhone: Workflow.string({
+  createPhone: Workflow.phone({
     label: 'Phone',
     placeholder: '+1234567890',
     acceptsVariables: true,
@@ -22,29 +22,17 @@ export const customerInputs = {
     acceptsVariables: true,
   }),
   createNote: Workflow.string({ label: 'Note', acceptsVariables: true }),
-  createVerifiedEmail: Workflow.select({
+  createVerifiedEmail: Workflow.boolean({
     label: 'Verified Email',
-    options: [
-      { value: 'true', label: 'Yes' },
-      { value: 'false', label: 'No' },
-    ],
-    default: 'true',
+    default: true,
   }),
-  createSendEmailInvite: Workflow.select({
+  createSendEmailInvite: Workflow.boolean({
     label: 'Send Email Invite',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
-  createTaxExempt: Workflow.select({
+  createTaxExempt: Workflow.boolean({
     label: 'Tax Exempt',
-    options: [
-      { value: 'false', label: 'No' },
-      { value: 'true', label: 'Yes' },
-    ],
-    default: 'false',
+    default: false,
   }),
   createAddress1: Workflow.string({ label: 'Address Line 1', acceptsVariables: true }),
   createAddress2: Workflow.string({ label: 'Address Line 2', acceptsVariables: true }),
@@ -58,8 +46,8 @@ export const customerInputs = {
   updateCustomerId: Workflow.string({ label: 'Customer ID', acceptsVariables: true }),
   updateFirstName: Workflow.string({ label: 'First Name', acceptsVariables: true }),
   updateLastName: Workflow.string({ label: 'Last Name', acceptsVariables: true }),
-  updateEmail: Workflow.string({ label: 'Email', acceptsVariables: true }),
-  updatePhone: Workflow.string({ label: 'Phone', acceptsVariables: true }),
+  updateEmail: Workflow.email({ label: 'Email', acceptsVariables: true }),
+  updatePhone: Workflow.phone({ label: 'Phone', acceptsVariables: true }),
   updateTags: Workflow.string({
     label: 'Tags',
     description: 'Comma-separated (replaces existing)',
@@ -132,32 +120,39 @@ export const customerInputs = {
   }),
 }
 
+const customerFields = {
+  customerId: Workflow.string(),
+  firstName: Workflow.string(),
+  lastName: Workflow.string(),
+  email: Workflow.email(),
+  phone: Workflow.phone(),
+  tags: Workflow.string(),
+  note: Workflow.string(),
+  ordersCount: Workflow.number({ integer: true }),
+  totalSpent: Workflow.currency(),
+  addresses: Workflow.string(),
+  createdAt: Workflow.datetime(),
+  updatedAt: Workflow.datetime(),
+}
+
 export function customerComputeOutputs(operation: string) {
   if (operation === 'create' || operation === 'get' || operation === 'update') {
     return {
-      customerId: Workflow.string({ label: 'Customer ID' }),
-      firstName: Workflow.string({ label: 'First Name' }),
-      lastName: Workflow.string({ label: 'Last Name' }),
-      email: Workflow.string({ label: 'Email' }),
-      phone: Workflow.string({ label: 'Phone' }),
-      tags: Workflow.string({ label: 'Tags' }),
-      note: Workflow.string({ label: 'Note' }),
-      ordersCount: Workflow.string({ label: 'Orders Count' }),
-      totalSpent: Workflow.string({ label: 'Total Spent' }),
-      addresses: Workflow.string({ label: 'Addresses (JSON)' }),
-      createdAt: Workflow.string({ label: 'Created At' }),
-      updatedAt: Workflow.string({ label: 'Updated At' }),
+      customer: Workflow.struct(customerFields, { label: 'customer' }),
     }
   }
   if (operation === 'delete') {
     return {
-      success: Workflow.string({ label: 'Success' }),
+      success: Workflow.boolean({ label: 'success' }),
     }
   }
   if (operation === 'getMany' || operation === 'search') {
     return {
-      customers: Workflow.string({ label: 'Customers (JSON)' }),
-      count: Workflow.string({ label: 'Count' }),
+      customers: Workflow.array({
+        label: 'customers',
+        items: Workflow.struct(customerFields, { label: 'customer' }),
+      }),
+      count: Workflow.number({ label: 'count', integer: true }),
     }
   }
   return {}

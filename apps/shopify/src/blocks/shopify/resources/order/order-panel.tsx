@@ -12,7 +12,7 @@ interface OrderPanelProps {
 }
 
 export function OrderPanel({ api, locations, locationsLoading }: OrderPanelProps) {
-  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const { StringInput, OptionsInput, BooleanInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>
@@ -37,10 +37,10 @@ export function OrderPanel({ api, locations, locationsLoading }: OrderPanelProps
               <StringInput name="createTags" />
             </VarField>
             <VarField>
-              <OptionsInput name="createSendReceipt" />
+              <BooleanInput name="createSendReceipt" />
             </VarField>
             <VarField>
-              <OptionsInput name="createSendFulfillmentReceipt" />
+              <BooleanInput name="createSendFulfillmentReceipt" />
             </VarField>
             <VarField>
               <OptionsInput name="createInventoryBehaviour" />
@@ -57,7 +57,7 @@ export function OrderPanel({ api, locations, locationsLoading }: OrderPanelProps
               <StringInput name="createSourceName" />
             </VarField>
             <VarField>
-              <OptionsInput name="createTest" />
+              <BooleanInput name="createTest" />
             </VarField>
           </VarFieldGroup>
         </Section>

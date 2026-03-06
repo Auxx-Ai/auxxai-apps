@@ -26,12 +26,12 @@ export async function executeFulfillment(
       if (input.createTrackingNumber) fulfillment.tracking_number = input.createTrackingNumber
       if (input.createTrackingCompany) fulfillment.tracking_company = input.createTrackingCompany
       if (input.createTrackingUrl) fulfillment.tracking_urls = [input.createTrackingUrl]
-      fulfillment.notify_customer = input.createNotifyCustomer === 'true'
+      fulfillment.notify_customer = !!input.createNotifyCustomer
 
       if (input.createLineItems?.length) {
         fulfillment.line_items = input.createLineItems.map((li: any) => ({
           id: Number(li.id),
-          quantity: Number(li.quantity),
+          quantity: li.quantity,
         }))
       }
 
@@ -41,7 +41,7 @@ export async function executeFulfillment(
         `/orders/${orderId}/fulfillments.json`,
         { method: 'POST', body: { fulfillment } }
       )
-      return mapFulfillmentResponse(result.fulfillment)
+      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
     }
 
     case 'update': {
@@ -49,7 +49,7 @@ export async function executeFulfillment(
       if (input.updateTrackingNumber) fulfillment.tracking_number = input.updateTrackingNumber
       if (input.updateTrackingCompany) fulfillment.tracking_company = input.updateTrackingCompany
       if (input.updateTrackingUrl) fulfillment.tracking_urls = [input.updateTrackingUrl]
-      fulfillment.notify_customer = input.updateNotifyCustomer === 'true'
+      fulfillment.notify_customer = !!input.updateNotifyCustomer
 
       const result = await shopifyApi<{ fulfillment: any }>(
         shopDomain,
@@ -57,7 +57,7 @@ export async function executeFulfillment(
         `/orders/${orderId}/fulfillments/${input.updateFulfillmentId}.json`,
         { method: 'PUT', body: { fulfillment } }
       )
-      return mapFulfillmentResponse(result.fulfillment)
+      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
     }
 
     case 'get': {
@@ -70,7 +70,7 @@ export async function executeFulfillment(
         `/orders/${orderId}/fulfillments/${input.getFulfillmentId}.json`,
         { qs }
       )
-      return mapFulfillmentResponse(result.fulfillment)
+      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
     }
 
     case 'getMany': {
@@ -87,10 +87,10 @@ export async function executeFulfillment(
         `/orders/${orderId}/fulfillments.json`,
         { qs }
       )
-      const fulfillments = result.fulfillments || []
+      const fulfillments = (result.fulfillments || []).map(mapFulfillmentResponse)
       return {
         fulfillments,
-        count: String(fulfillments.length),
+        count: fulfillments.length,
       }
     }
 
@@ -101,7 +101,7 @@ export async function executeFulfillment(
         `/orders/${orderId}/fulfillments/${input.cancelFulfillmentId}/cancel.json`,
         { method: 'POST' }
       )
-      return mapFulfillmentResponse(result.fulfillment)
+      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
     }
 
     default:
