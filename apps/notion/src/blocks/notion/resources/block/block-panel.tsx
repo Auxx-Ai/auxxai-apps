@@ -17,6 +17,7 @@ export function BlockPanel({ api }: BlockPanelProps) {
     StringInput,
     NumberInput,
     BooleanInput,
+    OptionsInput,
     ArrayInput,
     VarField,
     VarFieldGroup,
@@ -36,11 +37,22 @@ export function BlockPanel({ api }: BlockPanelProps) {
           </VarFieldGroup>
         </Section>
         <Section title="Blocks">
-          <VarFieldGroup>
-            <VarField>
-              <ArrayInput name="appendBlocks" />
-            </VarField>
-          </VarFieldGroup>
+          <ArrayInput name="appendBlocks" addLabel="Add Block">
+            <VarFieldGroup>
+              <VarField>
+                <OptionsInput name="blockType" />
+              </VarField>
+              <VarField>
+                <StringInput name="content" />
+              </VarField>
+              <VarField>
+                <BooleanInput name="checked" />
+              </VarField>
+              <VarField>
+                <OptionsInput name="language" />
+              </VarField>
+            </VarFieldGroup>
+          </ArrayInput>
         </Section>
       </ConditionalRender>
 

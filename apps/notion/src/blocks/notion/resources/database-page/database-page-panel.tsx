@@ -71,11 +71,16 @@ export function DatabasePagePanel({
           </VarFieldGroup>
         </Section>
         <Section title="Properties">
-          <VarFieldGroup>
-            <VarField>
-              <ArrayInput name="createProperties" propertyOptions={loadingProperties} />
-            </VarField>
-          </VarFieldGroup>
+          <ArrayInput name="createProperties" addLabel="Add Property">
+            <VarFieldGroup>
+              <VarField>
+                <OptionsInput name="propertyName" options={loadingProperties} />
+              </VarField>
+              <VarField>
+                <StringInput name="propertyValue" />
+              </VarField>
+            </VarFieldGroup>
+          </ArrayInput>
         </Section>
         <Section title="Content" collapsible>
           <VarFieldGroup>
@@ -169,11 +174,16 @@ export function DatabasePagePanel({
           </VarFieldGroup>
         </Section>
         <Section title="Properties">
-          <VarFieldGroup>
-            <VarField>
-              <ArrayInput name="updateProperties" propertyOptions={loadingProperties} />
-            </VarField>
-          </VarFieldGroup>
+          <ArrayInput name="updateProperties" addLabel="Add Property">
+            <VarFieldGroup>
+              <VarField>
+                <OptionsInput name="propertyName" options={loadingProperties} />
+              </VarField>
+              <VarField>
+                <StringInput name="propertyValue" />
+              </VarField>
+            </VarFieldGroup>
+          </ArrayInput>
         </Section>
       </ConditionalRender>
     </>
