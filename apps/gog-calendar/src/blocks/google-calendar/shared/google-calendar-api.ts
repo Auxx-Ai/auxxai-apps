@@ -1,5 +1,7 @@
 // src/blocks/google-calendar/shared/google-calendar-api.ts
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 const BASE_URL = 'https://www.googleapis.com'
 
 export function throwConnectionNotFound(): never {
@@ -36,9 +38,13 @@ export async function gcalApiRequest(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(
-      (error as any)?.error?.message || `Google Calendar API error: ${response.status}`
-    )
+    const message = (error as any)?.error?.message || `Google Calendar API error: ${response.status}`
+
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
+    throw new Error(message)
   }
 
   if (response.status === 204) return { success: true }

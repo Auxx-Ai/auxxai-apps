@@ -1,5 +1,7 @@
 // src/blocks/discord/shared/discord-api.ts
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 const DISCORD_API = 'https://discord.com/api/v10'
 
 const ERROR_MESSAGES: Record<number, string> = {
@@ -73,6 +75,10 @@ export async function discordApi<T = unknown>(
   const data = await response.json()
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const discordCode = (data as any)?.code as number | undefined
     const discordMessage = (data as any)?.message as string | undefined
 

@@ -1,3 +1,5 @@
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 const BASE_URL = 'https://people.googleapis.com/v1'
 
 const ALL_PERSON_FIELDS = [
@@ -56,6 +58,10 @@ export async function contactsApiRequest(
   })
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const error = await response.json().catch(() => ({}))
     throw new Error(error?.error?.message || `Google Contacts API error: ${response.status}`)
   }

@@ -1,3 +1,5 @@
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const STRIPE_API = 'https://api.stripe.com/v1'
 
 const ERROR_MESSAGES: Record<number, string> = {
@@ -94,6 +96,10 @@ export async function stripeApi<T = unknown>(
   const response = await fetch(url.toString(), fetchOptions)
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const errorBody = await response.json().catch(() => null)
     const stripeError = errorBody?.error
 

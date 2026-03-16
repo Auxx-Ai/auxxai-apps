@@ -1,5 +1,7 @@
 // src/blocks/google-sheets/shared/google-sheets-api.ts
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 const SHEETS_BASE_URL = 'https://sheets.googleapis.com'
 const DRIVE_BASE_URL = 'https://www.googleapis.com'
 
@@ -38,7 +40,13 @@ export async function sheetsApiRequest(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error((error as any)?.error?.message || `Google Sheets API error: ${response.status}`)
+    const message = (error as any)?.error?.message || `Google Sheets API error: ${response.status}`
+
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
+    throw new Error(message)
   }
 
   if (response.status === 204) return { success: true }

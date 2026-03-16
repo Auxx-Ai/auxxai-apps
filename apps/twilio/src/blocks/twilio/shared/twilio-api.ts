@@ -1,5 +1,7 @@
 // src/blocks/twilio/shared/twilio-api.ts
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 const TWILIO_API = 'https://api.twilio.com/2010-04-01/Accounts'
 
 const ERROR_MESSAGES: Record<number, string> = {
@@ -34,6 +36,10 @@ export async function twilioApi<T = unknown>(
   })
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const errorData = await response.json().catch(() => null)
     const twilioCode = errorData?.code
     const message =
