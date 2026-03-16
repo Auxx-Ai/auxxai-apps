@@ -5,6 +5,8 @@
  * dynamic list loaders (databases, properties, users, pages).
  */
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const NOTION_API = 'https://api.notion.com/v1'
 export const NOTION_VERSION = '2022-06-28'
 const MAX_PAGES = 50
@@ -68,6 +70,10 @@ export async function notionApi(
   })
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     let errorMessage = `Notion API error: ${response.status} ${response.statusText}`
     try {
       const errorBody = await response.json()

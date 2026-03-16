@@ -1,3 +1,5 @@
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const TELEGRAM_API = 'https://api.telegram.org'
 
 const ERROR_MESSAGES: Record<number, string> = {
@@ -43,8 +45,13 @@ export async function telegramApi<T = unknown>(
   const data = (await response.json()) as TelegramApiResponse<T>
 
   if (!data.ok) {
+    const statusCode = data.error_code ?? response.status
+    if (statusCode === 401 || statusCode === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const message =
-      ERROR_MESSAGES[data.error_code ?? response.status] ??
+      ERROR_MESSAGES[statusCode] ??
       `Telegram API error: ${data.description ?? response.statusText}`
     throw new Error(message)
   }

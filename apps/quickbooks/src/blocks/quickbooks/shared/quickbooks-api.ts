@@ -1,3 +1,5 @@
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 const QUICKBOOKS_PRODUCTION_API = 'https://quickbooks.api.intuit.com'
 const QUICKBOOKS_SANDBOX_API = 'https://sandbox-quickbooks.api.intuit.com'
 
@@ -49,6 +51,10 @@ export async function quickbooksApi<T = unknown>(
   const data = await response.json()
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const fault = data?.Fault?.Error?.[0]
     const faultMsg = fault?.Detail || fault?.Message
     const statusMsg = ERROR_MESSAGES[response.status]

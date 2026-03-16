@@ -5,6 +5,8 @@
  * dynamic list loaders (bases, tables, fields, views).
  */
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const AIRTABLE_API = 'https://api.airtable.com/v0'
 const MAX_PAGES = 50
 const PAGE_DELAY_MS = 250
@@ -69,6 +71,10 @@ export async function airtableApi(
   })
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     let errorMessage = `Airtable API error: ${response.status} ${response.statusText}`
     try {
       const errorBody = await response.json()

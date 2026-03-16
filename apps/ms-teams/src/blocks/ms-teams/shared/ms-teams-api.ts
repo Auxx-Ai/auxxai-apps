@@ -1,5 +1,7 @@
 // src/blocks/ms-teams/shared/ms-teams-api.ts
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const GRAPH_API = 'https://graph.microsoft.com'
 
 const ERROR_MESSAGES: Record<number, string> = {
@@ -47,6 +49,10 @@ export async function graphApi<T = unknown>(
   })
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const message =
       ERROR_MESSAGES[response.status] ??
       `Microsoft Graph API error: ${response.status} ${response.statusText}`

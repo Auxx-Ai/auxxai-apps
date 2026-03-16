@@ -1,3 +1,5 @@
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const GITHUB_API = 'https://api.github.com'
 
 export const ERROR_MESSAGES: Record<number, string> = {
@@ -47,6 +49,10 @@ export async function githubApi(
   if (response.status === 204) return {}
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const errorMsg =
       ERROR_MESSAGES[response.status] ??
       `GitHub API error: ${response.status} ${response.statusText}`

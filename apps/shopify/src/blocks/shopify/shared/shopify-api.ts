@@ -1,5 +1,7 @@
 // src/blocks/shopify/shared/shopify-api.ts
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 const API_VERSION = '2024-10'
 
 const ERROR_MESSAGES: Record<number, string> = {
@@ -63,6 +65,10 @@ export async function shopifyApi<T = unknown>(
   const data = await response.json()
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const statusMsg = ERROR_MESSAGES[response.status]
     const apiErrors = data?.errors
     const message = apiErrors
@@ -103,6 +109,9 @@ export async function shopifyApiGetAll<T>(
     })
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new ConnectionExpiredError('organization')
+      }
       const data = await response.json().catch(() => ({}))
       throw new Error(data?.errors || `Shopify API error: ${response.status}`)
     }

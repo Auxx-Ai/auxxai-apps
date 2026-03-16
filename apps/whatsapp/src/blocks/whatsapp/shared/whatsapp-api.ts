@@ -1,5 +1,7 @@
 // src/blocks/whatsapp/shared/whatsapp-api.ts
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const WHATSAPP_API = 'https://graph.facebook.com/v21.0'
 
 const ERROR_MESSAGES: Record<number, string> = {
@@ -42,6 +44,10 @@ export async function whatsappApi<T = unknown>(
   const data = await response.json()
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
+
     const apiError = data?.error?.message
     const message =
       ERROR_MESSAGES[response.status] ?? `WhatsApp API error: ${apiError ?? response.statusText}`

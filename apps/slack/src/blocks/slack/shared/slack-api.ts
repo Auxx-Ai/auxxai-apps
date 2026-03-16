@@ -5,6 +5,8 @@
  * the dynamic list loaders (channels, users).
  */
 
+import { ConnectionExpiredError } from '@auxx/sdk/server'
+
 export const SLACK_API = 'https://slack.com/api'
 
 /** Map Slack API error codes to human-readable messages. */
@@ -86,6 +88,9 @@ export async function slackApi(
   })
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionExpiredError('organization')
+    }
     throw new Error(`Slack API request failed: ${response.status} ${response.statusText}`)
   }
 
@@ -98,6 +103,12 @@ export async function slackApi(
       needed: data.needed,
       provided: data.provided,
     })
+
+    // Auth-related error codes indicate revoked/invalid tokens
+    if (errorCode === 'token_revoked' || errorCode === 'invalid_auth' || errorCode === 'account_inactive') {
+      throw new ConnectionExpiredError('organization')
+    }
+
     let message = SLACK_ERROR_MESSAGES[errorCode] ?? `Slack API error: ${errorCode}`
     if (errorCode === 'missing_scope' && data.needed) {
       message = `Bot token is missing the "${data.needed}" scope. Reconnect the app to grant it.`
