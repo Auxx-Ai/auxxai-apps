@@ -1,0 +1,241 @@
+{
+  "$schema": "Shopify App — Order Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "Only set fieldModes[field] = true for fields you want treated as literal strings.",
+    "createLineItems is required for order.create — must include at least one item",
+    "currency fields (price, totalPrice, etc.) are in cents (e.g. 1999 = $19.99)",
+    "Output for create/get/update: order.{ orderId, orderNumber, name, email, totalPrice, subtotalPrice, currency, financialStatus, fulfillmentStatus, tags, note, lineItems, customer, createdAt, updatedAt, orderStatusUrl }",
+    "Output for getMany: orders[].{ same fields }, count",
+    "Output for delete: success"
+  ],
+  "examples": [
+    {
+      "$operation": "order.create",
+      "id": "shopify-order-create-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-order-create-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Order",
+        "desc": "Create a new order in Shopify",
+        "resource": "order",
+        "operation": "create",
+        "createLineItems": [
+          {
+            "productId": "{{product-node.product.productId}}",
+            "variantId": "{{variant-node.variant.variantId}}",
+            "title": "Classic T-Shirt",
+            "quantity": 1,
+            "price": 2999
+          }
+        ],
+        "createEmail": "{{customer-node.customer.email}}",
+        "createFulfillmentStatus": "",
+        "createNote": "Submitted via support workflow",
+        "createTags": "support,auto-created",
+        "createSendReceipt": false,
+        "createSendFulfillmentReceipt": false,
+        "createInventoryBehaviour": "bypass",
+        "createLocationId": "",
+        "createSourceName": "web",
+        "createTest": false,
+        "createShippingFirstName": "{{customer-node.customer.firstName}}",
+        "createShippingLastName": "{{customer-node.customer.lastName}}",
+        "createShippingAddress1": "123 Main St",
+        "createShippingAddress2": "",
+        "createShippingCity": "New York",
+        "createShippingProvince": "NY",
+        "createShippingCountry": "US",
+        "createShippingZip": "10001",
+        "createShippingPhone": "",
+        "createBillingFirstName": "",
+        "createBillingLastName": "",
+        "createBillingAddress1": "",
+        "createBillingAddress2": "",
+        "createBillingCity": "",
+        "createBillingProvince": "",
+        "createBillingCountry": "",
+        "createBillingZip": "",
+        "createBillingPhone": "",
+        "createDiscountCodes": [],
+        "fieldModes": {
+          "createNote": true,
+          "createTags": true,
+          "createSourceName": true,
+          "createShippingAddress1": true,
+          "createShippingCity": true,
+          "createShippingProvince": true,
+          "createShippingCountry": true,
+          "createShippingZip": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "order.get",
+      "id": "shopify-order-get-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-order-get-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Order",
+        "desc": "Fetch a single order by ID",
+        "resource": "order",
+        "operation": "get",
+        "getOrderId": "{{some-node.order.orderId}}",
+        "getFields": [],
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "order.getMany",
+      "id": "shopify-order-get-many-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-order-get-many-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Orders",
+        "desc": "Fetch multiple orders with optional filters",
+        "resource": "order",
+        "operation": "getMany",
+        "getManyStatus": "open",
+        "getManyFinancialStatus": "any",
+        "getManyFulfillmentStatus": "any",
+        "getManyLimit": "50",
+        "getManyCreatedAtMin": "",
+        "getManyCreatedAtMax": "",
+        "getManyUpdatedAtMin": "",
+        "getManyUpdatedAtMax": "",
+        "getManyFields": [],
+        "fieldModes": {
+          "getManyStatus": true,
+          "getManyFinancialStatus": true,
+          "getManyFulfillmentStatus": true,
+          "getManyLimit": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "order.update",
+      "id": "shopify-order-update-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-order-update-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Update Order",
+        "desc": "Add a note and tags to an existing order",
+        "resource": "order",
+        "operation": "update",
+        "updateOrderId": "{{some-node.order.orderId}}",
+        "updateEmail": "",
+        "updateNote": "Support ticket resolved",
+        "updateTags": "resolved,support",
+        "updateSourceName": "",
+        "updateLocationId": "",
+        "updateShippingFirstName": "",
+        "updateShippingLastName": "",
+        "updateShippingAddress1": "",
+        "updateShippingAddress2": "",
+        "updateShippingCity": "",
+        "updateShippingProvince": "",
+        "updateShippingCountry": "",
+        "updateShippingZip": "",
+        "updateShippingPhone": "",
+        "fieldModes": {
+          "updateNote": true,
+          "updateTags": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "order.delete",
+      "id": "shopify-order-delete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-order-delete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Delete Order",
+        "desc": "Delete an order from Shopify",
+        "resource": "order",
+        "operation": "delete",
+        "deleteOrderId": "{{some-node.order.orderId}}",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "create_get_update": {
+      "order": {
+        "orderId": "string — Shopify numeric ID",
+        "orderNumber": "string — e.g. '#1001'",
+        "name": "string — e.g. '#1001 - Jane Doe'",
+        "email": "email",
+        "totalPrice": "currency (cents)",
+        "subtotalPrice": "currency (cents)",
+        "currency": "string — e.g. 'USD'",
+        "financialStatus": "string — e.g. 'paid', 'pending', 'refunded'",
+        "fulfillmentStatus": "string — e.g. 'fulfilled', 'partial', '' (unfulfilled)",
+        "tags": "string — comma-separated",
+        "note": "string",
+        "lineItems": "string (JSON array)",
+        "customer": "string (JSON object)",
+        "createdAt": "datetime (ISO 8601)",
+        "updatedAt": "datetime (ISO 8601)",
+        "orderStatusUrl": "url"
+      }
+    },
+    "getMany": {
+      "orders": "array of order objects (same fields as above)",
+      "count": "number (integer)"
+    },
+    "delete": {
+      "success": "boolean"
+    }
+  },
+  "fieldEnums": {
+    "createFulfillmentStatus": ["'' (unfulfilled)", "fulfilled", "partial", "restocked"],
+    "createInventoryBehaviour": ["bypass", "decrement_ignoring_policy", "decrement_obeying_policy"],
+    "getManyStatus": ["any", "open", "closed", "cancelled"],
+    "getManyFinancialStatus": ["any", "authorized", "paid", "partially_paid", "partially_refunded", "pending", "refunded", "unpaid", "voided"],
+    "getManyFulfillmentStatus": ["any", "partial", "shipped", "unfulfilled", "unshipped"],
+    "getManyLimit": ["10", "25", "50", "100", "250"]
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "$schema": "Shopify App — Inventory Level Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "inventoryItemId comes from variant.inventoryItemId output",
+    "locationId fields are select dropdowns populated from connected Shopify locations",
+    "Output for set/adjust/connect: inventoryLevel.{ inventoryItemId, locationId, available, updatedAt }",
+    "Output for getMany: inventoryLevels[].{ same fields }, count",
+    "Output for delete: success"
+  ],
+  "examples": [
+    {
+      "$operation": "inventoryLevel.getMany",
+      "id": "shopify-inv-level-get-many-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-inv-level-get-many-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Inventory Levels",
+        "desc": "Check inventory for one or more items across locations",
+        "resource": "inventoryLevel",
+        "operation": "getMany",
+        "getManyInventoryItemIds": "{{variant-node.variant.inventoryItemId}}",
+        "getManyLocationIds": "",
+        "getManyLimit": "50",
+        "fieldModes": {
+          "getManyLimit": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "inventoryLevel.set",
+      "$note": "Sets inventory to an exact quantity at a location",
+      "id": "shopify-inv-level-set-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-inv-level-set-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Set Inventory Level",
+        "desc": "Set inventory to an exact quantity at a location",
+        "resource": "inventoryLevel",
+        "operation": "set",
+        "setInventoryItemId": "{{variant-node.variant.inventoryItemId}}",
+        "setLocationId": "12345678",
+        "setAvailable": 50,
+        "setDisconnectIfNecessary": false,
+        "fieldModes": {
+          "setLocationId": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "inventoryLevel.adjust",
+      "$note": "Adds or subtracts from current inventory (use negative numbers to decrease)",
+      "id": "shopify-inv-level-adjust-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-inv-level-adjust-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Adjust Inventory Level",
+        "desc": "Decrease inventory by 1 at a location",
+        "resource": "inventoryLevel",
+        "operation": "adjust",
+        "adjustInventoryItemId": "{{variant-node.variant.inventoryItemId}}",
+        "adjustLocationId": "12345678",
+        "adjustAvailableAdjustment": -1,
+        "fieldModes": {
+          "adjustLocationId": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "inventoryLevel.connect",
+      "id": "shopify-inv-level-connect-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-inv-level-connect-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Connect Inventory to Location",
+        "desc": "Connect an inventory item to a location",
+        "resource": "inventoryLevel",
+        "operation": "connect",
+        "connectInventoryItemId": "{{variant-node.variant.inventoryItemId}}",
+        "connectLocationId": "12345678",
+        "fieldModes": {
+          "connectLocationId": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "inventoryLevel.delete",
+      "id": "shopify-inv-level-delete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-inv-level-delete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Disconnect Inventory from Location",
+        "desc": "Disconnect an inventory item from a location",
+        "resource": "inventoryLevel",
+        "operation": "delete",
+        "deleteInventoryItemId": "{{variant-node.variant.inventoryItemId}}",
+        "deleteLocationId": "12345678",
+        "fieldModes": {
+          "deleteLocationId": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "set_adjust_connect": {
+      "inventoryLevel": {
+        "inventoryItemId": "string",
+        "locationId": "string",
+        "available": "number (integer) — current quantity",
+        "updatedAt": "datetime (ISO 8601)"
+      }
+    },
+    "getMany": {
+      "inventoryLevels": "array of inventoryLevel objects (same fields as above)",
+      "count": "number (integer)"
+    },
+    "delete": {
+      "success": "boolean"
+    }
+  }
+}

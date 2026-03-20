@@ -1,0 +1,208 @@
+{
+  "$schema": "Shopify App — Product Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "NOTE: product.get uses 'getProductId' and 'getProductFields' (NOT 'getFields')",
+    "NOTE: product.getMany uses 'getProductMany*' prefix for all fields",
+    "Output for create/get/update: product.{ productId, title, bodyHtml, vendor, productType, handle, tags, status, variants, images, createdAt, updatedAt }",
+    "Output for getMany: products[].{ same fields }, count",
+    "Output for delete: success"
+  ],
+  "examples": [
+    {
+      "$operation": "product.create",
+      "id": "shopify-product-create-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-product-create-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Product",
+        "desc": "Create a new product in Shopify",
+        "resource": "product",
+        "operation": "create",
+        "createTitle": "Classic T-Shirt",
+        "createBodyHtml": "<p>Comfortable everyday t-shirt.</p>",
+        "createVendor": "My Store",
+        "createProductType": "Clothing",
+        "createTags": "summer,sale,new",
+        "createHandle": "classic-t-shirt",
+        "createPublished": true,
+        "createPublishedScope": "global",
+        "createTemplateSuffix": "",
+        "createImages": [],
+        "createOptions": "Size, Color",
+        "fieldModes": {
+          "createTitle": true,
+          "createBodyHtml": true,
+          "createVendor": true,
+          "createProductType": true,
+          "createTags": true,
+          "createHandle": true,
+          "createPublishedScope": true,
+          "createOptions": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "product.get",
+      "$important": "Field names for get: 'getProductId' and 'getProductFields' — NOT 'getProductId'/'getFields'",
+      "id": "shopify-product-get-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-product-get-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Product",
+        "desc": "Fetch a product by Shopify ID",
+        "resource": "product",
+        "operation": "get",
+        "getProductId": "{{some-node.product.productId}}",
+        "getProductFields": [],
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "product.getMany",
+      "id": "shopify-product-get-many-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-product-get-many-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Products",
+        "desc": "List published products filtered by type",
+        "resource": "product",
+        "operation": "getMany",
+        "getProductManyLimit": "50",
+        "getProductManyTitle": "",
+        "getProductManyVendor": "",
+        "getProductManyProductType": "Clothing",
+        "getProductManyHandle": "",
+        "getProductManyCollectionId": "",
+        "getProductManyPublishedStatus": "published",
+        "getProductManyCreatedAtMin": "",
+        "getProductManyCreatedAtMax": "",
+        "getProductManyUpdatedAtMin": "",
+        "getProductManyUpdatedAtMax": "",
+        "getProductManyFields": [],
+        "fieldModes": {
+          "getProductManyLimit": true,
+          "getProductManyProductType": true,
+          "getProductManyPublishedStatus": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "product.update",
+      "id": "shopify-product-update-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-product-update-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Update Product",
+        "desc": "Unpublish a product and update its tags",
+        "resource": "product",
+        "operation": "update",
+        "updateProductId": "{{some-node.product.productId}}",
+        "updateTitle": "",
+        "updateBodyHtml": "",
+        "updateVendor": "",
+        "updateProductType": "",
+        "updateTags": "discontinued,archived",
+        "updateHandle": "",
+        "updatePublished": "false",
+        "updatePublishedScope": "",
+        "updateTemplateSuffix": "",
+        "updateImages": [],
+        "updateOptions": "",
+        "fieldModes": {
+          "updateTags": true,
+          "updatePublished": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "product.delete",
+      "id": "shopify-product-delete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-product-delete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Delete Product",
+        "desc": "Delete a product from Shopify",
+        "resource": "product",
+        "operation": "delete",
+        "deleteProductId": "{{some-node.product.productId}}",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "create_get_update": {
+      "product": {
+        "productId": "string — Shopify numeric ID",
+        "title": "string",
+        "bodyHtml": "string — HTML description",
+        "vendor": "string",
+        "productType": "string",
+        "handle": "string — URL-friendly slug",
+        "tags": "string — comma-separated",
+        "status": "string — e.g. 'active', 'draft', 'archived'",
+        "variants": "string (JSON array)",
+        "images": "string (JSON array)",
+        "createdAt": "datetime (ISO 8601)",
+        "updatedAt": "datetime (ISO 8601)"
+      }
+    },
+    "getMany": {
+      "products": "array of product objects (same fields as above)",
+      "count": "number (integer)"
+    },
+    "delete": {
+      "success": "boolean"
+    }
+  },
+  "fieldEnums": {
+    "createPublishedScope": ["global", "web"],
+    "updatePublished": ["'' (no change)", "true", "false"],
+    "updatePublishedScope": ["'' (no change)", "global", "web"],
+    "getProductManyPublishedStatus": ["any", "published", "unpublished"],
+    "getProductManyLimit": ["10", "25", "50", "100", "250"]
+  }
+}

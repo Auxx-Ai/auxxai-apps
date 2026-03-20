@@ -1,0 +1,223 @@
+{
+  "$schema": "Shopify App — Draft Order Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "createLineItems is required. Use variantId for catalog items, or title+price for custom items.",
+    "Either createCustomerId or createEmail must be provided for create.",
+    "Output for create/get/update/complete: draftOrder.{ draftOrderId, name, status, email, totalPrice, subtotalPrice, currency, tags, note, lineItems, customer, orderId, invoiceUrl, createdAt, updatedAt }",
+    "Output for sendInvoice: draftOrderInvoice (string)",
+    "Output for getMany: draftOrders[].{ same fields }, count",
+    "Output for delete: success"
+  ],
+  "examples": [
+    {
+      "$operation": "draftOrder.create",
+      "id": "shopify-draft-order-create-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-draft-order-create-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Draft Order",
+        "desc": "Create a draft order for an existing customer",
+        "resource": "draftOrder",
+        "operation": "create",
+        "createLineItems": [
+          {
+            "variantId": "{{variant-node.variant.variantId}}",
+            "title": "",
+            "quantity": 1,
+            "price": 0
+          }
+        ],
+        "createCustomerId": "{{customer-node.customers[0].customerId}}",
+        "createEmail": "",
+        "createNote": "Created via support workflow",
+        "createTags": "support,draft",
+        "createTaxExempt": false,
+        "createUseCustomerDefaultAddress": true,
+        "createShippingFirstName": "",
+        "createShippingLastName": "",
+        "createShippingAddress1": "",
+        "createShippingAddress2": "",
+        "createShippingCity": "",
+        "createShippingProvince": "",
+        "createShippingCountry": "",
+        "createShippingZip": "",
+        "createShippingPhone": "",
+        "fieldModes": {
+          "createNote": true,
+          "createTags": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "draftOrder.sendInvoice",
+      "id": "shopify-draft-order-invoice-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-draft-order-invoice-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Send Draft Invoice",
+        "desc": "Email the invoice to the customer",
+        "resource": "draftOrder",
+        "operation": "sendInvoice",
+        "sendInvoiceDraftOrderId": "{{draft-order-node.draftOrder.draftOrderId}}",
+        "sendInvoiceTo": "{{customer-node.customers[0].email}}",
+        "sendInvoiceSubject": "Your invoice from My Store",
+        "sendInvoiceCustomMessage": "Please review your order and complete payment.",
+        "sendInvoiceBcc": "",
+        "fieldModes": {
+          "sendInvoiceSubject": true,
+          "sendInvoiceCustomMessage": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "draftOrder.complete",
+      "id": "shopify-draft-order-complete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-draft-order-complete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Complete Draft Order",
+        "desc": "Convert a draft order to a real order",
+        "resource": "draftOrder",
+        "operation": "complete",
+        "completeDraftOrderId": "{{draft-order-node.draftOrder.draftOrderId}}",
+        "completePaymentPending": false,
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "draftOrder.get",
+      "id": "shopify-draft-order-get-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-draft-order-get-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Draft Order",
+        "desc": "Fetch a draft order by ID",
+        "resource": "draftOrder",
+        "operation": "get",
+        "getDraftOrderId": "{{some-node.draftOrder.draftOrderId}}",
+        "getFields": [],
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "draftOrder.update",
+      "id": "shopify-draft-order-update-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-draft-order-update-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Update Draft Order",
+        "desc": "Update note and tags on a draft order",
+        "resource": "draftOrder",
+        "operation": "update",
+        "updateDraftOrderId": "{{some-node.draftOrder.draftOrderId}}",
+        "updateNote": "Updated via workflow",
+        "updateTags": "vip,support",
+        "updateEmail": "",
+        "fieldModes": {
+          "updateNote": true,
+          "updateTags": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "draftOrder.delete",
+      "id": "shopify-draft-order-delete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-draft-order-delete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Delete Draft Order",
+        "desc": "Delete a draft order",
+        "resource": "draftOrder",
+        "operation": "delete",
+        "deleteDraftOrderId": "{{some-node.draftOrder.draftOrderId}}",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "create_get_update_complete": {
+      "draftOrder": {
+        "draftOrderId": "string — Shopify numeric ID",
+        "name": "string — e.g. '#D1'",
+        "status": "string — 'open', 'invoice_sent', 'completed'",
+        "email": "email",
+        "totalPrice": "currency (cents)",
+        "subtotalPrice": "currency (cents)",
+        "currency": "string",
+        "tags": "string — comma-separated",
+        "note": "string",
+        "lineItems": "string (JSON array)",
+        "customer": "string (JSON object)",
+        "orderId": "string — set after complete, otherwise null",
+        "invoiceUrl": "url — payment link sent to customer",
+        "createdAt": "datetime (ISO 8601)",
+        "updatedAt": "datetime (ISO 8601)"
+      }
+    },
+    "sendInvoice": {
+      "draftOrderInvoice": "string"
+    },
+    "getMany": {
+      "draftOrders": "array of draftOrder objects (same fields as above)",
+      "count": "number (integer)"
+    },
+    "delete": {
+      "success": "boolean"
+    }
+  },
+  "fieldEnums": {
+    "getManyStatus": ["'' (any)", "open", "invoice_sent", "completed"]
+  }
+}

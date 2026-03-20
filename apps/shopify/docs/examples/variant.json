@@ -1,0 +1,207 @@
+{
+  "$schema": "Shopify App — Product Variant Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "'productId' is a SHARED required field across ALL variant operations — always include it",
+    "currency fields (price, compareAtPrice) are in cents (e.g. 1999 = $19.99)",
+    "Output for create/get/update: variant.{ variantId, title, price, compareAtPrice, sku, barcode, weight, weightUnit, inventoryItemId, inventoryQuantity, option1, option2, option3, createdAt, updatedAt }",
+    "Output for getMany: variants[].{ same fields }, count",
+    "Output for delete: success"
+  ],
+  "examples": [
+    {
+      "$operation": "variant.create",
+      "id": "shopify-variant-create-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-variant-create-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Variant",
+        "desc": "Create a new product variant",
+        "resource": "variant",
+        "operation": "create",
+        "productId": "{{product-node.product.productId}}",
+        "createTitle": "Small / Red",
+        "createPrice": 2999,
+        "createCompareAtPrice": 3999,
+        "createSku": "TSHIRT-S-RED",
+        "createBarcode": "",
+        "createWeight": 200,
+        "createWeightUnit": "g",
+        "createInventoryQuantity": 100,
+        "createInventoryPolicy": "deny",
+        "createFulfillmentService": "manual",
+        "createRequiresShipping": true,
+        "createTaxable": true,
+        "createOption1": "Small",
+        "createOption2": "Red",
+        "createOption3": "",
+        "fieldModes": {
+          "createTitle": true,
+          "createSku": true,
+          "createWeightUnit": true,
+          "createInventoryPolicy": true,
+          "createFulfillmentService": true,
+          "createOption1": true,
+          "createOption2": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "variant.get",
+      "id": "shopify-variant-get-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-variant-get-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Variant",
+        "desc": "Fetch a product variant by ID",
+        "resource": "variant",
+        "operation": "get",
+        "productId": "{{some-node.product.productId}}",
+        "getVariantId": "{{some-node.variant.variantId}}",
+        "getFields": [],
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "variant.getMany",
+      "id": "shopify-variant-get-many-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-variant-get-many-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Variants",
+        "desc": "List all variants for a product",
+        "resource": "variant",
+        "operation": "getMany",
+        "productId": "{{some-node.product.productId}}",
+        "getManyLimit": "250",
+        "getManyFields": [],
+        "fieldModes": {
+          "getManyLimit": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "variant.update",
+      "id": "shopify-variant-update-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-variant-update-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Update Variant",
+        "desc": "Update variant price and SKU",
+        "resource": "variant",
+        "operation": "update",
+        "productId": "{{some-node.product.productId}}",
+        "updateVariantId": "{{some-node.variant.variantId}}",
+        "updateTitle": "",
+        "updatePrice": 2499,
+        "updateCompareAtPrice": 0,
+        "updateSku": "TSHIRT-S-RED-V2",
+        "updateBarcode": "",
+        "updateWeight": 0,
+        "updateWeightUnit": "",
+        "updateInventoryPolicy": "",
+        "updateTaxable": "",
+        "updateOption1": "",
+        "updateOption2": "",
+        "updateOption3": "",
+        "fieldModes": {
+          "updateSku": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "variant.delete",
+      "id": "shopify-variant-delete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-variant-delete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Delete Variant",
+        "desc": "Remove a product variant",
+        "resource": "variant",
+        "operation": "delete",
+        "productId": "{{some-node.product.productId}}",
+        "deleteVariantId": "{{some-node.variant.variantId}}",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "create_get_update": {
+      "variant": {
+        "variantId": "string — Shopify numeric ID",
+        "title": "string — e.g. 'Small / Red'",
+        "price": "currency (cents)",
+        "compareAtPrice": "currency (cents)",
+        "sku": "string",
+        "barcode": "string",
+        "weight": "number",
+        "weightUnit": "string — 'g', 'kg', 'oz', 'lb'",
+        "inventoryItemId": "string — Shopify inventory item ID",
+        "inventoryQuantity": "number (integer)",
+        "option1": "string",
+        "option2": "string",
+        "option3": "string",
+        "createdAt": "datetime (ISO 8601)",
+        "updatedAt": "datetime (ISO 8601)"
+      }
+    },
+    "getMany": {
+      "variants": "array of variant objects (same fields as above)",
+      "count": "number (integer)"
+    },
+    "delete": {
+      "success": "boolean"
+    }
+  },
+  "fieldEnums": {
+    "createWeightUnit": ["g", "kg", "oz", "lb"],
+    "createInventoryPolicy": ["deny", "continue"],
+    "updateWeightUnit": ["'' (no change)", "g", "kg", "oz", "lb"],
+    "updateInventoryPolicy": ["'' (no change)", "deny", "continue"],
+    "updateTaxable": ["'' (no change)", "true", "false"],
+    "getManyLimit": ["10", "25", "50", "100", "250"]
+  }
+}
