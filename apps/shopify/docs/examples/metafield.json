@@ -1,0 +1,223 @@
+{
+  "$schema": "Shopify App — Metafield Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "'ownerResource' and 'ownerId' are SHARED fields used across all metafield operations",
+    "'ownerId' is not required when ownerResource is 'shop'",
+    "Output for create/get/update: metafield.{ metafieldId, namespace, key, value, type, ownerResource, ownerId, createdAt, updatedAt }",
+    "Output for getMany: metafields[].{ same fields }, count",
+    "Output for delete: success"
+  ],
+  "examples": [
+    {
+      "$operation": "metafield.create — on a product",
+      "id": "shopify-metafield-create-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-metafield-create-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Metafield",
+        "desc": "Store a custom color hex on a product",
+        "resource": "metafield",
+        "operation": "create",
+        "ownerResource": "product",
+        "ownerId": "{{product-node.product.productId}}",
+        "createNamespace": "custom",
+        "createKey": "color_hex",
+        "createValue": "#FF5733",
+        "createType": "single_line_text_field",
+        "fieldModes": {
+          "ownerResource": true,
+          "createNamespace": true,
+          "createKey": true,
+          "createValue": true,
+          "createType": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "metafield.create — dynamic value from extractor",
+      "id": "shopify-metafield-create-002",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-metafield-create-002",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Metafield",
+        "desc": "Store a value extracted from the message",
+        "resource": "metafield",
+        "operation": "create",
+        "ownerResource": "customer",
+        "ownerId": "{{customer-node.customers[0].customerId}}",
+        "createNamespace": "custom",
+        "createKey": "support_note",
+        "createValue": "{{extractor-node.extracted_data.note}}",
+        "createType": "single_line_text_field",
+        "fieldModes": {
+          "ownerResource": true,
+          "createNamespace": true,
+          "createKey": true,
+          "createType": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "metafield.get",
+      "id": "shopify-metafield-get-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-metafield-get-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Metafield",
+        "desc": "Fetch a metafield by ID",
+        "resource": "metafield",
+        "operation": "get",
+        "ownerResource": "product",
+        "ownerId": "{{product-node.product.productId}}",
+        "getMetafieldId": "{{some-node.metafield.metafieldId}}",
+        "fieldModes": {
+          "ownerResource": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "metafield.getMany",
+      "id": "shopify-metafield-get-many-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-metafield-get-many-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Metafields",
+        "desc": "List all metafields in the 'custom' namespace for a customer",
+        "resource": "metafield",
+        "operation": "getMany",
+        "ownerResource": "customer",
+        "ownerId": "{{customer-node.customers[0].customerId}}",
+        "getManyNamespace": "custom",
+        "getManyKey": "",
+        "getManyLimit": "50",
+        "fieldModes": {
+          "ownerResource": true,
+          "getManyNamespace": true,
+          "getManyLimit": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "metafield.update",
+      "id": "shopify-metafield-update-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-metafield-update-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Update Metafield",
+        "desc": "Update the value of an existing metafield",
+        "resource": "metafield",
+        "operation": "update",
+        "ownerResource": "product",
+        "ownerId": "{{product-node.product.productId}}",
+        "updateMetafieldId": "{{some-node.metafield.metafieldId}}",
+        "updateValue": "{{extractor-node.extracted_data.new_value}}",
+        "updateType": "",
+        "fieldModes": {
+          "ownerResource": true,
+          "updateType": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "metafield.delete",
+      "id": "shopify-metafield-delete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-metafield-delete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Delete Metafield",
+        "desc": "Delete a metafield by ID",
+        "resource": "metafield",
+        "operation": "delete",
+        "ownerResource": "product",
+        "ownerId": "{{product-node.product.productId}}",
+        "deleteMetafieldId": "{{some-node.metafield.metafieldId}}",
+        "fieldModes": {
+          "ownerResource": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "create_get_update": {
+      "metafield": {
+        "metafieldId": "string — Shopify numeric ID",
+        "namespace": "string",
+        "key": "string",
+        "value": "string",
+        "type": "string — e.g. 'single_line_text_field', 'number_integer'",
+        "ownerResource": "string",
+        "ownerId": "string",
+        "createdAt": "datetime (ISO 8601)",
+        "updatedAt": "datetime (ISO 8601)"
+      }
+    },
+    "getMany": {
+      "metafields": "array of metafield objects (same fields as above)",
+      "count": "number (integer)"
+    },
+    "delete": {
+      "success": "boolean"
+    }
+  },
+  "fieldEnums": {
+    "ownerResource": ["shop", "product", "variant", "customer", "order", "draft_order", "collection"],
+    "createType": [
+      "single_line_text_field", "multi_line_text_field", "number_integer", "number_decimal",
+      "boolean", "date", "date_time", "json", "url", "color", "weight", "dimension", "volume",
+      "rating", "money"
+    ],
+    "updateType": ["'' (no change)", "single_line_text_field", "multi_line_text_field", "number_integer", "number_decimal", "boolean", "json"]
+  }
+}

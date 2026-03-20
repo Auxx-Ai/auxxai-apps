@@ -1,0 +1,199 @@
+{
+  "$schema": "Shopify App — Fulfillment Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "'orderId' is a SHARED required field for all fulfillment operations",
+    "Operations: create, update (tracking only), get, getMany, cancel",
+    "Output for create/get/update/cancel: fulfillment.{ fulfillmentId, orderId, status, trackingNumber, trackingCompany, trackingUrl, lineItems, createdAt, updatedAt }",
+    "Output for getMany: fulfillments[].{ same fields }, count"
+  ],
+  "examples": [
+    {
+      "$operation": "fulfillment.create",
+      "id": "shopify-fulfillment-create-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-fulfillment-create-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Fulfillment",
+        "desc": "Fulfill all items on an order with tracking info",
+        "resource": "fulfillment",
+        "operation": "create",
+        "orderId": "{{order-node.order.orderId}}",
+        "createLocationId": "",
+        "createTrackingNumber": "1Z9999999999999999",
+        "createTrackingCompany": "UPS",
+        "createTrackingUrl": "https://wwwapps.ups.com/tracking/tracking.cgi?tracknum=1Z9999999999999999",
+        "createNotifyCustomer": true,
+        "createLineItems": [],
+        "fieldModes": {
+          "createTrackingNumber": true,
+          "createTrackingCompany": true,
+          "createTrackingUrl": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "fulfillment.create — with dynamic tracking number",
+      "id": "shopify-fulfillment-create-002",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-fulfillment-create-002",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Fulfillment",
+        "desc": "Fulfill order with tracking number from extractor",
+        "resource": "fulfillment",
+        "operation": "create",
+        "orderId": "{{order-node.order.orderId}}",
+        "createLocationId": "",
+        "createTrackingNumber": "{{extractor-node.extracted_data.tracking_number}}",
+        "createTrackingCompany": "UPS",
+        "createNotifyCustomer": true,
+        "createLineItems": [],
+        "fieldModes": {
+          "createTrackingCompany": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "fulfillment.update (tracking only)",
+      "id": "shopify-fulfillment-update-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-fulfillment-update-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Update Fulfillment Tracking",
+        "desc": "Update tracking info on an existing fulfillment",
+        "resource": "fulfillment",
+        "operation": "update",
+        "orderId": "{{order-node.order.orderId}}",
+        "updateFulfillmentId": "{{some-node.fulfillment.fulfillmentId}}",
+        "updateTrackingNumber": "{{extractor-node.extracted_data.tracking_number}}",
+        "updateTrackingCompany": "FedEx",
+        "updateTrackingUrl": "",
+        "updateNotifyCustomer": true,
+        "fieldModes": {
+          "updateTrackingCompany": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "fulfillment.get",
+      "id": "shopify-fulfillment-get-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-fulfillment-get-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Fulfillment",
+        "desc": "Fetch a single fulfillment by ID",
+        "resource": "fulfillment",
+        "operation": "get",
+        "orderId": "{{order-node.order.orderId}}",
+        "getFulfillmentId": "{{some-node.fulfillment.fulfillmentId}}",
+        "getFields": [],
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "fulfillment.getMany",
+      "id": "shopify-fulfillment-get-many-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-fulfillment-get-many-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Fulfillments",
+        "desc": "List all fulfillments for an order",
+        "resource": "fulfillment",
+        "operation": "getMany",
+        "orderId": "{{order-node.order.orderId}}",
+        "getManyLimit": "50",
+        "getManyCreatedAtMin": "",
+        "getManyCreatedAtMax": "",
+        "getManyFields": [],
+        "fieldModes": {
+          "getManyLimit": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "fulfillment.cancel",
+      "id": "shopify-fulfillment-cancel-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-fulfillment-cancel-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Cancel Fulfillment",
+        "desc": "Cancel an in-progress fulfillment",
+        "resource": "fulfillment",
+        "operation": "cancel",
+        "orderId": "{{order-node.order.orderId}}",
+        "cancelFulfillmentId": "{{some-node.fulfillment.fulfillmentId}}",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "create_get_update_cancel": {
+      "fulfillment": {
+        "fulfillmentId": "string — Shopify numeric ID",
+        "orderId": "string",
+        "status": "string — e.g. 'success', 'cancelled', 'error', 'failure', 'open', 'pending'",
+        "trackingNumber": "string",
+        "trackingCompany": "string",
+        "trackingUrl": "url",
+        "lineItems": "string (JSON array)",
+        "createdAt": "datetime (ISO 8601)",
+        "updatedAt": "datetime (ISO 8601)"
+      }
+    },
+    "getMany": {
+      "fulfillments": "array of fulfillment objects (same fields as above)",
+      "count": "number (integer)"
+    }
+  }
+}

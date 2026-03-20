@@ -1,0 +1,220 @@
+{
+  "$schema": "Shopify App — Customer Resource: Node data examples for all operations",
+  "$notes": [
+    "fieldModes convention (source: isVariableMode = fieldModes[field] !== true):",
+    "  true  = constant/literal mode — value is used as-is",
+    "  false = variable mode — {{nodeId.field}} references are resolved",
+    "  absent = variable mode (same as false)",
+    "Only set fieldModes[field] = true for fields you want treated as literal strings.",
+    "IMPORTANT: customer.get requires getCustomerId (numeric Shopify ID). To look up by email use operation 'search' with searchQuery: 'email:address@example.com'",
+    "Output for create/get/update: customer.{ customerId, firstName, lastName, email, phone, tags, note, ordersCount, totalSpent, addresses, createdAt, updatedAt }",
+    "Output for getMany/search: customers[].{ same fields }, count",
+    "Output for delete: success"
+  ],
+  "examples": [
+    {
+      "$operation": "customer.create",
+      "id": "shopify-customer-create-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-customer-create-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Create Customer",
+        "desc": "Create a new customer in Shopify",
+        "resource": "customer",
+        "operation": "create",
+        "createFirstName": "Jane",
+        "createLastName": "Doe",
+        "createEmail": "jane.doe@example.com",
+        "createPhone": "+15555550100",
+        "createTags": "vip,newsletter",
+        "createNote": "High value customer",
+        "createVerifiedEmail": true,
+        "createSendEmailInvite": false,
+        "createTaxExempt": false,
+        "createAddress1": "123 Main St",
+        "createAddress2": "",
+        "createCity": "New York",
+        "createProvince": "New York",
+        "createCountry": "US",
+        "createZip": "10001",
+        "createCompany": "Acme Corp",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "customer.get",
+      "$important": "Requires a numeric Shopify customer ID. To find by email, use customer.search instead.",
+      "id": "shopify-customer-get-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-customer-get-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Customer",
+        "desc": "Fetch a customer by Shopify ID",
+        "resource": "customer",
+        "operation": "get",
+        "getCustomerId": "{{some-node.customer.customerId}}",
+        "getFields": [],
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "customer.search",
+      "$important": "Use this — NOT customer.get — when you have an email, phone, or name. searchQuery follows Shopify search syntax.",
+      "id": "shopify-customer-search-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-customer-search-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Search Customer",
+        "desc": "Look up a customer in Shopify by email",
+        "resource": "customer",
+        "operation": "search",
+        "searchQuery": "email:{{extractor-001.extracted_data.email}}",
+        "searchLimit": "10",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "customer.search — other query patterns",
+      "$queryExamples": [
+        "email:jane@example.com",
+        "first_name:Jane",
+        "last_name:Doe",
+        "phone:+15555550100",
+        "tag:vip",
+        "first_name:Jane last_name:Doe"
+      ]
+    },
+    {
+      "$operation": "customer.getMany",
+      "id": "shopify-customer-get-many-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-customer-get-many-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Get Customers",
+        "desc": "Fetch multiple customers with optional date filters",
+        "resource": "customer",
+        "operation": "getMany",
+        "getManyLimit": "50",
+        "getManyCreatedAtMin": "2026-01-01T00:00:00Z",
+        "getManyCreatedAtMax": "",
+        "getManyUpdatedAtMin": "",
+        "getManyUpdatedAtMax": "",
+        "getManyFields": [],
+        "fieldModes": {
+          "getManyLimit": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "customer.update",
+      "id": "shopify-customer-update-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-customer-update-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Update Customer",
+        "desc": "Update an existing customer's tags and note",
+        "resource": "customer",
+        "operation": "update",
+        "updateCustomerId": "{{some-node.customer.customerId}}",
+        "updateFirstName": "",
+        "updateLastName": "",
+        "updateEmail": "",
+        "updatePhone": "",
+        "updateTags": "vip,resolved",
+        "updateNote": "Ticket resolved",
+        "updateTaxExempt": "",
+        "fieldModes": {
+          "updateTags": true,
+          "updateNote": true
+        },
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    },
+    {
+      "$operation": "customer.delete",
+      "id": "shopify-customer-delete-001",
+      "type": "standard",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "id": "shopify-customer-delete-001",
+        "type": "@shopify:shopify",
+        "appSlug": "shopify",
+        "blockId": "shopify",
+        "title": "Shopify: Delete Customer",
+        "desc": "Delete a customer from Shopify",
+        "resource": "customer",
+        "operation": "delete",
+        "deleteCustomerId": "{{some-node.customer.customerId}}",
+        "fieldModes": {},
+        "_connectedSourceHandleIds": ["source"],
+        "_connectedTargetHandleIds": ["target"]
+      },
+      "width": 244,
+      "height": 100
+    }
+  ],
+  "outputs": {
+    "create_get_update": {
+      "customer": {
+        "customerId": "string — Shopify numeric ID",
+        "firstName": "string",
+        "lastName": "string",
+        "email": "email",
+        "phone": "phone",
+        "tags": "string — comma-separated",
+        "note": "string",
+        "ordersCount": "number (integer)",
+        "totalSpent": "currency (cents)",
+        "addresses": "string (JSON array)",
+        "createdAt": "datetime (ISO 8601)",
+        "updatedAt": "datetime (ISO 8601)"
+      }
+    },
+    "getMany_search": {
+      "customers": "array of customer objects (same fields as above)",
+      "count": "number (integer)"
+    },
+    "delete": {
+      "success": "boolean"
+    }
+  }
+}
