@@ -42,4 +42,5 @@ export const getDiscordMessageTool = defineTool({
     timeout: 10000,
   },
   execute: getDiscordMessageExecute,
+  agent: { toolsetSlug: 'discord.messages.read' },
 })

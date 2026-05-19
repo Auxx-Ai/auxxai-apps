@@ -35,4 +35,5 @@ export const sendDiscordMessageTool = defineTool({
     timeout: 15000,
   },
   execute: sendDiscordMessageExecute,
+  agent: { toolsetSlug: 'discord.messages.write' },
 })

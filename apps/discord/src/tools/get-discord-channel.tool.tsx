@@ -29,4 +29,5 @@ export const getDiscordChannelTool = defineTool({
     timeout: 10000,
   },
   execute: getDiscordChannelExecute,
+  agent: { toolsetSlug: 'discord.channels.read' },
 })

@@ -1,103 +1,92 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock resource execute functions
-vi.mock('../src/blocks/discord/resources/channel/channel-execute.server', () => ({
-  executeChannel: vi.fn(),
-}))
-vi.mock('../src/blocks/discord/resources/message/message-execute.server', () => ({
-  executeMessage: vi.fn(),
-}))
-vi.mock('../src/blocks/discord/resources/member/member-execute.server', () => ({
-  executeMember: vi.fn(),
-}))
-
 import discordExecute from '../src/blocks/discord/discord.server'
-import { executeChannel } from '../src/blocks/discord/resources/channel/channel-execute.server'
-import { executeMessage } from '../src/blocks/discord/resources/message/message-execute.server'
-import { executeMember } from '../src/blocks/discord/resources/member/member-execute.server'
 
-const mockedChannel = vi.mocked(executeChannel)
-const mockedMessage = vi.mocked(executeMessage)
-const mockedMember = vi.mocked(executeMember)
+const runTool = vi.fn()
+const ctx = { runTool }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  runTool.mockResolvedValue({})
 })
 
-// ── Routing ─────────────────────────────────────────────────────────────────
+describe('discordExecute dispatcher', () => {
+  it('dispatches channel.create to create_discord_channel with projected inputs', async () => {
+    await discordExecute(
+      {
+        resource: 'channel',
+        operation: 'create',
+        createGuild: 'g1',
+        createName: 'new-channel',
+        createType: 'text',
+        createTopic: 'topic',
+        createCategory: 'cat1',
+        createNsfw: false,
+      },
+      ctx
+    )
 
-describe('discordExecute routing', () => {
-  it('routes channel resource to executeChannel', async () => {
-    mockedChannel.mockResolvedValueOnce({ channelId: '1' })
-
-    const result = await discordExecute({ resource: 'channel', operation: 'get' })
-
-    expect(mockedChannel).toHaveBeenCalledWith('get', { resource: 'channel', operation: 'get' })
-    expect(result).toEqual({ channelId: '1' })
+    expect(runTool).toHaveBeenCalledWith('create_discord_channel', {
+      guildId: 'g1',
+      name: 'new-channel',
+      type: 'text',
+      topic: 'topic',
+      parentId: 'cat1',
+      nsfw: false,
+    })
   })
 
-  it('routes message resource to executeMessage', async () => {
-    mockedMessage.mockResolvedValueOnce({ messageId: '1' })
+  it('dispatches message.send with the trimmed reply id', async () => {
+    await discordExecute(
+      {
+        resource: 'message',
+        operation: 'send',
+        sendChannel: 'c1',
+        sendContent: 'hello',
+        sendReplyTo: '  m1  ',
+        sendSuppressEmbeds: true,
+        sendSuppressNotifications: false,
+      },
+      ctx
+    )
 
-    const result = await discordExecute({ resource: 'message', operation: 'send' })
-
-    expect(mockedMessage).toHaveBeenCalledWith('send', { resource: 'message', operation: 'send' })
-    expect(result).toEqual({ messageId: '1' })
+    expect(runTool).toHaveBeenCalledWith('send_discord_message', {
+      channelId: 'c1',
+      content: 'hello',
+      replyToMessageId: 'm1',
+      suppressEmbeds: true,
+      suppressNotifications: false,
+    })
   })
 
-  it('routes member resource to executeMember', async () => {
-    mockedMember.mockResolvedValueOnce({ members: [] })
+  it('splits comma-separated role ids for member.roleAdd', async () => {
+    await discordExecute(
+      {
+        resource: 'member',
+        operation: 'roleAdd',
+        roleAddGuild: 'g1',
+        roleAddUserId: 'u1',
+        roleAddRoles: 'r1, r2 , r3',
+      },
+      ctx
+    )
 
-    const result = await discordExecute({ resource: 'member', operation: 'getMany' })
-
-    expect(mockedMember).toHaveBeenCalledWith('getMany', { resource: 'member', operation: 'getMany' })
-    expect(result).toEqual({ members: [] })
+    expect(runTool).toHaveBeenCalledWith('add_discord_member_role', {
+      guildId: 'g1',
+      userId: 'u1',
+      roleIds: ['r1', 'r2', 'r3'],
+    })
   })
-})
 
-// ── Error cases ─────────────────────────────────────────────────────────────
-
-describe('discordExecute errors', () => {
   it('throws on unknown resource', async () => {
     await expect(
-      discordExecute({ resource: 'webhook', operation: 'create' })
-    ).rejects.toThrow('Unknown resource: webhook')
+      discordExecute({ resource: 'unknown', operation: 'noop' }, ctx)
+    ).rejects.toThrow(/Unknown op/)
   })
 
-  it('throws on invalid operation for a valid resource', async () => {
+  it('throws when ctx.runTool is missing', async () => {
     await expect(
-      discordExecute({ resource: 'channel', operation: 'react' })
-    ).rejects.toThrow('Invalid operation "react" for resource "channel"')
+      discordExecute({ resource: 'channel', operation: 'get', getChannel: '1' })
+    ).rejects.toThrow(/runTool/)
   })
-
-  it('throws on invalid operation for message resource', async () => {
-    await expect(
-      discordExecute({ resource: 'message', operation: 'create' })
-    ).rejects.toThrow('Invalid operation "create" for resource "message"')
-  })
-
-  it('throws on invalid operation for member resource', async () => {
-    await expect(
-      discordExecute({ resource: 'member', operation: 'delete' })
-    ).rejects.toThrow('Invalid operation "delete" for resource "member"')
-  })
-})
-
-// ── Valid operations per resource ───────────────────────────────────────────
-
-describe('all valid operations are accepted', () => {
-  const validOps: [string, string[], ReturnType<typeof vi.mocked>][] = [
-    ['channel', ['create', 'delete', 'get', 'getMany', 'update'], mockedChannel],
-    ['message', ['send', 'delete', 'get', 'getMany', 'react'], mockedMessage],
-    ['member', ['getMany', 'roleAdd', 'roleRemove'], mockedMember],
-  ]
-
-  for (const [resource, operations, mock] of validOps) {
-    for (const operation of operations) {
-      it(`accepts ${resource}.${operation}`, async () => {
-        mock.mockResolvedValueOnce({})
-        await expect(discordExecute({ resource, operation })).resolves.toBeDefined()
-      })
-    }
-  }
 })

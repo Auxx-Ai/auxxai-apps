@@ -28,4 +28,5 @@ export const listDiscordGuildsTool = defineTool({
     timeout: 10000,
   },
   execute: listDiscordGuildsExecute,
+  agent: {},
 })

@@ -27,4 +27,5 @@ export const reactToDiscordMessageTool = defineTool({
     timeout: 10000,
   },
   execute: reactToDiscordMessageExecute,
+  agent: { toolsetSlug: 'discord.messages.write' },
 })
