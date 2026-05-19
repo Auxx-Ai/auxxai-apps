@@ -66,6 +66,12 @@ function TwilioNode() {
 // Workflow Block Export
 // ============================================================================
 
+/**
+ * `toolMap` is read by the lambda runtime to route block execute calls into
+ * internal tools (`ctx.runTool(toolId, input)`). The SDK's `WorkflowBlock`
+ * type does not yet declare this field, so the literal is widened via cast
+ * — the build's catalog scanner consumes it duck-typed.
+ */
 export const twilioBlock = {
   id: 'twilio',
   label: 'Twilio',
@@ -76,10 +82,16 @@ export const twilioBlock = {
   schema: twilioSchema,
   node: TwilioNode,
   panel: TwilioPanel,
+  toolMap: {
+    'sms.send': '_twilio_block_send_sms',
+    'call.make': '_twilio_block_make_call',
+  },
   execute: twilioExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof twilioSchema>
+} as unknown as WorkflowBlock<typeof twilioSchema> & {
+  toolMap: Record<string, string>
+}

@@ -14,8 +14,3 @@ export const ALL_OPERATIONS = [
   { value: 'send', label: 'Send' },
   { value: 'make', label: 'Make' },
 ] as const
-
-export const VALID_OPERATIONS: Record<string, string[]> = {
-  sms: ['send'],
-  call: ['make'],
-}

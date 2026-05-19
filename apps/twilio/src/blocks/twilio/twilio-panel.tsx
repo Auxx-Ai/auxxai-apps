@@ -9,7 +9,16 @@ import { CallPanel } from './resources/call/call-panel'
 
 export function TwilioPanel() {
   const api = useWorkflow<typeof twilioSchema>(twilioSchema)
-  const { data, updateData, OptionsInput, VarFieldGroup, FieldRow, FieldDivider, Section, ConditionalRender } = api
+  const {
+    data,
+    updateData,
+    OptionsInput,
+    VarFieldGroup,
+    FieldRow,
+    FieldDivider,
+    Section,
+    ConditionalRender,
+  } = api
 
   const resource = (data?.resource ?? 'sms') as keyof typeof OPERATIONS
   const operation = data?.operation ?? 'send'
