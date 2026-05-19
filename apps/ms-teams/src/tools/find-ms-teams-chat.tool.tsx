@@ -33,4 +33,5 @@ export const findMsTeamsChatTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: findMsTeamsChatExecute,
+  agent: { toolsetSlug: 'ms-teams.chats.read' },
 })

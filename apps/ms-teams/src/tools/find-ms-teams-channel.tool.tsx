@@ -29,4 +29,5 @@ export const findMsTeamsChannelTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: findMsTeamsChannelExecute,
+  agent: { toolsetSlug: 'ms-teams.channels.read' },
 })

@@ -36,4 +36,5 @@ export const findMsTeamsUserTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: findMsTeamsUserExecute,
+  agent: { toolsetSlug: 'ms-teams.users.read' },
 })

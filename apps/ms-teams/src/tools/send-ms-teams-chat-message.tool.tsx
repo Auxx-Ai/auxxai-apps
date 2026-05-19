@@ -21,4 +21,5 @@ export const sendMsTeamsChatMessageTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: sendMsTeamsChatMessageExecute,
+  agent: { toolsetSlug: 'ms-teams.messages.write' },
 })

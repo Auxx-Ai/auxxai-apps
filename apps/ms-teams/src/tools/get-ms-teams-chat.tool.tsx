@@ -27,4 +27,5 @@ export const getMsTeamsChatTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: getMsTeamsChatExecute,
+  agent: { toolsetSlug: 'ms-teams.chats.read' },
 })

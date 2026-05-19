@@ -23,4 +23,5 @@ export const listMsTeamsChatsTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: listMsTeamsChatsExecute,
+  agent: {},
 })

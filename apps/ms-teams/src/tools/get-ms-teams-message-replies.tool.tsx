@@ -37,4 +37,5 @@ export const getMsTeamsMessageRepliesTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: getMsTeamsMessageRepliesExecute,
+  agent: { toolsetSlug: 'ms-teams.messages.read' },
 })
