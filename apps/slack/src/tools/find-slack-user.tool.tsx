@@ -37,4 +37,5 @@ export const findSlackUserTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: findSlackUserExecute,
+  agent: { toolsetSlug: 'slack.users.read' },
 })

@@ -20,4 +20,5 @@ export const replyInSlackThreadTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: replyInSlackThreadExecute,
+  agent: { toolsetSlug: 'slack.messages.write' },
 })

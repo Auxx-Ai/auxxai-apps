@@ -36,4 +36,5 @@ export const sendSlackMessageTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: sendSlackMessageExecute,
+  agent: { toolsetSlug: 'slack.messages.write' },
 })

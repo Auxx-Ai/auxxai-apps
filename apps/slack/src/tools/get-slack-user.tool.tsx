@@ -22,4 +22,5 @@ export const getSlackUserTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: getSlackUserExecute,
+  agent: { toolsetSlug: 'slack.users.read' },
 })

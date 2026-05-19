@@ -20,4 +20,5 @@ export const addSlackReactionTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: addSlackReactionExecute,
+  agent: { toolsetSlug: 'slack.messages.write' },
 })

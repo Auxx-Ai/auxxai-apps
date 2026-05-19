@@ -27,4 +27,5 @@ export const getRecentSlackMessagesTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: getRecentSlackMessagesExecute,
+  agent: { toolsetSlug: 'slack.messages.read' },
 })

@@ -13,6 +13,10 @@ import { listSlackChannelsTool } from './tools/list-slack-channels.tool'
 import { replyInSlackThreadTool } from './tools/reply-in-slack-thread.tool'
 import { searchSlackMessagesTool } from './tools/search-slack-messages.tool'
 import { sendSlackMessageTool } from './tools/send-slack-message.tool'
+import { slackBlockCreateChannelTool } from './tools/slack-block-create-channel.tool'
+import { slackBlockDeleteMessageTool } from './tools/slack-block-delete-message.tool'
+import { slackBlockGetChannelTool } from './tools/slack-block-get-channel.tool'
+import { slackBlockSendMessageTool } from './tools/slack-block-send-message.tool'
 import { slackToolsets } from './tools/toolsets'
 import { appMentionTrigger } from './triggers/app-mention/app-mention.workflow'
 
@@ -43,6 +47,11 @@ export const app = {
     sendSlackMessageTool,
     replyInSlackThreadTool,
     addSlackReactionTool,
+    // Internal tools — back the Slack block's dispatcher, no agent/action surface.
+    slackBlockCreateChannelTool,
+    slackBlockGetChannelTool,
+    slackBlockSendMessageTool,
+    slackBlockDeleteMessageTool,
   ],
   toolsets: slackToolsets,
 }
