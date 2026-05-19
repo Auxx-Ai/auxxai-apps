@@ -12,6 +12,7 @@ import supabaseIcon from '../../assets/icon.png'
 import supabaseExecute from './supabase.server'
 import { SupabasePanel } from './supabase-panel'
 import { supabaseSchema } from './supabase-schema'
+import { supabaseToolMap } from './tool-map'
 
 export { supabaseSchema }
 
@@ -61,6 +62,12 @@ function SupabaseNode() {
   )
 }
 
+/**
+ * The block's `toolMap` is the dispatch table the workflow runtime reads to
+ * resolve each `(resource, operation)` pair to a tool id. Until the SDK's
+ * `WorkflowBlock` type is widened to include `toolMap`, we cast the literal
+ * through `unknown` so the extra property is preserved on the value.
+ */
 export const supabaseBlock = {
   id: 'supabase',
   label: 'Supabase',
@@ -72,10 +79,13 @@ export const supabaseBlock = {
   schema: supabaseSchema,
   node: SupabaseNode,
   panel: SupabasePanel,
-  execute: supabaseExecute,
   config: {
     timeout: 30000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof supabaseSchema>
+  toolMap: supabaseToolMap,
+  execute: supabaseExecute,
+} as unknown as WorkflowBlock<typeof supabaseSchema> & {
+  toolMap: typeof supabaseToolMap
+}

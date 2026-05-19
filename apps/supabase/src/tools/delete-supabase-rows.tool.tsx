@@ -45,4 +45,5 @@ export const deleteSupabaseRowsTool = defineTool({
     timeout: 20000,
   },
   execute: deleteSupabaseRowsExecute,
+  agent: { toolsetSlug: 'supabase.rows.write' },
 })
