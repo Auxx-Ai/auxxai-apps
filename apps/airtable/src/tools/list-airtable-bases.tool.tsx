@@ -27,4 +27,5 @@ export const listAirtableBasesTool = defineTool({
     timeout: 10000,
   },
   execute: listAirtableBasesExecute,
+  agent: {},
 })

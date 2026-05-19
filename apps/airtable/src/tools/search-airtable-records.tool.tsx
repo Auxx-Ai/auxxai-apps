@@ -91,4 +91,5 @@ export const searchAirtableRecordsTool = defineTool({
     timeout: 15000,
   },
   execute: searchAirtableRecordsExecute,
+  agent: { toolsetSlug: 'airtable.records' },
 })

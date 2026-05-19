@@ -57,4 +57,5 @@ export const getAirtableBaseSchemaTool = defineTool({
     timeout: 15000,
   },
   execute: getAirtableBaseSchemaExecute,
+  agent: { toolsetSlug: 'airtable.records' },
 })
