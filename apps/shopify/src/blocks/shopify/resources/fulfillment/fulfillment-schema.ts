@@ -44,7 +44,11 @@ export const fulfillmentInputs = {
   }),
 
   // --- Fulfillment: Update Tracking ---
-  updateFulfillmentId: Workflow.string({ label: 'Fulfillment ID', required: true, acceptsVariables: true }),
+  updateFulfillmentId: Workflow.string({
+    label: 'Fulfillment ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   updateTrackingNumber: Workflow.string({ label: 'Tracking Number', acceptsVariables: true }),
   updateTrackingCompany: Workflow.string({ label: 'Tracking Company', acceptsVariables: true }),
   updateTrackingUrl: Workflow.url({ label: 'Tracking URL', acceptsVariables: true }),
@@ -54,7 +58,11 @@ export const fulfillmentInputs = {
   }),
 
   // --- Fulfillment: Get ---
-  getFulfillmentId: Workflow.string({ label: 'Fulfillment ID', required: true, acceptsVariables: true }),
+  getFulfillmentId: Workflow.string({
+    label: 'Fulfillment ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   getFields: Workflow.array({
     label: 'Fields',
     description: 'Fields to include in the response (leave empty for all)',
@@ -88,7 +96,11 @@ export const fulfillmentInputs = {
   }),
 
   // --- Fulfillment: Cancel ---
-  cancelFulfillmentId: Workflow.string({ label: 'Fulfillment ID', required: true, acceptsVariables: true }),
+  cancelFulfillmentId: Workflow.string({
+    label: 'Fulfillment ID',
+    required: true,
+    acceptsVariables: true,
+  }),
 }
 
 const fulfillmentFields = {

@@ -8,7 +8,16 @@ interface CollectionPanelProps {
 }
 
 export function CollectionPanel({ api }: CollectionPanelProps) {
-  const { StringInput, BooleanInput, OptionsInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    BooleanInput,
+    OptionsInput,
+    VarInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>

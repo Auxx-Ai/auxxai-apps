@@ -21,12 +21,24 @@ export async function twilioApi<T = unknown>(
   path: string,
   accountSid: string,
   authToken: string,
-  options: { method?: string; body?: Record<string, string> } = {},
+  options: {
+    method?: string
+    body?: Record<string, string>
+    query?: Record<string, string | undefined>
+  } = {}
 ): Promise<T> {
-  const { method = 'POST', body } = options
+  const { method = 'POST', body, query } = options
   const authHeader = `Basic ${btoa(`${accountSid}:${authToken}`)}`
 
-  const response = await fetch(`${TWILIO_API}/${accountSid}${path}`, {
+  const queryString = query
+    ? Object.entries(query)
+        .filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+        .join('&')
+    : ''
+  const url = `${TWILIO_API}/${accountSid}${path}${queryString ? `?${queryString}` : ''}`
+
+  const response = await fetch(url, {
     method,
     headers: {
       Authorization: authHeader,
@@ -54,7 +66,7 @@ export async function twilioApi<T = unknown>(
 
 export function throwConnectionNotFound(): never {
   const err = new Error(
-    'Twilio not connected. Please add your Auth Token in Settings → Apps → Twilio.',
+    'Twilio not connected. Please add your Auth Token in Settings → Apps → Twilio.'
   ) as Error & { code: string; scope: string }
   err.code = 'CONNECTION_NOT_FOUND'
   err.scope = 'organization'

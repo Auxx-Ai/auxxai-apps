@@ -6,9 +6,16 @@ import { getOrganizationSetting } from '@auxx/sdk/server'
  * Slack Events API webhook handler.
  *
  * Verifies the request signature using the Signing Secret, handles the
- * URL verification challenge, and dispatches events to triggers.
+ * URL verification challenge, and returns dispatch data for the
+ * `slack.app-mention` workflow trigger when `app_mention` events arrive.
+ *
+ * See plans/kopilot/apps/slack-overhaul.md §7b.
  */
-export default async function slackEventsWebhook(req: Request): Promise<Response> {
+export default async function slackEventsWebhook(
+  req: Request
+): Promise<
+  Response | { response: Response; triggerData: Record<string, unknown>; eventId: string }
+> {
   const timestamp = req.headers.get('X-Slack-Request-Timestamp')
   const signature = req.headers.get('X-Slack-Signature')
   const body = await req.text()
@@ -56,8 +63,40 @@ export default async function slackEventsWebhook(req: Request): Promise<Response
     })
   }
 
-  // TODO: dispatch payload.event to workflow triggers (new-message, app-mention, reaction-added)
-  console.log('[slack-events] Received event:', payload.event?.type)
+  const okResponse = () =>
+    new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
 
-  return new Response(null, { status: 200 })
+  // Dispatch app_mention events to the workflow trigger.
+  // Other event types (message.channels, message.im, reaction_added) are
+  // deferred per plans/kopilot/apps/slack-overhaul.md §8.
+  if (payload.event?.type === 'app_mention') {
+    const event = payload.event
+    const teamId: string = payload.team_id ?? event.team ?? ''
+    const channelId: string = event.channel ?? ''
+    const userId: string = event.user ?? ''
+    const ts: string = event.ts ?? ''
+    const threadTs: string = event.thread_ts ?? ''
+    const text: string = event.text ?? ''
+    const botUserId: string = payload.authorizations?.[0]?.user_id ?? ''
+    const eventId: string = payload.event_id ?? `slack-app_mention-${ts || Date.now()}`
+
+    return {
+      response: okResponse(),
+      eventId,
+      triggerData: {
+        teamId,
+        channelId,
+        userId,
+        text,
+        ts,
+        threadTs,
+        botUserId,
+      },
+    }
+  }
+
+  return okResponse()
 }

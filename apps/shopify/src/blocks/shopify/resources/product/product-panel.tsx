@@ -8,7 +8,16 @@ interface ProductPanelProps {
 }
 
 export function ProductPanel({ api }: ProductPanelProps) {
-  const { StringInput, BooleanInput, OptionsInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    BooleanInput,
+    OptionsInput,
+    VarInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>

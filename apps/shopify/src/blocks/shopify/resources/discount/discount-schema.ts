@@ -150,12 +150,15 @@ export function discountComputeOutputs(operation: string) {
   }
   if (operation === 'update') {
     return {
-      discount: Workflow.struct({
-        priceRuleId: Workflow.string(),
-        discountCodeId: Workflow.string(),
-        code: Workflow.string(),
-        value: Workflow.string(),
-      }, { label: 'discount' }),
+      discount: Workflow.struct(
+        {
+          priceRuleId: Workflow.string(),
+          discountCodeId: Workflow.string(),
+          code: Workflow.string(),
+          value: Workflow.string(),
+        },
+        { label: 'discount' }
+      ),
     }
   }
   if (operation === 'delete') {

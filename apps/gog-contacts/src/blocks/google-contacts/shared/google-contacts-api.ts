@@ -2,6 +2,15 @@ import { ConnectionExpiredError } from '@auxx/sdk/server'
 
 const BASE_URL = 'https://people.googleapis.com/v1'
 
+export function throwConnectionNotFound(): never {
+  const err = new Error(
+    'Google Contacts not connected. Please connect in Settings → Apps → Google Contacts.'
+  ) as Error & { code: string; scope: string }
+  err.code = 'CONNECTION_NOT_FOUND'
+  err.scope = 'organization'
+  throw err
+}
+
 const ALL_PERSON_FIELDS = [
   'addresses',
   'biographies',

@@ -2,6 +2,10 @@
 
 import { TextBlock } from '@auxx/sdk/client'
 import { airtableBlock } from './blocks/airtable/airtable.workflow'
+import { getAirtableBaseSchemaTool } from './tools/get-airtable-base-schema.tool'
+import { listAirtableBasesTool } from './tools/list-airtable-bases.tool'
+import { searchAirtableRecordsTool } from './tools/search-airtable-records.tool'
+import { airtableToolsets } from './tools/toolsets'
 
 export const app = {
   record: {
@@ -20,6 +24,8 @@ export const app = {
     blocks: [airtableBlock],
     triggers: [],
   },
+  tools: [listAirtableBasesTool, getAirtableBaseSchemaTool, searchAirtableRecordsTool],
+  toolsets: airtableToolsets,
 }
 
 export function App() {

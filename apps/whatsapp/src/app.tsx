@@ -3,6 +3,11 @@
 import { TextBlock } from '@auxx/sdk/client'
 import { whatsappBlock } from './blocks/whatsapp/whatsapp.workflow'
 import { messageReceivedTrigger } from './blocks/whatsapp/triggers/message-received/message-received.workflow'
+import { findWhatsappContactByPhoneTool } from './tools/find-whatsapp-contact-by-phone.tool'
+import { getWhatsappMediaUrlTool } from './tools/get-whatsapp-media-url.tool'
+import { listWhatsappPhoneNumbersTool } from './tools/list-whatsapp-phone-numbers.tool'
+import { sendWhatsappTextTool } from './tools/send-whatsapp-text.tool'
+import { whatsappToolsets } from './tools/toolsets'
 
 export const app = {
   record: {
@@ -19,6 +24,13 @@ export const app = {
     blocks: [whatsappBlock],
     triggers: [messageReceivedTrigger],
   },
+  tools: [
+    listWhatsappPhoneNumbersTool,
+    findWhatsappContactByPhoneTool,
+    getWhatsappMediaUrlTool,
+    sendWhatsappTextTool,
+  ],
+  toolsets: whatsappToolsets,
 }
 
 export function App() {
