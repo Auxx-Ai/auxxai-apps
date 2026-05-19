@@ -62,4 +62,5 @@ export const summarizeNotionDatabaseTool = defineTool({
     timeout: 60000,
   },
   execute: summarizeNotionDatabaseExecute,
+  agent: { toolsetSlug: 'notion.databases' },
 })

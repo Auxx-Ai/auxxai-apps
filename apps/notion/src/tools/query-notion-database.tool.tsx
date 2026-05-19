@@ -77,4 +77,5 @@ export const queryNotionDatabaseTool = defineTool({
     timeout: 20000,
   },
   execute: queryNotionDatabaseExecute,
+  agent: { toolsetSlug: 'notion.databases' },
 })

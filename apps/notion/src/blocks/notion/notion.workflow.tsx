@@ -12,6 +12,7 @@ import notionIcon from '../../assets/icon.png'
 import notionExecute from './notion.server'
 import { NotionPanel } from './notion-panel'
 import { notionSchema } from './notion-schema'
+import { notionToolMap } from './notion-tool-map'
 
 export { notionSchema }
 
@@ -108,10 +109,11 @@ export const notionBlock = {
   schema: notionSchema,
   node: NotionNode,
   panel: NotionPanel,
-  execute: notionExecute,
   config: {
     timeout: 30000,
     retries: 1,
     requiresConnection: true,
   },
+  toolMap: notionToolMap,
+  execute: notionExecute,
 } satisfies WorkflowBlock<typeof notionSchema>

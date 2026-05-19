@@ -1,0 +1,9 @@
+// src/tools/internal/notion-block-update-database-page.tool.server.ts
+
+import { executeDatabasePage } from '../../blocks/notion/resources/database-page/database-page-execute.server'
+
+export default async function notionBlockUpdateDatabasePage(
+  input: Record<string, any>
+): Promise<Record<string, any>> {
+  return executeDatabasePage('update', input)
+}
