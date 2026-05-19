@@ -3,8 +3,10 @@
 import type { Connection } from '@auxx/sdk/server'
 
 /**
- * Airtable does not support webhooks, so this is a no-op.
+ * Supabase does not require any connection-time setup beyond storing the
+ * Service Role key. Realtime triggers are deferred — see §13 of the
+ * implementation plan.
  */
 export default async function connectionAdded({ connection }: { connection: Connection }) {
-  // No-op — Airtable has no webhook system
+  // No-op
 }

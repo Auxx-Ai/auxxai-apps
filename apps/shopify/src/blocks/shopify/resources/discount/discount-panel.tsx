@@ -8,7 +8,17 @@ interface DiscountPanelProps {
 }
 
 export function DiscountPanel({ api }: DiscountPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, NumberInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    OptionsInput,
+    BooleanInput,
+    NumberInput,
+    VarInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>

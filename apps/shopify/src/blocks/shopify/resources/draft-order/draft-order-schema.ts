@@ -73,7 +73,11 @@ export const draftOrderInputs = {
   createShippingPhone: Workflow.phone({ label: 'Shipping Phone', acceptsVariables: true }),
 
   // --- Draft Order: Update ---
-  updateDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
+  updateDraftOrderId: Workflow.string({
+    label: 'Draft Order ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   updateNote: Workflow.string({ label: 'Note', acceptsVariables: true }),
   updateTags: Workflow.string({
     label: 'Tags',
@@ -83,7 +87,11 @@ export const draftOrderInputs = {
   updateEmail: Workflow.email({ label: 'Email', acceptsVariables: true }),
 
   // --- Draft Order: Get ---
-  getDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
+  getDraftOrderId: Workflow.string({
+    label: 'Draft Order ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   getFields: Workflow.array({
     label: 'Fields',
     description: 'Fields to include in the response (leave empty for all)',
@@ -125,10 +133,18 @@ export const draftOrderInputs = {
   }),
 
   // --- Draft Order: Delete ---
-  deleteDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
+  deleteDraftOrderId: Workflow.string({
+    label: 'Draft Order ID',
+    required: true,
+    acceptsVariables: true,
+  }),
 
   // --- Draft Order: Complete ---
-  completeDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
+  completeDraftOrderId: Workflow.string({
+    label: 'Draft Order ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   completePaymentPending: Workflow.boolean({
     label: 'Payment Pending',
     description: 'Mark as payment pending instead of paid',
@@ -136,7 +152,11 @@ export const draftOrderInputs = {
   }),
 
   // --- Draft Order: Send Invoice ---
-  sendInvoiceDraftOrderId: Workflow.string({ label: 'Draft Order ID', required: true, acceptsVariables: true }),
+  sendInvoiceDraftOrderId: Workflow.string({
+    label: 'Draft Order ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   sendInvoiceTo: Workflow.email({
     label: 'To Email',
     description: 'Recipient email (defaults to customer email)',

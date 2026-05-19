@@ -8,7 +8,15 @@ interface InventoryItemPanelProps {
 }
 
 export function InventoryItemPanel({ api }: InventoryItemPanelProps) {
-  const { StringInput, VarInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    VarInput,
+    OptionsInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>

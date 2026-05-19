@@ -2,6 +2,14 @@
 
 import { TextBlock } from '@auxx/sdk/client'
 import { twilioBlock } from './blocks/twilio/twilio.workflow'
+import { getTwilioCallTool } from './tools/get-twilio-call.tool'
+import { getTwilioMessageTool } from './tools/get-twilio-message.tool'
+import { listTwilioCallsTool } from './tools/list-twilio-calls.tool'
+import { listTwilioMessagesTool } from './tools/list-twilio-messages.tool'
+import { listTwilioPhoneNumbersTool } from './tools/list-twilio-phone-numbers.tool'
+import { makeTwilioCallTool } from './tools/make-twilio-call.tool'
+import { sendTwilioSmsTool } from './tools/send-twilio-sms.tool'
+import { twilioToolsets } from './tools/toolsets'
 
 export const app = {
   record: {
@@ -18,6 +26,16 @@ export const app = {
     blocks: [twilioBlock],
     triggers: [],
   },
+  tools: [
+    listTwilioPhoneNumbersTool,
+    listTwilioMessagesTool,
+    getTwilioMessageTool,
+    sendTwilioSmsTool,
+    listTwilioCallsTool,
+    getTwilioCallTool,
+    makeTwilioCallTool,
+  ],
+  toolsets: twilioToolsets,
 }
 
 export function App() {

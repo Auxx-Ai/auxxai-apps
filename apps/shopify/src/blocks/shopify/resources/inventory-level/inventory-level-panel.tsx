@@ -16,7 +16,16 @@ export function InventoryLevelPanel({
   locations,
   locationsLoading,
 }: InventoryLevelPanelProps) {
-  const { StringInput, NumberInput, BooleanInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    NumberInput,
+    BooleanInput,
+    OptionsInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   const locationOptions = locationsLoading
     ? [{ label: 'Loading locations...', value: '' }]

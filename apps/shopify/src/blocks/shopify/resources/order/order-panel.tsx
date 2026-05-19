@@ -12,7 +12,16 @@ interface OrderPanelProps {
 }
 
 export function OrderPanel({ api, locations, locationsLoading }: OrderPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    OptionsInput,
+    BooleanInput,
+    VarInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>

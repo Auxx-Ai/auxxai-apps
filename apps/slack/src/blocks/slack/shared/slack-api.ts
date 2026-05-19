@@ -105,7 +105,11 @@ export async function slackApi(
     })
 
     // Auth-related error codes indicate revoked/invalid tokens
-    if (errorCode === 'token_revoked' || errorCode === 'invalid_auth' || errorCode === 'account_inactive') {
+    if (
+      errorCode === 'token_revoked' ||
+      errorCode === 'invalid_auth' ||
+      errorCode === 'account_inactive'
+    ) {
       throw new ConnectionExpiredError('organization')
     }
 

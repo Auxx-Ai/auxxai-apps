@@ -42,7 +42,11 @@ export const collectionInputs = {
   createImageUrl: Workflow.url({ label: 'Image URL', acceptsVariables: true }),
 
   // --- Collection: Update ---
-  updateCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
+  updateCollectionId: Workflow.string({
+    label: 'Collection ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   updateTitle: Workflow.string({ label: 'Title', acceptsVariables: true }),
   updateBodyHtml: Workflow.string({ label: 'Description (HTML)', acceptsVariables: true }),
   updatePublished: Workflow.select({
@@ -71,7 +75,11 @@ export const collectionInputs = {
   }),
 
   // --- Collection: Get ---
-  getCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
+  getCollectionId: Workflow.string({
+    label: 'Collection ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   getFields: Workflow.array({
     label: 'Fields',
     description: 'Fields to include in the response (leave empty for all)',
@@ -121,11 +129,23 @@ export const collectionInputs = {
   }),
 
   // --- Collection: Delete ---
-  deleteCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
+  deleteCollectionId: Workflow.string({
+    label: 'Collection ID',
+    required: true,
+    acceptsVariables: true,
+  }),
 
   // --- Collection: Add Product ---
-  addProductCollectionId: Workflow.string({ label: 'Collection ID', required: true, acceptsVariables: true }),
-  addProductProductId: Workflow.string({ label: 'Product ID', required: true, acceptsVariables: true }),
+  addProductCollectionId: Workflow.string({
+    label: 'Collection ID',
+    required: true,
+    acceptsVariables: true,
+  }),
+  addProductProductId: Workflow.string({
+    label: 'Product ID',
+    required: true,
+    acceptsVariables: true,
+  }),
 
   // --- Collection: Remove Product ---
   removeProductCollectId: Workflow.string({

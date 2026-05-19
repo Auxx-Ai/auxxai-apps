@@ -59,7 +59,11 @@ export const customerInputs = {
   createCompany: Workflow.string({ label: 'Company', acceptsVariables: true }),
 
   // --- Customer: Update ---
-  updateCustomerId: Workflow.string({ label: 'Customer ID', required: true, acceptsVariables: true }),
+  updateCustomerId: Workflow.string({
+    label: 'Customer ID',
+    required: true,
+    acceptsVariables: true,
+  }),
   updateFirstName: Workflow.string({ label: 'First Name', acceptsVariables: true }),
   updateLastName: Workflow.string({ label: 'Last Name', acceptsVariables: true }),
   updateEmail: Workflow.email({ label: 'Email', acceptsVariables: true }),
@@ -121,7 +125,11 @@ export const customerInputs = {
   }),
 
   // --- Customer: Delete ---
-  deleteCustomerId: Workflow.string({ label: 'Customer ID', required: true, acceptsVariables: true }),
+  deleteCustomerId: Workflow.string({
+    label: 'Customer ID',
+    required: true,
+    acceptsVariables: true,
+  }),
 
   // --- Customer: Search ---
   searchQuery: Workflow.string({

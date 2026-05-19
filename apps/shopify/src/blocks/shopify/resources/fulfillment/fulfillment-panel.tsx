@@ -12,7 +12,16 @@ interface FulfillmentPanelProps {
 }
 
 export function FulfillmentPanel({ api, locations, locationsLoading }: FulfillmentPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    OptionsInput,
+    BooleanInput,
+    VarInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   const locationOptions = locationsLoading
     ? [{ label: 'Loading locations...', value: '' }]

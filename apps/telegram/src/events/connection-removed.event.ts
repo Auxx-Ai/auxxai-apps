@@ -27,5 +27,10 @@ export default async function connectionRemoved({ connection }: { connection: Co
     await deleteWebhookHandler(handler.id)
   }
 
-  console.log('[telegram] Cleaned up', connectionHandlers.length, 'webhook handlers for connection', connection.id)
+  console.log(
+    '[telegram] Cleaned up',
+    connectionHandlers.length,
+    'webhook handlers for connection',
+    connection.id
+  )
 }

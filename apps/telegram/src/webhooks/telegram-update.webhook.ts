@@ -3,7 +3,7 @@
 import { extractUpdateTriggerData } from '../blocks/telegram/triggers/shared/telegram-trigger-types'
 
 export default async function telegramUpdateWebhook(
-  req: Request,
+  req: Request
 ): Promise<
   Response | { response: Response; triggerData: Record<string, unknown>; eventId: string }
 > {

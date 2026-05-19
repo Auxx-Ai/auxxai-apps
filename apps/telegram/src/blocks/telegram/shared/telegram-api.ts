@@ -51,8 +51,7 @@ export async function telegramApi<T = unknown>(
     }
 
     const message =
-      ERROR_MESSAGES[statusCode] ??
-      `Telegram API error: ${data.description ?? response.statusText}`
+      ERROR_MESSAGES[statusCode] ?? `Telegram API error: ${data.description ?? response.statusText}`
     throw new Error(message)
   }
 

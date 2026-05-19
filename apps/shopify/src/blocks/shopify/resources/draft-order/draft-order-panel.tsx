@@ -8,7 +8,16 @@ interface DraftOrderPanelProps {
 }
 
 export function DraftOrderPanel({ api }: DraftOrderPanelProps) {
-  const { StringInput, OptionsInput, BooleanInput, VarInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
+  const {
+    StringInput,
+    OptionsInput,
+    BooleanInput,
+    VarInput,
+    VarField,
+    VarFieldGroup,
+    Section,
+    ConditionalRender,
+  } = api
 
   return (
     <>
