@@ -40,4 +40,5 @@ export const sendWhatsappTextTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: sendWhatsappTextExecute,
+  agent: { toolsetSlug: 'whatsapp.messages.write' },
 })

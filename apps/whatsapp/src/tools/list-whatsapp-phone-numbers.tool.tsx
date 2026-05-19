@@ -22,4 +22,5 @@ export const listWhatsappPhoneNumbersTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: listWhatsappPhoneNumbersExecute,
+  agent: {},
 })
