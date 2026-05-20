@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `file.get` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { getFileInputs, getFileOutputs } from './schemas/file'
 import telegramBlockGetFileExecute from './telegram-block-get-file.tool.server'
 
 export const telegramBlockGetFileTool = defineTool({
@@ -11,17 +12,8 @@ export const telegramBlockGetFileTool = defineTool({
   name: 'Telegram: get file (block)',
   description: 'Internal — backs the Telegram block file.get operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      getFileId: z.string(),
-    })
-    .passthrough(),
-  outputs: z
-    .object({
-      fileId: z.string(),
-      downloadUrl: z.string(),
-    })
-    .passthrough(),
+  inputs: getFileInputs,
+  outputs: getFileOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockGetFileExecute,
 })

@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `callback.answerQuery` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { answerCallbackQueryInputs, answerCallbackQueryOutputs } from './schemas/callback'
 import telegramBlockAnswerCallbackQueryExecute from './telegram-block-answer-callback-query.tool.server'
 
 export const telegramBlockAnswerCallbackQueryTool = defineTool({
@@ -11,16 +12,8 @@ export const telegramBlockAnswerCallbackQueryTool = defineTool({
   name: 'Telegram: answer callback query (block)',
   description: 'Internal — backs the Telegram block callback.answerQuery operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      answerQueryId: z.string(),
-      answerQueryText: z.string().optional(),
-      answerQueryShowAlert: z.boolean().optional(),
-      answerQueryUrl: z.string().optional(),
-      answerQueryCacheTime: z.number().optional(),
-    })
-    .passthrough(),
-  outputs: z.object({ success: z.string() }).passthrough(),
+  inputs: answerCallbackQueryInputs,
+  outputs: answerCallbackQueryOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockAnswerCallbackQueryExecute,
 })

@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `message.pinMessage` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { pinMessageInputs, pinMessageOutputs } from './schemas/message'
 import telegramBlockPinMessageExecute from './telegram-block-pin-message.tool.server'
 
 export const telegramBlockPinMessageTool = defineTool({
@@ -11,14 +12,8 @@ export const telegramBlockPinMessageTool = defineTool({
   name: 'Telegram: pin message (block)',
   description: 'Internal — backs the Telegram block message.pinMessage operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      pinChatId: z.string(),
-      pinMessageId: z.string(),
-      pinDisableNotification: z.boolean().optional(),
-    })
-    .passthrough(),
-  outputs: z.object({ success: z.string() }).passthrough(),
+  inputs: pinMessageInputs,
+  outputs: pinMessageOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockPinMessageExecute,
 })

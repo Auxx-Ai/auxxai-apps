@@ -6,36 +6,18 @@
  * dispatcher through `ctx.runTool`.
  */
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import googleCalendarIcon from '../assets/icon.png'
 import gcalBlockGetEventExecute from './gcal-block-get-event.tool.server'
+import { getEventInputs, getEventOutputs } from './schemas/event'
 
 export const gcalBlockGetEventTool = defineTool({
   id: 'gcal_block_get_event',
   name: 'Google Calendar: get event (block)',
   description: 'Internal — backs the Google Calendar block event.get operation.',
   icon: googleCalendarIcon,
-  inputs: z.object({
-    eventCalendar: z.string(),
-    getEventId: z.string(),
-    getTimezone: z.string().optional(),
-  }),
-  outputs: z
-    .object({
-      eventId: z.string(),
-      summary: z.string(),
-      description: z.string(),
-      location: z.string(),
-      start: z.string(),
-      end: z.string(),
-      status: z.string(),
-      htmlLink: z.string(),
-      attendees: z.string(),
-      organizer: z.string(),
-      created: z.string(),
-      updated: z.string(),
-    })
-    .passthrough(),
+  inputs: getEventInputs,
+  outputs: getEventOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: gcalBlockGetEventExecute,
 })

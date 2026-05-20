@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `chat.setDescription` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { setChatDescriptionInputs, setChatDescriptionOutputs } from './schemas/chat'
 import telegramBlockSetChatDescriptionExecute from './telegram-block-set-chat-description.tool.server'
 
 export const telegramBlockSetChatDescriptionTool = defineTool({
@@ -11,13 +12,8 @@ export const telegramBlockSetChatDescriptionTool = defineTool({
   name: 'Telegram: set chat description (block)',
   description: 'Internal — backs the Telegram block chat.setDescription operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      setDescChatId: z.string(),
-      setDescDescription: z.string().optional(),
-    })
-    .passthrough(),
-  outputs: z.object({ success: z.string() }).passthrough(),
+  inputs: setChatDescriptionInputs,
+  outputs: setChatDescriptionOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockSetChatDescriptionExecute,
 })

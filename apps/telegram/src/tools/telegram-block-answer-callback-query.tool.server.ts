@@ -1,9 +1,12 @@
 // src/tools/telegram-block-answer-callback-query.tool.server.ts
 
+import type { z } from '@auxx/sdk/tools'
 import { executeCallback } from '../blocks/telegram/resources/callback/callback-execute.server'
+import { answerCallbackQueryInputs, answerCallbackQueryOutputs } from './schemas/callback'
 
-export default async function telegramBlockAnswerCallbackQuery(
-  input: Record<string, any>
-): Promise<Record<string, any>> {
-  return executeCallback('answerQuery', input)
+type Input = z.infer<typeof answerCallbackQueryInputs>
+type Output = z.infer<typeof answerCallbackQueryOutputs>
+
+export default async function telegramBlockAnswerCallbackQuery(input: Input): Promise<Output> {
+  return executeCallback('answerQuery', input) as Promise<Output>
 }

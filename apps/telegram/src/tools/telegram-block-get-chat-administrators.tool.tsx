@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `chat.getAdministrators` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { getChatAdministratorsInputs, getChatAdministratorsOutputs } from './schemas/chat'
 import telegramBlockGetChatAdministratorsExecute from './telegram-block-get-chat-administrators.tool.server'
 
 export const telegramBlockGetChatAdministratorsTool = defineTool({
@@ -11,16 +12,8 @@ export const telegramBlockGetChatAdministratorsTool = defineTool({
   name: 'Telegram: get chat administrators (block)',
   description: 'Internal — backs the Telegram block chat.getAdministrators operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      getAdminsChatId: z.string(),
-    })
-    .passthrough(),
-  outputs: z
-    .object({
-      count: z.string(),
-    })
-    .passthrough(),
+  inputs: getChatAdministratorsInputs,
+  outputs: getChatAdministratorsOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockGetChatAdministratorsExecute,
 })
