@@ -1,6 +1,6 @@
 // src/blocks/google-sheets/triggers/row-trigger/row-trigger.workflow.tsx
 
-import type { WorkflowTrigger } from '@auxx/sdk'
+import { defineTrigger } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeHandle,
@@ -31,15 +31,13 @@ function RowTriggerNode() {
   )
 }
 
-export const rowTrigger = {
+export const rowTrigger = defineTrigger({
   id: 'gog-sheets.row-trigger',
   label: 'Google Sheets Trigger',
   description: 'Triggers when rows are added or updated in a Google Sheet',
   icon: googleSheetsIcon,
   color: '#0F9D58',
   schema: rowTriggerSchema,
-  node: RowTriggerNode,
-  panel: RowTriggerPanel,
   execute: rowTriggerExecute,
   config: {
     requiresConnection: true,
@@ -48,4 +46,8 @@ export const rowTrigger = {
       minIntervalMinutes: 1,
     },
   },
-} satisfies WorkflowTrigger<typeof rowTriggerSchema>
+  workflow: {
+    node: RowTriggerNode,
+    panel: RowTriggerPanel,
+  },
+})
