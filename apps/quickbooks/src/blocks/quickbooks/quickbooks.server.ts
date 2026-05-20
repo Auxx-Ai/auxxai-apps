@@ -1,17 +1,20 @@
-import { VALID_OPERATIONS } from './resources/constants'
-import { executeCustomer } from './resources/customer/customer-execute.server'
-import { executeInvoice } from './resources/invoice/invoice-execute.server'
-import { executePayment } from './resources/payment/payment-execute.server'
-import { executeEstimate } from './resources/estimate/estimate-execute.server'
-import { executeBill } from './resources/bill/bill-execute.server'
-import { executeEmployee } from './resources/employee/employee-execute.server'
-import { executeItem } from './resources/item/item-execute.server'
-import { executeVendor } from './resources/vendor/vendor-execute.server'
-import { executePurchase } from './resources/purchase/purchase-execute.server'
-import { executeTransaction } from './resources/transaction/transaction-execute.server'
+// src/blocks/quickbooks/quickbooks.server.ts
 
+import { VALID_OPERATIONS } from './resources/constants'
+import { quickbooksBlockToolMap } from './quickbooks.workflow'
+
+/**
+ * Block dispatcher — projects the union input shape to the right internal
+ * tool. The lambda runtime injects `ctx.runTool(toolId, input)`; per-op
+ * tools live under `src/tools/internal/` and lift their bodies from the
+ * resource execute branches.
+ *
+ * Inputs flow through as-is. The internal tools each consume the existing
+ * prefixed field names the panel already writes, so no projection is needed.
+ */
 export default async function quickbooksExecute(
   input: Record<string, any>,
+  ctx: { runTool: (toolId: string, input: Record<string, any>) => Promise<Record<string, any>> }
 ): Promise<Record<string, any>> {
   const { resource, operation } = input
 
@@ -21,28 +24,9 @@ export default async function quickbooksExecute(
     throw new Error(`Invalid operation "${operation}" for resource "${resource}"`)
   }
 
-  switch (resource) {
-    case 'bill':
-      return executeBill(operation, input)
-    case 'customer':
-      return executeCustomer(operation, input)
-    case 'employee':
-      return executeEmployee(operation, input)
-    case 'estimate':
-      return executeEstimate(operation, input)
-    case 'invoice':
-      return executeInvoice(operation, input)
-    case 'item':
-      return executeItem(operation, input)
-    case 'payment':
-      return executePayment(operation, input)
-    case 'purchase':
-      return executePurchase(operation, input)
-    case 'transaction':
-      return executeTransaction(operation, input)
-    case 'vendor':
-      return executeVendor(operation, input)
-    default:
-      throw new Error(`Unhandled resource: ${resource}`)
-  }
+  const key = `${resource}.${operation}` as keyof typeof quickbooksBlockToolMap
+  const toolId = quickbooksBlockToolMap[key]
+  if (!toolId) throw new Error(`No tool mapped for ${key}`)
+
+  return ctx.runTool(toolId, input)
 }

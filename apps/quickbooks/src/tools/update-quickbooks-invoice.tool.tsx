@@ -42,4 +42,5 @@ export const updateQuickbooksInvoiceTool = defineTool({
     timeout: 20000,
   },
   execute: updateQuickbooksInvoiceExecute,
+  agent: { toolsetSlug: 'quickbooks.sales.write' },
 })

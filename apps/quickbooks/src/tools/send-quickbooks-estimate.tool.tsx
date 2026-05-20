@@ -22,4 +22,5 @@ export const sendQuickbooksEstimateTool = defineTool({
     timeout: 20000,
   },
   execute: sendQuickbooksEstimateExecute,
+  agent: { toolsetSlug: 'quickbooks.sales.write' },
 })

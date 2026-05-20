@@ -65,4 +65,5 @@ export const findQuickbooksCustomerTool = defineTool({
     timeout: 10000,
   },
   execute: findQuickbooksCustomerExecute,
+  agent: { toolsetSlug: 'quickbooks.contacts.read' },
 })

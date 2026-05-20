@@ -26,4 +26,5 @@ export const updateQuickbooksPaymentTool = defineTool({
     timeout: 15000,
   },
   execute: updateQuickbooksPaymentExecute,
+  agent: { toolsetSlug: 'quickbooks.sales.write' },
 })

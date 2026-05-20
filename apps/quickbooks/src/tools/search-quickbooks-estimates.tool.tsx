@@ -36,4 +36,5 @@ export const searchQuickbooksEstimatesTool = defineTool({
     timeout: 15000,
   },
   execute: searchQuickbooksEstimatesExecute,
+  agent: { toolsetSlug: 'quickbooks.sales.read' },
 })

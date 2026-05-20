@@ -42,4 +42,5 @@ export const getQuickbooksVendorTool = defineTool({
     timeout: 10000,
   },
   execute: getQuickbooksVendorExecute,
+  agent: { toolsetSlug: 'quickbooks.contacts.read' },
 })
