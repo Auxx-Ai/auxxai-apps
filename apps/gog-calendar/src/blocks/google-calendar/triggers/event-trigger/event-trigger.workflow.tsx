@@ -56,4 +56,5 @@ export const eventTrigger = defineTrigger({
     node: EventTriggerNode,
     panel: EventTriggerPanel,
   },
+  agent: {},
 })
