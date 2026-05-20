@@ -1,4 +1,3 @@
-import { type WorkflowBlock } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeRow,
@@ -9,6 +8,7 @@ import googleContactsIcon from '../../assets/icon.png'
 import googleContactsExecute from './google-contacts.server'
 import { GoogleContactsPanel } from './google-contacts-panel'
 import { googleContactsSchema } from './google-contacts-schema'
+import { googleContactsToolMap } from './google-contacts-tool-map'
 
 export { googleContactsSchema }
 
@@ -38,16 +38,17 @@ export const googleContactsBlock = {
   id: 'google-contacts',
   label: 'Google Contacts',
   description: 'Manage Google Contacts — create, update, delete, and search contacts',
-  category: 'action',
+  category: 'action' as const,
   icon: googleContactsIcon,
   color: '#4285F4',
   schema: googleContactsSchema,
   node: GoogleContactsNode,
   panel: GoogleContactsPanel,
+  toolMap: googleContactsToolMap,
   execute: googleContactsExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof googleContactsSchema>
+}

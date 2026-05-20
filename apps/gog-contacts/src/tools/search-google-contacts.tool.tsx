@@ -45,4 +45,5 @@ export const searchGoogleContactsTool = defineTool({
     timeout: 15000,
   },
   execute: searchGoogleContactsExecute,
+  agent: { toolsetSlug: 'gog-contacts.contacts.read' },
 })

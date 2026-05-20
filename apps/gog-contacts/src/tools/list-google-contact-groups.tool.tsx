@@ -32,4 +32,5 @@ export const listGoogleContactGroupsTool = defineTool({
     timeout: 10000,
   },
   execute: listGoogleContactGroupsExecute,
+  agent: {},
 })
