@@ -1,10 +1,16 @@
-import { VALID_OPERATIONS } from './resources/constants'
-import { executeIssue } from './resources/issue/issue-execute.server'
-import { executeFile } from './resources/file/file-execute.server'
-import { executeRepository } from './resources/repository/repository-execute.server'
-import { executeRelease } from './resources/release/release-execute.server'
-import { executeReview } from './resources/review/review-execute.server'
+// src/blocks/github/github.server.ts
 
+import { githubBlockToolMap } from './github.workflow'
+import { VALID_OPERATIONS } from './resources/constants'
+
+type ToolMapKey = keyof typeof githubBlockToolMap
+
+/**
+ * Router-style dispatcher — the block now delegates per (resource, operation)
+ * to internal tools (`tools/internal/*`) via the lambda-injected
+ * `globalThis.__AUXX_WORKFLOW_SDK__.runTool`. See impl plan §6.3 / §7.4 and
+ * plans/kopilot/agents/triggers/app-surface-per-app-migration.md §2.5.
+ */
 export default async function githubExecute(
   input: Record<string, any>
 ): Promise<Record<string, any>> {
@@ -16,18 +22,21 @@ export default async function githubExecute(
     throw new Error(`Invalid operation "${operation}" for resource "${resource}"`)
   }
 
-  switch (resource) {
-    case 'issue':
-      return executeIssue(operation, input)
-    case 'file':
-      return executeFile(operation, input)
-    case 'repository':
-      return executeRepository(operation, input)
-    case 'release':
-      return executeRelease(operation, input)
-    case 'review':
-      return executeReview(operation, input)
-    default:
-      throw new Error(`Unhandled resource: ${resource}`)
+  const key = `${resource}.${operation}` as ToolMapKey
+  const toolId = githubBlockToolMap[key]
+  if (!toolId) {
+    throw new Error(`No tool mapped for ${key}`)
   }
+
+  const runTool = (globalThis as any).__AUXX_WORKFLOW_SDK__?.runTool as
+    | ((toolId: string, input: Record<string, any>) => Promise<Record<string, any>>)
+    | undefined
+  if (!runTool) {
+    throw new Error(
+      'Block dispatcher: runTool is not available on the workflow runtime. ' +
+        'The lambda runtime must inject globalThis.__AUXX_WORKFLOW_SDK__.runTool.'
+    )
+  }
+
+  return runTool(toolId, input)
 }

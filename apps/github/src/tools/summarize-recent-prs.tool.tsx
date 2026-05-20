@@ -83,4 +83,5 @@ export const summarizeRecentPrsTool = defineTool({
     streaming: true,
   },
   execute: summarizeRecentPrsExecute,
+  agent: { toolsetSlug: 'github.pulls', streaming: true },
 })

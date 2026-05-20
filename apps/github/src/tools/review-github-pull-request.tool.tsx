@@ -37,4 +37,5 @@ export const reviewGithubPullRequestTool = defineTool({
     timeout: 15000,
   },
   execute: reviewGithubPullRequestExecute,
+  agent: { toolsetSlug: 'github.pulls' },
 })

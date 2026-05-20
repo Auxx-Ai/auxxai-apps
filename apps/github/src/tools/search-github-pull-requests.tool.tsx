@@ -50,4 +50,5 @@ export const searchGithubPullRequestsTool = defineTool({
     timeout: 15000,
   },
   execute: searchGithubPullRequestsExecute,
+  agent: { toolsetSlug: 'github.pulls' },
 })

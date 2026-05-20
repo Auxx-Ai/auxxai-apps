@@ -1,4 +1,4 @@
-import { type WorkflowBlock } from '@auxx/sdk'
+import type { WorkflowBlock } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeRow,
@@ -12,6 +12,36 @@ import { GitHubPanel } from './github-panel'
 import { githubSchema } from './github-schema'
 
 export { githubSchema }
+
+/**
+ * Dispatcher table: `<resource>.<operation>` -> internal tool id. The runtime
+ * reads this from the catalog and routes block executes through the unified
+ * `__AUXX_TOOLS__` registry. See impl plan §6.3 / §7.4.
+ */
+export const githubBlockToolMap = {
+  'issue.create': 'github_issue_create',
+  'issue.createComment': 'github_issue_create_comment',
+  'issue.edit': 'github_issue_edit',
+  'issue.get': 'github_issue_get',
+  'issue.lock': 'github_issue_lock',
+  'file.create': 'github_file_create',
+  'file.delete': 'github_file_delete',
+  'file.edit': 'github_file_edit',
+  'file.get': 'github_file_get',
+  'file.list': 'github_file_list',
+  'repository.get': 'github_repository_get',
+  'repository.getIssues': 'github_repository_get_issues',
+  'repository.getPullRequests': 'github_repository_get_pull_requests',
+  'release.create': 'github_release_create',
+  'release.delete': 'github_release_delete',
+  'release.get': 'github_release_get',
+  'release.getMany': 'github_release_get_many',
+  'release.update': 'github_release_update',
+  'review.create': 'github_review_create',
+  'review.get': 'github_review_get',
+  'review.getMany': 'github_review_get_many',
+  'review.update': 'github_review_update',
+} as const
 
 function GitHubNode() {
   const { data, status, lastRun } = useWorkflowNode()
@@ -152,4 +182,7 @@ export const githubBlock = {
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof githubSchema>
+  toolMap: githubBlockToolMap,
+} satisfies WorkflowBlock<typeof githubSchema> & {
+  toolMap: Record<string, string>
+}

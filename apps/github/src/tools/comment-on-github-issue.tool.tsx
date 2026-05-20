@@ -26,4 +26,5 @@ export const commentOnGithubIssueTool = defineTool({
     timeout: 10000,
   },
   execute: commentOnGithubIssueExecute,
+  agent: { toolsetSlug: 'github.issues' },
 })
