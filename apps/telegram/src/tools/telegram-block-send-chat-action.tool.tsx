@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `message.sendChatAction` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { sendChatActionInputs, sendChatActionOutputs } from './schemas/message'
 import telegramBlockSendChatActionExecute from './telegram-block-send-chat-action.tool.server'
 
 export const telegramBlockSendChatActionTool = defineTool({
@@ -11,14 +12,8 @@ export const telegramBlockSendChatActionTool = defineTool({
   name: 'Telegram: send chat action (block)',
   description: 'Internal — backs the Telegram block message.sendChatAction operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      sendActionChatId: z.string(),
-      sendActionAction: z.string().optional(),
-      sendActionThreadId: z.string().optional(),
-    })
-    .passthrough(),
-  outputs: z.object({ success: z.string() }).passthrough(),
+  inputs: sendChatActionInputs,
+  outputs: sendChatActionOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockSendChatActionExecute,
 })

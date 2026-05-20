@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `chat.leave` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { leaveChatInputs, leaveChatOutputs } from './schemas/chat'
 import telegramBlockLeaveChatExecute from './telegram-block-leave-chat.tool.server'
 
 export const telegramBlockLeaveChatTool = defineTool({
@@ -11,12 +12,8 @@ export const telegramBlockLeaveChatTool = defineTool({
   name: 'Telegram: leave chat (block)',
   description: 'Internal — backs the Telegram block chat.leave operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      leaveChatId: z.string(),
-    })
-    .passthrough(),
-  outputs: z.object({ success: z.string() }).passthrough(),
+  inputs: leaveChatInputs,
+  outputs: leaveChatOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockLeaveChatExecute,
 })

@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `message.editMessageText` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { editMessageTextInputs, editMessageTextOutputs } from './schemas/message'
 import telegramBlockEditMessageTextExecute from './telegram-block-edit-message-text.tool.server'
 
 export const telegramBlockEditMessageTextTool = defineTool({
@@ -11,26 +12,8 @@ export const telegramBlockEditMessageTextTool = defineTool({
   name: 'Telegram: edit message text (block)',
   description: 'Internal — backs the Telegram block message.editMessageText operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      editTextMessageType: z.string().optional(),
-      editTextChatId: z.string().optional(),
-      editTextMessageId: z.string().optional(),
-      editTextInlineMessageId: z.string().optional(),
-      editTextText: z.string(),
-      editTextParseMode: z.string().optional(),
-      editTextDisablePreview: z.boolean().optional(),
-      editTextReplyMarkup: z.string().optional(),
-    })
-    .passthrough(),
-  outputs: z
-    .object({
-      messageId: z.string(),
-      chatId: z.string(),
-      text: z.string(),
-      editDate: z.string(),
-    })
-    .passthrough(),
+  inputs: editMessageTextInputs,
+  outputs: editMessageTextOutputs,
   config: { requiresConnection: true, timeout: 15000 },
   execute: telegramBlockEditMessageTextExecute,
 })

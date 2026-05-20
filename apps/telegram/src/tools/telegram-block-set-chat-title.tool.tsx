@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `chat.setTitle` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { setChatTitleInputs, setChatTitleOutputs } from './schemas/chat'
 import telegramBlockSetChatTitleExecute from './telegram-block-set-chat-title.tool.server'
 
 export const telegramBlockSetChatTitleTool = defineTool({
@@ -11,13 +12,8 @@ export const telegramBlockSetChatTitleTool = defineTool({
   name: 'Telegram: set chat title (block)',
   description: 'Internal — backs the Telegram block chat.setTitle operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      setTitleChatId: z.string(),
-      setTitleTitle: z.string(),
-    })
-    .passthrough(),
-  outputs: z.object({ success: z.string() }).passthrough(),
+  inputs: setChatTitleInputs,
+  outputs: setChatTitleOutputs,
   config: { requiresConnection: true, timeout: 10000 },
   execute: telegramBlockSetChatTitleExecute,
 })

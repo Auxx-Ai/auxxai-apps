@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `message.sendDocument` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { sendDocumentInputs, sendDocumentOutputs } from './schemas/message'
 import telegramBlockSendDocumentExecute from './telegram-block-send-document.tool.server'
 
 export const telegramBlockSendDocumentTool = defineTool({
@@ -11,26 +12,8 @@ export const telegramBlockSendDocumentTool = defineTool({
   name: 'Telegram: send document (block)',
   description: 'Internal — backs the Telegram block message.sendDocument operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      sendDocChatId: z.string(),
-      sendDocFile: z.string(),
-      sendDocCaption: z.string().optional(),
-      sendDocParseMode: z.string().optional(),
-      sendDocDisableNotification: z.boolean().optional(),
-      sendDocReplyToMessageId: z.string().optional(),
-      sendDocThreadId: z.string().optional(),
-      sendDocReplyMarkup: z.string().optional(),
-    })
-    .passthrough(),
-  outputs: z
-    .object({
-      messageId: z.string(),
-      chatId: z.string(),
-      caption: z.string(),
-      date: z.string(),
-    })
-    .passthrough(),
+  inputs: sendDocumentInputs,
+  outputs: sendDocumentOutputs,
   config: { requiresConnection: true, timeout: 30000 },
   execute: telegramBlockSendDocumentExecute,
 })

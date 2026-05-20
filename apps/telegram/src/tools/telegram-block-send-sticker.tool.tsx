@@ -2,8 +2,9 @@
 //
 // Internal-only tool — backs the Telegram block's `message.sendSticker` op.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { sendStickerInputs, sendStickerOutputs } from './schemas/message'
 import telegramBlockSendStickerExecute from './telegram-block-send-sticker.tool.server'
 
 export const telegramBlockSendStickerTool = defineTool({
@@ -11,23 +12,8 @@ export const telegramBlockSendStickerTool = defineTool({
   name: 'Telegram: send sticker (block)',
   description: 'Internal — backs the Telegram block message.sendSticker operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      sendStickerChatId: z.string(),
-      sendStickerFile: z.string(),
-      sendStickerDisableNotification: z.boolean().optional(),
-      sendStickerReplyToMessageId: z.string().optional(),
-      sendStickerThreadId: z.string().optional(),
-      sendStickerReplyMarkup: z.string().optional(),
-    })
-    .passthrough(),
-  outputs: z
-    .object({
-      messageId: z.string(),
-      chatId: z.string(),
-      date: z.string(),
-    })
-    .passthrough(),
+  inputs: sendStickerInputs,
+  outputs: sendStickerOutputs,
   config: { requiresConnection: true, timeout: 15000 },
   execute: telegramBlockSendStickerExecute,
 })

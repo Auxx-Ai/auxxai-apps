@@ -4,8 +4,9 @@
  * Internal-only tool — backs the Slack block's `message.delete` op.
  */
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import slackIcon from '../assets/icon.png'
+import { deleteMessageInputs, deleteMessageOutputs } from './schemas'
 import slackBlockDeleteMessageExecute from './slack-block-delete-message.tool.server'
 
 export const slackBlockDeleteMessageTool = defineTool({
@@ -13,15 +14,8 @@ export const slackBlockDeleteMessageTool = defineTool({
   name: 'Slack: delete message (block)',
   description: 'Internal — backs the Slack block message.delete operation.',
   icon: slackIcon,
-  inputs: z.object({
-    deleteChannelMode: z.enum(['list', 'id']).optional(),
-    deleteChannelList: z.string().optional(),
-    deleteChannelId: z.string().optional(),
-    deleteMessageTs: z.string(),
-  }),
-  outputs: z.object({
-    success: z.string(),
-  }),
+  inputs: deleteMessageInputs,
+  outputs: deleteMessageOutputs,
   config: { requiresConnection: true, timeout: 15000 },
   execute: slackBlockDeleteMessageExecute,
 })

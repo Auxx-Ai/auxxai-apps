@@ -4,8 +4,9 @@
 // No `agent` / `action` surface keys: invoked solely via the block's
 // dispatcher through `ctx.runTool`.
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import telegramIcon from '../assets/icon.png'
+import { sendMessageInputs, sendMessageOutputs } from './schemas/message'
 import telegramBlockSendMessageExecute from './telegram-block-send-message.tool.server'
 
 export const telegramBlockSendMessageTool = defineTool({
@@ -13,26 +14,8 @@ export const telegramBlockSendMessageTool = defineTool({
   name: 'Telegram: send message (block)',
   description: 'Internal — backs the Telegram block message.sendMessage operation.',
   icon: telegramIcon,
-  inputs: z
-    .object({
-      sendMessageChatId: z.string(),
-      sendMessageText: z.string(),
-      sendMessageParseMode: z.string().optional(),
-      sendMessageDisablePreview: z.boolean().optional(),
-      sendMessageDisableNotification: z.boolean().optional(),
-      sendMessageReplyToMessageId: z.string().optional(),
-      sendMessageThreadId: z.string().optional(),
-      sendMessageReplyMarkup: z.string().optional(),
-    })
-    .passthrough(),
-  outputs: z
-    .object({
-      messageId: z.string(),
-      chatId: z.string(),
-      text: z.string(),
-      date: z.string(),
-    })
-    .passthrough(),
+  inputs: sendMessageInputs,
+  outputs: sendMessageOutputs,
   config: { requiresConnection: true, timeout: 15000 },
   execute: telegramBlockSendMessageExecute,
 })

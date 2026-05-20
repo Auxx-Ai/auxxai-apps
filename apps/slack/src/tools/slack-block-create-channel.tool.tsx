@@ -6,8 +6,9 @@
  * dispatcher through `ctx.runTool`.
  */
 
-import { defineTool, z } from '@auxx/sdk/tools'
+import { defineTool } from '@auxx/sdk/tools'
 import slackIcon from '../assets/icon.png'
+import { createChannelInputs, createChannelOutputs } from './schemas'
 import slackBlockCreateChannelExecute from './slack-block-create-channel.tool.server'
 
 export const slackBlockCreateChannelTool = defineTool({
@@ -15,14 +16,8 @@ export const slackBlockCreateChannelTool = defineTool({
   name: 'Slack: create channel (block)',
   description: 'Internal — backs the Slack block channel.create operation.',
   icon: slackIcon,
-  inputs: z.object({
-    createChannelName: z.string(),
-    createChannelVisibility: z.enum(['public', 'private']).optional(),
-  }),
-  outputs: z.object({
-    channelId: z.string(),
-    channelName: z.string(),
-  }),
+  inputs: createChannelInputs,
+  outputs: createChannelOutputs,
   config: { requiresConnection: true, timeout: 15000 },
   execute: slackBlockCreateChannelExecute,
 })
