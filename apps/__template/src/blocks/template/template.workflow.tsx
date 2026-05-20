@@ -18,6 +18,7 @@ import { WorkflowNode, WorkflowNodeHandle, WorkflowNodeRow, useWorkflowNode } fr
 import icon from '../../assets/icon.png'
 import { TemplatePanel } from './template-panel'
 import { templateSchema } from './template-schema'
+import { templateToolMap } from './template-tool-map'
 import templateExecute from './template.server'
 
 export { templateSchema }
@@ -49,9 +50,6 @@ export const templateBlock = {
     timeout: 5000,
     retries: 0,
   },
-  toolMap: {
-    echo: 'echo',
-    reverse: 'reverse',
-  },
+  toolMap: templateToolMap,
   execute: templateExecute,
 } satisfies WorkflowBlock<typeof templateSchema>
