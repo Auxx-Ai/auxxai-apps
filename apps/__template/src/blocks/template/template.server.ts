@@ -12,11 +12,12 @@
  */
 
 import type { WorkflowExecuteFunction } from '@auxx/sdk'
-import { templateBlock } from './template.workflow'
+import { templateSchema } from './template-schema'
+import { templateToolMap } from './template-tool-map'
 
-const execute: WorkflowExecuteFunction<typeof templateBlock.schema> = async (input, ctx) => {
-  const key = String(input.operation)
-  const toolId = (templateBlock.toolMap as Record<string, string>)[key]
+const execute: WorkflowExecuteFunction<typeof templateSchema> = async (input, ctx) => {
+  const key = String(input.operation) as keyof typeof templateToolMap
+  const toolId = templateToolMap[key]
   if (!toolId) {
     throw new Error(`Unknown op: ${key}`)
   }

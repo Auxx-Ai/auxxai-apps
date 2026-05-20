@@ -7,7 +7,7 @@ import { sanitizePhone } from './shared/sanitize-phone'
 interface SendWhatsappMediaInput {
   phoneNumberId: string
   recipientPhone: string
-  mediaType: 'image' | 'video' | 'audio' | 'document'
+  mediaType?: 'image' | 'video' | 'audio' | 'document'
   mediaUrl: string
   caption?: string
   filename?: string

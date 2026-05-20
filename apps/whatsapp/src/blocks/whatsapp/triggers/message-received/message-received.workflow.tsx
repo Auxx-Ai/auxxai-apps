@@ -1,6 +1,6 @@
 // src/blocks/whatsapp/triggers/message-received/message-received.workflow.tsx
 
-import type { WorkflowTrigger } from '@auxx/sdk'
+import type { Trigger } from '@auxx/sdk'
 import { WorkflowNode, WorkflowNodeHandle, WorkflowNodeRow } from '@auxx/sdk/client'
 import whatsappIcon from '../../../../assets/icon.png'
 import { MessageReceivedPanel } from './message-received-panel'
@@ -23,12 +23,14 @@ export const messageReceivedTrigger = {
   icon: whatsappIcon,
   color: '#25D366',
   schema: messageReceivedSchema,
-  node: MessageReceivedNode,
-  panel: MessageReceivedPanel,
   execute: messageReceivedExecute,
   config: {
     timeout: 5000,
     retries: 0,
     requiresConnection: true,
   },
-} satisfies WorkflowTrigger<typeof messageReceivedSchema>
+  workflow: {
+    node: MessageReceivedNode,
+    panel: MessageReceivedPanel,
+  },
+} satisfies Trigger<typeof messageReceivedSchema>

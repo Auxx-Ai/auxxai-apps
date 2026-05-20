@@ -11,6 +11,7 @@ import {
 import whatsappIcon from '../../assets/icon.png'
 import { WhatsappPanel } from './whatsapp-panel'
 import { whatsappSchema } from './whatsapp-schema'
+import { whatsappBlockToolMap } from './whatsapp-tool-map'
 import whatsappExecute from './whatsapp.server'
 
 export { whatsappSchema }
@@ -81,15 +82,6 @@ export const whatsappBlock = {
     retries: 1,
     requiresConnection: true,
   },
-  toolMap: {
-    'message.sendText': 'send_whatsapp_text',
-    'message.sendMedia': 'send_whatsapp_media',
-    'message.sendTemplate': 'send_whatsapp_template',
-    'message.sendContacts': 'send_whatsapp_contacts',
-    'message.sendLocation': 'send_whatsapp_location',
-    'media.upload': 'upload_whatsapp_media',
-    'media.getUrl': 'get_whatsapp_media_url',
-    'media.delete': 'delete_whatsapp_media',
-  },
+  toolMap: whatsappBlockToolMap,
   execute: whatsappExecute,
 } satisfies WorkflowBlock<typeof whatsappSchema>
