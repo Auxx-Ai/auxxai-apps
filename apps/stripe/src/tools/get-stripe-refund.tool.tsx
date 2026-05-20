@@ -29,4 +29,5 @@ export const getStripeRefundTool = defineTool({
   outputs: z.object({ refund: refundOutput }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripeRefundExecute,
+  agent: { toolsetSlug: 'stripe.refunds.read' },
 })

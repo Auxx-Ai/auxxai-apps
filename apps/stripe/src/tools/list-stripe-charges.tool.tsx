@@ -30,4 +30,5 @@ export const listStripeChargesTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 20000, idempotent: true },
   execute: listStripeChargesExecute,
+  agent: { toolsetSlug: 'stripe.charges.read' },
 })

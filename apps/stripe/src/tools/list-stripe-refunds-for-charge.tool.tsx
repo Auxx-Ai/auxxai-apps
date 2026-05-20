@@ -20,4 +20,5 @@ export const listStripeRefundsForChargeTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: listStripeRefundsForChargeExecute,
+  agent: { toolsetSlug: 'stripe.refunds.read' },
 })

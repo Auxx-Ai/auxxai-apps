@@ -34,4 +34,5 @@ export const listStripeSubscriptionsForCustomerTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000, idempotent: true },
   execute: listStripeSubscriptionsForCustomerExecute,
+  agent: { toolsetSlug: 'stripe.subscriptions.read' },
 })

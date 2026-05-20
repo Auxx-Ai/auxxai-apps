@@ -34,4 +34,5 @@ export const getStripeChargeTool = defineTool({
   outputs: z.object({ charge: chargeOutput }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripeChargeExecute,
+  agent: { toolsetSlug: 'stripe.charges.read' },
 })

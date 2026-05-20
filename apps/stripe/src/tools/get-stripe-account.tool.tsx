@@ -25,4 +25,5 @@ export const getStripeAccountTool = defineTool({
     idempotent: true,
   },
   execute: getStripeAccountExecute,
+  agent: {},
 })

@@ -30,4 +30,5 @@ export const listStripeCouponsTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: listStripeCouponsExecute,
+  agent: { toolsetSlug: 'stripe.coupons.read' },
 })

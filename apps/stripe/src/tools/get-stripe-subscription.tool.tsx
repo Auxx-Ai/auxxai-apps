@@ -46,4 +46,5 @@ export const getStripeSubscriptionTool = defineTool({
   outputs: z.object({ subscription: subscriptionOutput }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripeSubscriptionExecute,
+  agent: { toolsetSlug: 'stripe.subscriptions.read' },
 })

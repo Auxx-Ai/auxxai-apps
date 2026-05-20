@@ -50,4 +50,5 @@ export const createStripeCustomerTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: createStripeCustomerExecute,
+  agent: { toolsetSlug: 'stripe.customers.write' },
 })

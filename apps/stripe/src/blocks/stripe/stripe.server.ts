@@ -1,14 +1,19 @@
-import { VALID_OPERATIONS } from './resources/constants'
-import { executeBalance } from './resources/balance/balance-execute.server'
-import { executeCharge } from './resources/charge/charge-execute.server'
-import { executeCoupon } from './resources/coupon/coupon-execute.server'
-import { executeCustomer } from './resources/customer/customer-execute.server'
-import { executeCustomerCard } from './resources/customer-card/customer-card-execute.server'
-import { executeSource } from './resources/source/source-execute.server'
-import { executeToken } from './resources/token/token-execute.server'
+// src/blocks/stripe/stripe.server.ts
 
+import { stripeBlockToolMap } from './stripe.workflow'
+import { VALID_OPERATIONS } from './resources/constants'
+
+/**
+ * Block dispatcher — projects (resource, operation) to the right internal
+ * tool. The lambda runtime injects `ctx.runTool(toolId, input)`; per-op
+ * internal tools live under `src/tools/internal/` and re-export the named
+ * functions exposed by each resource execute file. Inputs flow through
+ * as-is — the internal tools consume the existing prefixed field names
+ * (e.g. `createChargeAmount`, `getCardCustomerId`) the panel already writes.
+ */
 export default async function stripeExecute(
-  input: Record<string, any>
+  input: Record<string, any>,
+  ctx: { runTool: (toolId: string, input: Record<string, any>) => Promise<Record<string, any>> }
 ): Promise<Record<string, any>> {
   const { resource, operation } = input
 
@@ -18,22 +23,9 @@ export default async function stripeExecute(
     throw new Error(`Invalid operation "${operation}" for resource "${resource}"`)
   }
 
-  switch (resource) {
-    case 'balance':
-      return executeBalance(operation, input)
-    case 'charge':
-      return executeCharge(operation, input)
-    case 'coupon':
-      return executeCoupon(operation, input)
-    case 'customer':
-      return executeCustomer(operation, input)
-    case 'customerCard':
-      return executeCustomerCard(operation, input)
-    case 'source':
-      return executeSource(operation, input)
-    case 'token':
-      return executeToken(operation, input)
-    default:
-      throw new Error(`Unhandled resource: ${resource}`)
-  }
+  const key = `${resource}.${operation}`
+  const toolId = stripeBlockToolMap[key]
+  if (!toolId) throw new Error(`No tool mapped for ${key}`)
+
+  return ctx.runTool(toolId, input)
 }

@@ -20,4 +20,5 @@ export const addStripeCustomerCardTool = defineTool({
   outputs: z.object({ card: cardOutput }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: addStripeCustomerCardExecute,
+  agent: { toolsetSlug: 'stripe.customer-cards.write' },
 })

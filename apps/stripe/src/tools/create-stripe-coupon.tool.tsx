@@ -47,4 +47,11 @@ export const createStripeCouponTool = defineTool({
   outputs: z.object({ coupon: couponOutput }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: createStripeCouponExecute,
+  agent: { toolsetSlug: 'stripe.coupons.write' },
+  action: {
+    label: 'Create Coupon',
+    description: 'Create a Stripe discount coupon to share with a customer',
+    color: '#635BFF',
+    surface: 'ticket-header',
+  },
 })
