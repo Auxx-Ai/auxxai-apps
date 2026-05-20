@@ -7,6 +7,7 @@ export const eventTriggerInputs = {
     label: 'Calendar',
     description: 'Calendar to watch for events',
     options: [] as { value: string; label: string }[],
+    default: 'primary',
   }),
   triggerOn: Workflow.select({
     label: 'Trigger On',
@@ -25,7 +26,7 @@ export const eventTriggerInputs = {
     description: 'Optional text to filter events by (searches all fields)',
     placeholder: 'team meeting',
     acceptsVariables: true,
-  }),
+  }).optional(),
 }
 
 export const eventTriggerOutputs = {
