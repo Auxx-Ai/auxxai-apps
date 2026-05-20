@@ -1,6 +1,5 @@
 // src/blocks/google-sheets/google-sheets.workflow.tsx
 
-import { type WorkflowBlock } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeRow,
@@ -11,6 +10,7 @@ import googleSheetsIcon from '../../assets/icon.png'
 import googleSheetsExecute from './google-sheets.server'
 import { GoogleSheetsPanel } from './google-sheets-panel'
 import { googleSheetsSchema } from './google-sheets-schema'
+import { googleSheetsToolMap } from './google-sheets-tool-map'
 
 export { googleSheetsSchema }
 
@@ -45,16 +45,17 @@ export const googleSheetsBlock = {
   id: 'google-sheets',
   label: 'Google Sheets',
   description: 'Interact with Google Sheets — read, write, and manage spreadsheets',
-  category: 'action',
+  category: 'action' as const,
   icon: googleSheetsIcon,
   color: '#0F9D58',
   schema: googleSheetsSchema,
   node: GoogleSheetsNode,
   panel: GoogleSheetsPanel,
+  toolMap: googleSheetsToolMap,
   execute: googleSheetsExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof googleSheetsSchema>
+}

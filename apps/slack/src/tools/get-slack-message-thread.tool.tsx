@@ -26,4 +26,5 @@ export const getSlackMessageThreadTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: getSlackMessageThreadExecute,
+  agent: { toolsetSlug: 'slack.messages.read' },
 })

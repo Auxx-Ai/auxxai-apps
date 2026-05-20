@@ -32,4 +32,5 @@ export const listNotionDatabasesTool = defineTool({
     timeout: 10000,
   },
   execute: listNotionDatabasesExecute,
+  agent: {},
 })

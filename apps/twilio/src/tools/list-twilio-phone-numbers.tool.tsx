@@ -33,4 +33,5 @@ export const listTwilioPhoneNumbersTool = defineTool({
     timeout: 10000,
   },
   execute: listTwilioPhoneNumbersExecute,
+  agent: {},
 })

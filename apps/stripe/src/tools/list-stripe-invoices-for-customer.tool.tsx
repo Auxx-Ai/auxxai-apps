@@ -21,4 +21,5 @@ export const listStripeInvoicesForCustomerTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000, idempotent: true },
   execute: listStripeInvoicesForCustomerExecute,
+  agent: { toolsetSlug: 'stripe.invoices.read' },
 })

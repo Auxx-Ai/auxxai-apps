@@ -44,4 +44,5 @@ export const updateStripeCustomerTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: updateStripeCustomerExecute,
+  agent: { toolsetSlug: 'stripe.customers.write' },
 })

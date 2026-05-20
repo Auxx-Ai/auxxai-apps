@@ -49,4 +49,5 @@ export const searchNotionPagesTool = defineTool({
     timeout: 15000,
   },
   execute: searchNotionPagesExecute,
+  agent: { toolsetSlug: 'notion.pages' },
 })

@@ -30,4 +30,5 @@ export const listQuickbooksAccountsTool = defineTool({
     timeout: 15000,
   },
   execute: listQuickbooksAccountsExecute,
+  agent: {},
 })

@@ -38,4 +38,5 @@ export const getStripePaymentIntentTool = defineTool({
   outputs: z.object({ paymentIntent: paymentIntentOutput }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripePaymentIntentExecute,
+  agent: { toolsetSlug: 'stripe.payment-intents.read' },
 })

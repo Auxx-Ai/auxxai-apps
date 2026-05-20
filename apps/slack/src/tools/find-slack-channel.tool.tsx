@@ -27,4 +27,5 @@ export const findSlackChannelTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: findSlackChannelExecute,
+  agent: { toolsetSlug: 'slack.channels.read' },
 })

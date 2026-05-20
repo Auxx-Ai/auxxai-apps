@@ -44,4 +44,5 @@ export const getQuickbooksInvoiceTool = defineTool({
     timeout: 10000,
   },
   execute: getQuickbooksInvoiceExecute,
+  agent: { toolsetSlug: 'quickbooks.sales.read' },
 })

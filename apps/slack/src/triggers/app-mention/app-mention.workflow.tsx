@@ -1,6 +1,6 @@
 // src/triggers/app-mention/app-mention.workflow.tsx
 
-import type { WorkflowTrigger } from '@auxx/sdk'
+import { defineTrigger } from '@auxx/sdk'
 import { WorkflowNode, WorkflowNodeHandle, WorkflowNodeRow } from '@auxx/sdk/client'
 import slackIcon from '../../assets/icon.png'
 import { AppMentionPanel } from './app-mention-panel'
@@ -16,19 +16,21 @@ function AppMentionNode() {
   )
 }
 
-export const appMentionTrigger = {
+export const appMentionTrigger = defineTrigger({
   id: 'slack.app-mention',
   label: 'Slack: App Mention',
   description: 'Fires when someone @-mentions the Auxx bot in a Slack channel.',
   icon: slackIcon,
   color: '#4A154B',
   schema: appMentionSchema,
-  node: AppMentionNode,
-  panel: AppMentionPanel,
   execute: appMentionExecute,
   config: {
     timeout: 5000,
     retries: 0,
     requiresConnection: true,
   },
-} satisfies WorkflowTrigger<typeof appMentionSchema>
+  workflow: {
+    node: AppMentionNode,
+    panel: AppMentionPanel,
+  },
+})

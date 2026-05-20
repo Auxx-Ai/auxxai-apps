@@ -53,4 +53,5 @@ export const updateCalendarEventTool = defineTool({
     timeout: 15000,
   },
   execute: updateEventExecute,
+  agent: { toolsetSlug: 'gog-calendar.events' },
 })

@@ -71,4 +71,5 @@ export const updateGoogleContactTool = defineTool({
     timeout: 15000,
   },
   execute: updateGoogleContactExecute,
+  agent: { toolsetSlug: 'gog-contacts.contacts.write' },
 })

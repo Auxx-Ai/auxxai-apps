@@ -1,0 +1,9 @@
+// src/tools/internal/notion-block-get-many-database-pages.tool.server.ts
+
+import { executeDatabasePage } from '../../blocks/notion/resources/database-page/database-page-execute.server'
+
+export default async function notionBlockGetManyDatabasePages(
+  input: Record<string, any>
+): Promise<Record<string, any>> {
+  return executeDatabasePage('getMany', input)
+}

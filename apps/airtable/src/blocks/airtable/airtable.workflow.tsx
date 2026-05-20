@@ -70,6 +70,22 @@ function AirtableNode() {
   )
 }
 
+/**
+ * Dispatcher table: `<resource>.<operation>` -> internal tool id. The runtime
+ * reads this from the catalog and routes block executes through the unified
+ * `__AUXX_TOOLS__` registry. See impl plan §6.3 / §7.4.
+ */
+export const airtableBlockToolMap = {
+  'base.getMany': 'airtable_block_get_bases',
+  'base.getSchema': 'airtable_block_get_schema',
+  'record.create': 'airtable_block_create_record',
+  'record.delete': 'airtable_block_delete_record',
+  'record.get': 'airtable_block_get_record',
+  'record.search': 'airtable_block_search_records',
+  'record.update': 'airtable_block_update_record',
+  'record.upsert': 'airtable_block_upsert_record',
+} as const
+
 export const airtableBlock = {
   id: 'airtable',
   label: 'Airtable',
@@ -87,4 +103,7 @@ export const airtableBlock = {
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof airtableSchema>
+  toolMap: airtableBlockToolMap,
+} satisfies WorkflowBlock<typeof airtableSchema> & {
+  toolMap: Record<string, string>
+}

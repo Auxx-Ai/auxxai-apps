@@ -22,4 +22,5 @@ export const getWhatsappMediaUrlTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: getWhatsappMediaUrlExecute,
+  agent: { toolsetSlug: 'whatsapp.media.read' },
 })

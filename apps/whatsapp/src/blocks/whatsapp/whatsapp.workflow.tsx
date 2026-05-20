@@ -76,10 +76,20 @@ export const whatsappBlock = {
   schema: whatsappSchema,
   node: WhatsappNode,
   panel: WhatsappPanel,
-  execute: whatsappExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
+  toolMap: {
+    'message.sendText': 'send_whatsapp_text',
+    'message.sendMedia': 'send_whatsapp_media',
+    'message.sendTemplate': 'send_whatsapp_template',
+    'message.sendContacts': 'send_whatsapp_contacts',
+    'message.sendLocation': 'send_whatsapp_location',
+    'media.upload': 'upload_whatsapp_media',
+    'media.getUrl': 'get_whatsapp_media_url',
+    'media.delete': 'delete_whatsapp_media',
+  },
+  execute: whatsappExecute,
 } satisfies WorkflowBlock<typeof whatsappSchema>

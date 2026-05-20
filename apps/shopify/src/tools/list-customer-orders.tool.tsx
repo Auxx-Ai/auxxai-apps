@@ -34,4 +34,5 @@ export const listCustomerOrdersTool = defineTool({
     timeout: 15000,
   },
   execute: listCustomerOrdersExecute,
+  agent: { toolsetSlug: 'shopify.customers' },
 })

@@ -1,42 +1,17 @@
 # Template
 
-> An Auxx application
+> Scaffold for a new Auxx app.
 
-## Auxx App: template
-
-App ID: ``
+This directory is the starting point for every new Auxx app. Copy it,
+rename, and rip out the example tool / block / trigger as you replace
+them with the real thing.
 
 ## Getting Started
 
-### Install Dependencies
-
 ```bash
 pnpm install
-```
-
-### Development Mode
-
-Start the development server with hot reload:
-
-```bash
-pnpm run dev
-```
-
-This will:
-- Watch for file changes
-- Validate TypeScript
-- Bundle your code
-- Enable hot reload in Auxx platform
-
-### Build for Production
-
-```bash
-pnpm run build
-```
-
-### Formatting
-
-```bash
+pnpm run dev      # watch + bundle + hot reload
+pnpm run build    # production bundle
 pnpm run format
 ```
 
@@ -45,115 +20,148 @@ pnpm run format
 ```
 template/
 ├── src/
-│   ├── app.tsx                   # Main app entry point with surfaces and App component
-│   ├── hello-world-action.tsx    # Example record action
-│   ├── hello-world-dialog.tsx    # Example dialog component
-│   ├── test-user.tsx             # Example component with async data
-│   ├── get-user.server.ts        # Example server-side function
-│   └── assets/                   # Static assets (images, etc.)
-├── .auxx/                        # Build output (gitignored)
+│   ├── app.tsx                                  # registry: lists tools, blocks, triggers
+│   ├── app.settings.ts                          # admin-facing settings schema
+│   ├── tools/
+│   │   ├── ping.tool.tsx + .server.ts           # agent-exposed tool (has `agent` key)
+│   │   ├── echo.tool.tsx + .server.ts           # internal-only tool (no surface keys)
+│   │   ├── reverse.tool.tsx + .server.ts        # internal-only tool
+│   │   └── toolsets.ts                          # admin-approvable groups of agent tools
+│   ├── blocks/template/
+│   │   ├── template.workflow.tsx                # block declaration + `toolMap`
+│   │   ├── template.server.ts                   # `ctx.runTool` dispatcher
+│   │   ├── template-schema.ts
+│   │   └── template-panel.tsx
+│   ├── triggers/example/
+│   │   ├── example.workflow.tsx                 # `defineTrigger({ … workflow: {…} })`
+│   │   ├── example.server.ts
+│   │   ├── example-schema.ts
+│   │   └── example-panel.tsx
+│   ├── events/                                  # connection lifecycle hooks
+│   ├── webhooks/                                # inbound webhook handlers
+│   └── assets/                                  # static assets (icon.png, etc.)
 ├── package.json
 ├── tsconfig.json
-├── .gitignore
 └── README.md
 ```
 
-## Key Concepts
+## Surfaces — the unified model
 
-### App Configuration
+Every tool, block, and trigger lives in `src/app.tsx`'s registry. **Where**
+each one shows up is controlled by *surface keys* on the definition itself,
+not by which array it lives in.
 
-Your extension is defined in `src/app.tsx`, which exports two things:
+### Tools
 
-1. **`app` object**: Defines all the surfaces (actions, widgets, etc.) your extension provides
-2. **`App` component**: The main UI component that renders in certain contexts
+```ts
+import { defineTool, z } from '@auxx/sdk/tools'
 
-Example structure:
-
-```typescript
-// src/app.tsx
-import { recordAction } from './hello-world-action'
-
-export const app = {
-  record: {
-    actions: [recordAction],      // Actions that appear on records
-    bulkActions: [],               // Actions for multiple records
-    widgets: [],                   // Custom widgets to display
-  },
-  workflow: {
-    blocks: {
-      steps: [],                   // Custom workflow steps
-      triggers: [],                // Custom workflow triggers
-    }
-  },
-  // ... more surface types
-}
-
-export function App() {
-  return <div>Your extension UI</div>
-}
+export const pingTool = defineTool({
+  id: 'ping',
+  name: 'Ping',
+  description: 'Echoes a message back.',
+  inputs: z.object({ message: z.string() }),
+  outputs: z.object({ reply: z.string() }),
+  execute: pingExecute,
+  agent: { toolsetSlug: 'template.examples' },
+  // action: { label: 'Ping', surface: 'ticket-header', … }   // optional
+})
 ```
 
-### Surfaces
+| Surface key | Effect |
+|---|---|
+| `agent: {…}`  | Tool appears in the agent picker (gated by its `toolsetSlug`). |
+| `action: {…}` | Tool also runs as a quick action on a ticket / record. |
+| *(neither)*   | Internal-only. Tool is callable by the platform (e.g. a block dispatcher) but invisible in pickers. |
 
-Surfaces are extension points where your code adds functionality to Auxx:
+Add as many keys as apply — a tool can be agent-exposed, quick-action-exposed,
+and a block target all at once.
 
-#### Record Actions
+### Blocks → dispatchers
 
-Buttons that appear in the record detail view:
+A workflow block doesn't carry business logic anymore. It declares a
+`toolMap` that routes each operation to an internal tool, and its server
+file is a thin `ctx.runTool` dispatcher:
 
-```typescript
-import type { RecordAction } from '@auxx/sdk/client'
+```ts
+// blocks/template/template.workflow.tsx
+export const templateBlock = {
+  id: 'template',
+  schema: templateSchema,
+  node: TemplateNode,
+  panel: TemplatePanel,
+  toolMap: {
+    echo:    'echo',
+    reverse: 'reverse',
+  },
+  execute: templateExecute,
+} satisfies WorkflowBlock<typeof templateSchema>
 
-export const recordAction: RecordAction = {
-  id: 'my-extension-action',     // Must be unique
-  label: 'My Action',             // User-facing text
-  icon: 'zap',                    // Optional icon
-  onTrigger: async ({ recordId }) => {
-    // Your code here
+// blocks/template/template.server.ts
+const execute: WorkflowExecuteFunction<typeof templateBlock.schema> =
+  async (input, ctx) => {
+    const toolId = templateBlock.toolMap[String(input.operation)]
+    return ctx.runTool(toolId, { text: input.text })
   }
-}
+export default execute
 ```
 
-**Important**: You only need to define `id`, `label`, and `onTrigger`. The build process automatically adds:
-- `type: 'record-action'`
-- `location: 'record-detail-page'`
+The internal tools (`echo`, `reverse`) are regular `defineTool` calls
+with **no** `agent` / `action` keys — they exist solely to back the
+block. Real apps with a `resource × operation` matrix project the
+block's union input shape onto each tool's flat input shape before
+calling `ctx.runTool`; see `apps/whatsapp/src/blocks/whatsapp/whatsapp.server.ts`.
 
-#### Other Surface Types
+### Triggers
 
-- **Bulk Actions**: Actions on multiple selected records
-- **Widgets**: Custom UI components embedded in pages
-- **Workflow Blocks**: Custom workflow steps and triggers
-- **Call Recording Actions**: Text selection actions for call analysis
-- **Workspace Settings**: Configuration pages
+Triggers are declared with `defineTrigger` and use `workflow` as their
+surface key:
 
-### App Component
+```ts
+import { defineTrigger } from '@auxx/sdk'
 
-The `App` component is your extension's main UI. It's displayed when:
-- Users view your extension's settings page
-- The platform needs to render your extension's interface
+export const exampleTrigger = defineTrigger({
+  id: 'template.example',
+  schema: exampleTriggerSchema,
+  execute: exampleTriggerExecute,
+  workflow: {
+    node: ExampleTriggerNode,
+    panel: ExampleTriggerPanel,
+  },
+  // agent: {},  // uncomment to fan out into agents
+})
+```
 
-```typescript
+The same pattern as tools: `workflow` gates visibility in the workflow
+trigger picker; `agent` (optional) gates fan-out to agents.
+
+## Toolsets
+
+`src/tools/toolsets.ts` groups agent-exposed tools into admin-approvable
+bundles. Every tool with an `agent: { toolsetSlug }` should reference an
+id declared here.
+
+```ts
+export const templateToolsets: Toolset[] = [
+  {
+    id: 'template.examples',
+    name: 'Template examples',
+    description: 'Example tools an agent can call.',
+    tools: ['ping'],
+  },
+]
+```
+
+## App component
+
+```tsx
 export function App() {
-  return (
-    <div>
-      <h1>My Extension</h1>
-      <p>Configuration and status information goes here</p>
-    </div>
-  )
+  return <TextBlock>…</TextBlock>
 }
 ```
 
-### Build Process
-
-The build process automatically:
-
-1. **Finds your app.tsx**: Looks for `src/app.tsx` or `src/app.ts`
-2. **Extracts surfaces**: Reads the `app` object and organizes surfaces by type
-3. **Adds required fields**: Automatically adds `type` and `location` to each surface
-4. **Bundles code**: Creates an optimized bundle with React externalized
-5. **Exports App component**: Makes `window.App` available to the platform runtime
-
-You don't need to worry about these details - just define your surfaces in the `app` object!
+Rendered by the platform on the app's settings page. Keep it short —
+explain the integration to the admin who's about to install it.
 
 ## Documentation
 

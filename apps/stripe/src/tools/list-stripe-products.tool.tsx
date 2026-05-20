@@ -35,4 +35,5 @@ export const listStripeProductsTool = defineTool({
     idempotent: true,
   },
   execute: listStripeProductsExecute,
+  agent: {},
 })

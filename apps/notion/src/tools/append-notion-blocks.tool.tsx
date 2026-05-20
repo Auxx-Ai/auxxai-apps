@@ -54,4 +54,5 @@ export const appendNotionBlocksTool = defineTool({
     timeout: 15000,
   },
   execute: appendNotionBlocksExecute,
+  agent: { toolsetSlug: 'notion.blocks' },
 })

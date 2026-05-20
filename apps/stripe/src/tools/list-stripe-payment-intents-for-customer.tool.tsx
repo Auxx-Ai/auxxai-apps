@@ -20,4 +20,5 @@ export const listStripePaymentIntentsForCustomerTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000, idempotent: true },
   execute: listStripePaymentIntentsForCustomerExecute,
+  agent: { toolsetSlug: 'stripe.payment-intents.read' },
 })

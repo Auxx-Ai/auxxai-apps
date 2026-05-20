@@ -28,4 +28,5 @@ export const getQuickbooksItemTool = defineTool({
     timeout: 10000,
   },
   execute: getQuickbooksItemExecute,
+  agent: { toolsetSlug: 'quickbooks.sales.read' },
 })

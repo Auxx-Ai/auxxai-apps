@@ -37,4 +37,5 @@ export const getTwilioMessageTool = defineTool({
     timeout: 10000,
   },
   execute: getTwilioMessageExecute,
+  agent: { toolsetSlug: 'twilio.messages.read', idempotent: true },
 })

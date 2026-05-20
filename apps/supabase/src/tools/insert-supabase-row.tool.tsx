@@ -29,4 +29,5 @@ export const insertSupabaseRowTool = defineTool({
     timeout: 15000,
   },
   execute: insertSupabaseRowExecute,
+  agent: { toolsetSlug: 'supabase.rows.write' },
 })

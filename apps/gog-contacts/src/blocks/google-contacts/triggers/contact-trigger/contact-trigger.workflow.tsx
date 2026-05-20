@@ -1,4 +1,4 @@
-import type { WorkflowTrigger } from '@auxx/sdk'
+import { defineTrigger } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeHandle,
@@ -33,15 +33,13 @@ function ContactTriggerNode() {
   )
 }
 
-export const contactTrigger = {
+export const contactTrigger = defineTrigger({
   id: 'gog-contacts.contact-trigger',
   label: 'Google Contacts Trigger',
   description: 'Triggers when contacts are created, updated, or deleted',
   icon: googleContactsIcon,
   color: '#4285F4',
   schema: contactTriggerSchema,
-  node: ContactTriggerNode,
-  panel: ContactTriggerPanel,
   execute: contactTriggerExecute,
   config: {
     requiresConnection: true,
@@ -50,4 +48,8 @@ export const contactTrigger = {
       minIntervalMinutes: 1,
     },
   },
-} satisfies WorkflowTrigger<typeof contactTriggerSchema>
+  workflow: {
+    node: ContactTriggerNode,
+    panel: ContactTriggerPanel,
+  },
+})

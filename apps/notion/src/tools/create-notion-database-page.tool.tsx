@@ -80,4 +80,5 @@ export const createNotionDatabasePageTool = defineTool({
     timeout: 15000,
   },
   execute: createNotionDatabasePageExecute,
+  agent: { toolsetSlug: 'notion.databases' },
 })

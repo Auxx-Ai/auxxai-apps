@@ -51,4 +51,5 @@ export const searchGithubReposTool = defineTool({
     timeout: 10000,
   },
   execute: searchGithubReposExecute,
+  agent: { toolsetSlug: 'github.repos' },
 })

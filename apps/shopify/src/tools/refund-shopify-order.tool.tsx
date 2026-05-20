@@ -33,4 +33,5 @@ export const refundShopifyOrderTool = defineTool({
     timeout: 20000,
   },
   execute: refundShopifyOrderExecute,
+  agent: { toolsetSlug: 'shopify.orders.write' },
 })

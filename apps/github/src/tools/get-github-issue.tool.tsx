@@ -58,4 +58,5 @@ export const getGithubIssueTool = defineTool({
     timeout: 15000,
   },
   execute: getGithubIssueExecute,
+  agent: { toolsetSlug: 'github.issues' },
 })

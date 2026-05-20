@@ -4,22 +4,22 @@ import { getOrganizationConnection } from '@auxx/sdk/server'
 import { BlockValidationError } from '@auxx/sdk/shared'
 import { graphApi, graphPaginatedGet, throwConnectionNotFound } from '../../shared/ms-teams-api'
 
-export async function executeChannelMessage(
-  operation: string,
-  input: Record<string, any>
-): Promise<Record<string, any>> {
+function getToken(): string {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
-  const token = connection.value
+  return connection.value
+}
 
-  switch (operation) {
-    case 'create':
-      return createChannelMessage(token, input)
-    case 'getMany':
-      return getManyChannelMessages(token, input)
-    default:
-      throw new Error(`Unknown channel message operation: ${operation}`)
-  }
+export async function channelMessageCreate(
+  input: Record<string, any>
+): Promise<Record<string, any>> {
+  return createChannelMessage(getToken(), input)
+}
+
+export async function channelMessageGetMany(
+  input: Record<string, any>
+): Promise<Record<string, any>> {
+  return getManyChannelMessages(getToken(), input)
 }
 
 async function createChannelMessage(

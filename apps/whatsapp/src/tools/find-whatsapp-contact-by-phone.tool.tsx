@@ -31,4 +31,5 @@ export const findWhatsappContactByPhoneTool = defineTool({
   }),
   config: { requiresConnection: false, timeout: 5000 },
   execute: findWhatsappContactByPhoneExecute,
+  agent: { toolsetSlug: 'whatsapp.contacts.read' },
 })

@@ -31,4 +31,5 @@ export const searchSlackMessagesTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: searchSlackMessagesExecute,
+  agent: { toolsetSlug: 'slack.messages.read' },
 })

@@ -26,4 +26,5 @@ export const deleteTelegramMessageTool = defineTool({
     timeout: 10000,
   },
   execute: deleteTelegramMessageExecute,
+  agent: { toolsetSlug: 'telegram.messages.write' },
 })

@@ -1,7 +1,7 @@
 {
-  "name": "notion",
+  "name": "template",
   "version": "1.0.0",
-  "description": "An Auxx application",
+  "description": "Scaffold for a new Auxx app",
   "type": "module",
   "private": true,
   "scripts": {

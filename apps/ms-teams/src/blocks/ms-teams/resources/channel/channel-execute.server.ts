@@ -4,28 +4,30 @@ import { getOrganizationConnection } from '@auxx/sdk/server'
 import { BlockValidationError } from '@auxx/sdk/shared'
 import { graphApi, graphPaginatedGet, throwConnectionNotFound } from '../../shared/ms-teams-api'
 
-export async function executeChannel(
-  operation: string,
-  input: Record<string, any>
-): Promise<Record<string, any>> {
+function getToken(): string {
   const connection = getOrganizationConnection()
   if (!connection?.value) throwConnectionNotFound()
-  const token = connection.value
+  return connection.value
+}
 
-  switch (operation) {
-    case 'create':
-      return createChannel(token, input)
-    case 'delete':
-      return deleteChannel(token, input)
-    case 'get':
-      return getChannel(token, input)
-    case 'getMany':
-      return getManyChannels(token, input)
-    case 'update':
-      return updateChannel(token, input)
-    default:
-      throw new Error(`Unknown channel operation: ${operation}`)
-  }
+export async function channelCreate(input: Record<string, any>): Promise<Record<string, any>> {
+  return createChannel(getToken(), input)
+}
+
+export async function channelDelete(input: Record<string, any>): Promise<Record<string, any>> {
+  return deleteChannel(getToken(), input)
+}
+
+export async function channelGet(input: Record<string, any>): Promise<Record<string, any>> {
+  return getChannel(getToken(), input)
+}
+
+export async function channelGetMany(input: Record<string, any>): Promise<Record<string, any>> {
+  return getManyChannels(getToken(), input)
+}
+
+export async function channelUpdate(input: Record<string, any>): Promise<Record<string, any>> {
+  return updateChannel(getToken(), input)
 }
 
 async function createChannel(

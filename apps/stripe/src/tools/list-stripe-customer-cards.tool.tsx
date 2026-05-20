@@ -23,4 +23,5 @@ export const listStripeCustomerCardsTool = defineTool({
   outputs: z.object({ cards: z.array(cardOutput) }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: listStripeCustomerCardsExecute,
+  agent: { toolsetSlug: 'stripe.customer-cards.read' },
 })

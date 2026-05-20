@@ -58,4 +58,5 @@ export const summarizeRecentDiscordActivityTool = defineTool({
     streaming: true,
   },
   execute: summarizeRecentDiscordActivityExecute,
+  agent: { toolsetSlug: 'discord.messages.read', streaming: true },
 })

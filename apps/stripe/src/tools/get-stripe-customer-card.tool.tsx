@@ -17,4 +17,5 @@ export const getStripeCustomerCardTool = defineTool({
   outputs: z.object({ card: cardOutput }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripeCustomerCardExecute,
+  agent: { toolsetSlug: 'stripe.customer-cards.read' },
 })

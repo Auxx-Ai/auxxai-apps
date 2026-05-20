@@ -41,4 +41,5 @@ export const updateQuickbooksVendorTool = defineTool({
     timeout: 15000,
   },
   execute: updateQuickbooksVendorExecute,
+  agent: { toolsetSlug: 'quickbooks.contacts.write' },
 })

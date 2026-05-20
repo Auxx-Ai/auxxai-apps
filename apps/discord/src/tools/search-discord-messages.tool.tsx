@@ -53,4 +53,5 @@ export const searchDiscordMessagesTool = defineTool({
     timeout: 20000,
   },
   execute: searchDiscordMessagesExecute,
+  agent: { toolsetSlug: 'discord.messages.read' },
 })

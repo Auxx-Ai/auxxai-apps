@@ -34,4 +34,5 @@ export const listDiscordChannelsTool = defineTool({
     timeout: 10000,
   },
   execute: listDiscordChannelsExecute,
+  agent: { toolsetSlug: 'discord.channels.read' },
 })

@@ -46,4 +46,5 @@ export const listStripePricesTool = defineTool({
     idempotent: true,
   },
   execute: listStripePricesExecute,
+  agent: {},
 })

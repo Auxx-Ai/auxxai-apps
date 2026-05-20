@@ -22,4 +22,5 @@ export const deleteCalendarEventTool = defineTool({
     timeout: 10000,
   },
   execute: deleteEventExecute,
+  agent: { toolsetSlug: 'gog-calendar.events' },
 })

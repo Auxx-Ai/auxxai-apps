@@ -31,4 +31,5 @@ export const getRecentMsTeamsChannelMessagesTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: getRecentMsTeamsChannelMessagesExecute,
+  agent: { toolsetSlug: 'ms-teams.messages.read' },
 })

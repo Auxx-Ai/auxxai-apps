@@ -42,4 +42,5 @@ export const listDiscordMembersTool = defineTool({
     timeout: 15000,
   },
   execute: listDiscordMembersExecute,
+  agent: { toolsetSlug: 'discord.members.read' },
 })

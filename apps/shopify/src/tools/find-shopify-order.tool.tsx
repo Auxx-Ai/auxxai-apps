@@ -73,4 +73,5 @@ export const findShopifyOrderTool = defineTool({
     timeout: 15000,
   },
   execute: findShopifyOrderExecute,
+  agent: { toolsetSlug: 'shopify.orders.read' },
 })

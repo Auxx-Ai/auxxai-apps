@@ -8,7 +8,6 @@
  * Operations vary per resource (see resources/constants.ts).
  */
 
-import { type WorkflowBlock } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeRow,
@@ -20,6 +19,7 @@ import slackIcon from '../../assets/icon.png'
 import slackExecute from './slack.server'
 import { SlackPanel } from './slack-panel'
 import { slackSchema } from './slack-schema'
+import { slackToolMap } from './slack-tool-map'
 
 // Re-export for consumers
 export { slackSchema }
@@ -107,16 +107,17 @@ export const slackBlock = {
   id: 'slack',
   label: 'Slack',
   description: 'Interact with Slack — send messages, manage channels, and more',
-  category: 'action',
+  category: 'action' as const,
   icon: slackIcon,
   color: '#4A154B',
   schema: slackSchema,
   node: SlackNode,
   panel: SlackPanel,
+  toolMap: slackToolMap,
   execute: slackExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof slackSchema>
+}

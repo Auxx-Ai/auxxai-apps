@@ -22,4 +22,5 @@ export const getSlackChannelTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: getSlackChannelExecute,
+  agent: { toolsetSlug: 'slack.channels.read' },
 })

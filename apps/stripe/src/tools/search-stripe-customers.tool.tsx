@@ -46,4 +46,5 @@ export const searchStripeCustomersTool = defineTool({
     idempotent: true,
   },
   execute: searchStripeCustomersExecute,
+  agent: { toolsetSlug: 'stripe.customers.read' },
 })

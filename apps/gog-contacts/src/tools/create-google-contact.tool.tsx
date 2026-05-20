@@ -99,4 +99,5 @@ export const createGoogleContactTool = defineTool({
     timeout: 15000,
   },
   execute: createGoogleContactExecute,
+  agent: { toolsetSlug: 'gog-contacts.contacts.write' },
 })

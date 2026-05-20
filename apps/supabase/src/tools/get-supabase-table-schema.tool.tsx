@@ -58,4 +58,5 @@ export const getSupabaseTableSchemaTool = defineTool({
     timeout: 10000,
   },
   execute: getSupabaseTableSchemaExecute,
+  agent: {},
 })

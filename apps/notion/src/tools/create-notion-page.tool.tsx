@@ -33,4 +33,5 @@ export const createNotionPageTool = defineTool({
     timeout: 15000,
   },
   execute: createNotionPageExecute,
+  agent: { toolsetSlug: 'notion.pages' },
 })

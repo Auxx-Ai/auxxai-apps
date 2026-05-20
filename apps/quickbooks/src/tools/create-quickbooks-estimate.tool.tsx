@@ -38,4 +38,5 @@ export const createQuickbooksEstimateTool = defineTool({
     timeout: 20000,
   },
   execute: createQuickbooksEstimateExecute,
+  agent: { toolsetSlug: 'quickbooks.sales.write' },
 })

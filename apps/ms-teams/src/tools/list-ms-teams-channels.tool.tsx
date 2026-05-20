@@ -25,4 +25,5 @@ export const listMsTeamsChannelsTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: listMsTeamsChannelsExecute,
+  agent: { toolsetSlug: 'ms-teams.channels.read' },
 })

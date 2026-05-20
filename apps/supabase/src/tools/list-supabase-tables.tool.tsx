@@ -33,4 +33,5 @@ export const listSupabaseTablesTool = defineTool({
     timeout: 10000,
   },
   execute: listSupabaseTablesExecute,
+  agent: {},
 })

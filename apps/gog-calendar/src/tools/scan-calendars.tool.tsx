@@ -37,10 +37,13 @@ export const scanCalendarsTool = defineTool({
   }),
   config: {
     requiresConnection: true,
-    streaming: true,
     // Streaming tools have a higher hard cap (120s) per plans/kopilot/apps/README.md §10;
     // this tool typically completes in <2s per calendar, so 30s is plenty for a fan-out.
     timeout: 30000,
   },
   execute: scanCalendarsExecute,
+  agent: {
+    toolsetSlug: 'gog-calendar.availability',
+    streaming: true,
+  },
 })

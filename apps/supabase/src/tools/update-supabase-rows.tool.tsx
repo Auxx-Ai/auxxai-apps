@@ -50,4 +50,5 @@ export const updateSupabaseRowsTool = defineTool({
     timeout: 20000,
   },
   execute: updateSupabaseRowsExecute,
+  agent: { toolsetSlug: 'supabase.rows.write' },
 })

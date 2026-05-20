@@ -44,4 +44,5 @@ export const sendTwilioSmsTool = defineTool({
     timeout: 15000,
   },
   execute: sendTwilioSmsExecute,
+  agent: { toolsetSlug: 'twilio.messages.write' },
 })

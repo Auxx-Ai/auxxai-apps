@@ -1,6 +1,5 @@
 // src/blocks/discord/discord.workflow.tsx
 
-import { type WorkflowBlock } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeRow,
@@ -12,6 +11,7 @@ import discordIcon from '../../assets/icon.png'
 import discordExecute from './discord.server'
 import { DiscordPanel } from './discord-panel'
 import { discordSchema } from './discord-schema'
+import { discordToolMap } from './discord-tool-map'
 
 export { discordSchema }
 
@@ -105,16 +105,17 @@ export const discordBlock = {
   id: 'discord',
   label: 'Discord',
   description: 'Interact with Discord — send messages, manage channels, and manage member roles',
-  category: 'action',
+  category: 'action' as const,
   icon: discordIcon,
   color: '#5865F2',
   schema: discordSchema,
   node: DiscordNode,
   panel: DiscordPanel,
+  toolMap: discordToolMap,
   execute: discordExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof discordSchema>
+}

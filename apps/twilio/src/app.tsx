@@ -2,6 +2,8 @@
 
 import { TextBlock } from '@auxx/sdk/client'
 import { twilioBlock } from './blocks/twilio/twilio.workflow'
+import { twilioBlockMakeCallTool } from './tools/_twilio_block_make_call.tool'
+import { twilioBlockSendSmsTool } from './tools/_twilio_block_send_sms.tool'
 import { getTwilioCallTool } from './tools/get-twilio-call.tool'
 import { getTwilioMessageTool } from './tools/get-twilio-message.tool'
 import { listTwilioCallsTool } from './tools/list-twilio-calls.tool'
@@ -34,6 +36,9 @@ export const app = {
     listTwilioCallsTool,
     getTwilioCallTool,
     makeTwilioCallTool,
+    // Internal block-backing tools (no agent / action surface).
+    twilioBlockSendSmsTool,
+    twilioBlockMakeCallTool,
   ],
   toolsets: twilioToolsets,
 }

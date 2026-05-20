@@ -103,6 +103,30 @@ function MsTeamsNode() {
   )
 }
 
+/**
+ * Maps `<resource>.<operation>` keys to the internal tool ids that back each
+ * branch of the Microsoft Teams block. The block's dispatcher (`ms-teams.server.ts`)
+ * uses this map plus `ctx.runTool` to invoke the correct tool per panel
+ * selection. Keep this in sync with `resources/constants.ts` (`VALID_OPERATIONS`).
+ */
+export const msTeamsToolMap: Record<string, string> = {
+  'channel.create': 'block_ms_teams_channel_create',
+  'channel.delete': 'block_ms_teams_channel_delete',
+  'channel.get': 'block_ms_teams_channel_get',
+  'channel.getMany': 'block_ms_teams_channel_get_many',
+  'channel.update': 'block_ms_teams_channel_update',
+  'channelMessage.create': 'block_ms_teams_channel_message_create',
+  'channelMessage.getMany': 'block_ms_teams_channel_message_get_many',
+  'chatMessage.create': 'block_ms_teams_chat_message_create',
+  'chatMessage.get': 'block_ms_teams_chat_message_get',
+  'chatMessage.getMany': 'block_ms_teams_chat_message_get_many',
+  'task.create': 'block_ms_teams_task_create',
+  'task.delete': 'block_ms_teams_task_delete',
+  'task.get': 'block_ms_teams_task_get',
+  'task.getMany': 'block_ms_teams_task_get_many',
+  'task.update': 'block_ms_teams_task_update',
+}
+
 export const msTeamsBlock = {
   id: 'ms-teams',
   label: 'Microsoft Teams',
@@ -120,4 +144,5 @@ export const msTeamsBlock = {
     retries: 1,
     requiresConnection: true,
   },
+  toolMap: msTeamsToolMap,
 } satisfies WorkflowBlock<typeof msTeamsSchema>

@@ -1,6 +1,5 @@
 // src/blocks/google-calendar/google-calendar.workflow.tsx
 
-import { type WorkflowBlock } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeRow,
@@ -11,6 +10,7 @@ import googleCalendarIcon from '../../assets/icon.png'
 import googleCalendarExecute from './google-calendar.server'
 import { GoogleCalendarPanel } from './google-calendar-panel'
 import { googleCalendarSchema } from './google-calendar-schema'
+import { googleCalendarToolMap } from './google-calendar-tool-map'
 
 export { googleCalendarSchema }
 
@@ -42,16 +42,17 @@ export const googleCalendarBlock = {
   id: 'google-calendar',
   label: 'Google Calendar',
   description: 'Manage Google Calendar events — create, update, delete, and check availability',
-  category: 'action',
+  category: 'action' as const,
   icon: googleCalendarIcon,
   color: '#4285F4',
   schema: googleCalendarSchema,
   node: GoogleCalendarNode,
   panel: GoogleCalendarPanel,
+  toolMap: googleCalendarToolMap,
   execute: googleCalendarExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof googleCalendarSchema>
+}

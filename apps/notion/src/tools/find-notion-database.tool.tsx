@@ -29,4 +29,5 @@ export const findNotionDatabaseTool = defineTool({
     timeout: 10000,
   },
   execute: findNotionDatabaseExecute,
+  agent: { toolsetSlug: 'notion.databases' },
 })

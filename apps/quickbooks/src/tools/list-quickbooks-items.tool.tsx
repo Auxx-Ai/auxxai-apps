@@ -28,4 +28,5 @@ export const listQuickbooksItemsTool = defineTool({
     timeout: 15000,
   },
   execute: listQuickbooksItemsExecute,
+  agent: {},
 })

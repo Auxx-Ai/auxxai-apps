@@ -36,4 +36,5 @@ export const getNotionPageContentTool = defineTool({
     timeout: 15000,
   },
   execute: getNotionPageContentExecute,
+  agent: { toolsetSlug: 'notion.blocks' },
 })

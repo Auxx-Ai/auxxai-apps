@@ -1,6 +1,6 @@
 // src/blocks/telegram/triggers/update-received/update-received.workflow.tsx
 
-import type { WorkflowTrigger } from '@auxx/sdk'
+import { defineTrigger } from '@auxx/sdk'
 import { WorkflowNode, WorkflowNodeHandle, WorkflowNodeRow } from '@auxx/sdk/client'
 import telegramIcon from '../../../../assets/icon.png'
 import { UpdateReceivedPanel } from './update-received-panel'
@@ -16,19 +16,21 @@ function UpdateReceivedNode() {
   )
 }
 
-export const updateReceivedTrigger = {
+export const updateReceivedTrigger = defineTrigger({
   id: 'telegram.update-received',
   label: 'Update Received',
   description: 'Triggers when the Telegram bot receives a message, callback query, or other update',
   icon: telegramIcon,
   color: '#0088CC',
   schema: updateReceivedSchema,
-  node: UpdateReceivedNode,
-  panel: UpdateReceivedPanel,
   execute: updateReceivedExecute,
   config: {
     timeout: 5000,
     retries: 0,
     requiresConnection: true,
   },
-} satisfies WorkflowTrigger<typeof updateReceivedSchema>
+  workflow: {
+    node: UpdateReceivedNode,
+    panel: UpdateReceivedPanel,
+  },
+})

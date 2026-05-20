@@ -22,4 +22,5 @@ export const listMsTeamsTeamsTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: listMsTeamsTeamsExecute,
+  agent: {},
 })

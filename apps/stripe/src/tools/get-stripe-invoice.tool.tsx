@@ -36,4 +36,5 @@ export const getStripeInvoiceTool = defineTool({
   outputs: z.object({ invoice: invoiceOutput }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripeInvoiceExecute,
+  agent: { toolsetSlug: 'stripe.invoices.read' },
 })

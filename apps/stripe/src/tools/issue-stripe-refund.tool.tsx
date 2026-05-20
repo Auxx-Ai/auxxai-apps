@@ -31,4 +31,13 @@ export const issueStripeRefundTool = defineTool({
   outputs: z.object({ refund: refundOutput }),
   config: { requiresConnection: true, timeout: 20000 },
   execute: issueStripeRefundExecute,
+  agent: { toolsetSlug: 'stripe.refunds.write' },
+  action: {
+    label: 'Refund Charge',
+    description: 'Issue a full or partial refund on a Stripe charge',
+    color: '#635BFF',
+    surface: 'ticket-header',
+    requiresConfirmation: true,
+    confirmationMessage: 'Issue this refund?',
+  },
 })

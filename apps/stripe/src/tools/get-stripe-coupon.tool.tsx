@@ -14,4 +14,5 @@ export const getStripeCouponTool = defineTool({
   outputs: z.object({ coupon: couponOutput }),
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripeCouponExecute,
+  agent: { toolsetSlug: 'stripe.coupons.read' },
 })

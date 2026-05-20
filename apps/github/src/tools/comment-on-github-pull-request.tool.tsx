@@ -30,4 +30,5 @@ export const commentOnGithubPullRequestTool = defineTool({
     timeout: 10000,
   },
   execute: commentOnGithubPullRequestExecute,
+  agent: { toolsetSlug: 'github.pulls' },
 })

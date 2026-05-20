@@ -104,6 +104,35 @@ function StripeNode() {
   )
 }
 
+/**
+ * Dispatcher table: `<resource>.<operation>` -> internal tool id. The runtime
+ * reads this from the catalog and routes block executes through the unified
+ * `__AUXX_TOOLS__` registry. See impl plan §6.3 / §7.4 and the migration recipe
+ * in `plans/kopilot/agents/triggers/app-surface-per-app-migration.md` §2.5.
+ * Keep this in sync with `resources/constants.ts` (`VALID_OPERATIONS`).
+ */
+export const stripeBlockToolMap: Record<string, string> = {
+  'balance.get': 'block_stripe_balance_get',
+  'charge.create': 'block_stripe_charge_create',
+  'charge.get': 'block_stripe_charge_get',
+  'charge.getMany': 'block_stripe_charge_get_many',
+  'charge.update': 'block_stripe_charge_update',
+  'coupon.create': 'block_stripe_coupon_create',
+  'coupon.getMany': 'block_stripe_coupon_get_many',
+  'customer.create': 'block_stripe_customer_create',
+  'customer.delete': 'block_stripe_customer_delete',
+  'customer.get': 'block_stripe_customer_get',
+  'customer.getMany': 'block_stripe_customer_get_many',
+  'customer.update': 'block_stripe_customer_update',
+  'customerCard.add': 'block_stripe_customer_card_add',
+  'customerCard.get': 'block_stripe_customer_card_get',
+  'customerCard.remove': 'block_stripe_customer_card_remove',
+  'source.create': 'block_stripe_source_create',
+  'source.delete': 'block_stripe_source_delete',
+  'source.get': 'block_stripe_source_get',
+  'token.create': 'block_stripe_token_create',
+}
+
 export const stripeBlock = {
   id: 'stripe',
   label: 'Stripe',
@@ -120,4 +149,7 @@ export const stripeBlock = {
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof stripeSchema>
+  toolMap: stripeBlockToolMap,
+} satisfies WorkflowBlock<typeof stripeSchema> & {
+  toolMap: Record<string, string>
+}

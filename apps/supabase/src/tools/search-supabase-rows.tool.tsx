@@ -67,4 +67,5 @@ export const searchSupabaseRowsTool = defineTool({
     timeout: 15000,
   },
   execute: searchSupabaseRowsExecute,
+  agent: { toolsetSlug: 'supabase.rows.read' },
 })

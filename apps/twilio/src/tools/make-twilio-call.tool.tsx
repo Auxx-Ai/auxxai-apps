@@ -39,4 +39,5 @@ export const makeTwilioCallTool = defineTool({
     timeout: 20000,
   },
   execute: makeTwilioCallExecute,
+  agent: { toolsetSlug: 'twilio.calls.write' },
 })

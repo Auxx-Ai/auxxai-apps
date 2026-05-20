@@ -1,6 +1,6 @@
 // src/webhooks/shopify-events.webhook.ts
 
-import { extractTriggerData } from '../blocks/shopify/triggers/shopify-trigger/shared/shopify-trigger-types'
+import { extractTriggerData } from '../triggers/shopify-trigger/shared/shopify-trigger-types'
 
 const okResponse = () =>
   new Response(JSON.stringify({ ok: true }), {

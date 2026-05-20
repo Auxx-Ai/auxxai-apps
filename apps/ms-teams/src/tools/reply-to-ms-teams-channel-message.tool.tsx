@@ -24,4 +24,5 @@ export const replyToMsTeamsChannelMessageTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: replyToMsTeamsChannelMessageExecute,
+  agent: { toolsetSlug: 'ms-teams.messages.write' },
 })

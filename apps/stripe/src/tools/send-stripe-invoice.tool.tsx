@@ -17,4 +17,5 @@ export const sendStripeInvoiceTool = defineTool({
   outputs: z.object({ invoice: invoiceOutput }),
   config: { requiresConnection: true, timeout: 20000 },
   execute: sendStripeInvoiceExecute,
+  agent: { toolsetSlug: 'stripe.invoices.write' },
 })

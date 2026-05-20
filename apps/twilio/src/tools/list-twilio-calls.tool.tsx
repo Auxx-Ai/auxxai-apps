@@ -67,4 +67,5 @@ export const listTwilioCallsTool = defineTool({
     timeout: 15000,
   },
   execute: listTwilioCallsExecute,
+  agent: { toolsetSlug: 'twilio.calls.read', idempotent: true },
 })

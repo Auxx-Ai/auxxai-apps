@@ -11,6 +11,7 @@ import shopifyIcon from '../../assets/icon.png'
 import shopifyExecute from './shopify.server'
 import { ShopifyPanel } from './shopify-panel'
 import { shopifySchema } from './shopify-schema'
+import { shopifyToolMap } from './shopify-tool-map'
 
 export { shopifySchema }
 
@@ -137,4 +138,5 @@ export const shopifyBlock = {
     retries: 1,
     requiresConnection: true,
   },
+  toolMap: shopifyToolMap,
 } satisfies WorkflowBlock<typeof shopifySchema>

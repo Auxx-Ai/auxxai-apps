@@ -42,4 +42,5 @@ export const getGithubRepoTool = defineTool({
     timeout: 10000,
   },
   execute: getGithubRepoExecute,
+  agent: { toolsetSlug: 'github.repos' },
 })

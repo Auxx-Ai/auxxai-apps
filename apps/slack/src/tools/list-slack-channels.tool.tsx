@@ -24,4 +24,5 @@ export const listSlackChannelsTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 10000 },
   execute: listSlackChannelsExecute,
+  agent: {},
 })

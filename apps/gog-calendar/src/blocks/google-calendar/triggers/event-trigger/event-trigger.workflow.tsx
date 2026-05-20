@@ -1,6 +1,6 @@
 // src/blocks/google-calendar/triggers/event-trigger/event-trigger.workflow.tsx
 
-import type { WorkflowTrigger } from '@auxx/sdk'
+import { defineTrigger } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeHandle,
@@ -37,15 +37,13 @@ function EventTriggerNode() {
   )
 }
 
-export const eventTrigger = {
+export const eventTrigger = defineTrigger({
   id: 'gog-calendar.event-trigger',
   label: 'Google Calendar Trigger',
   description: 'Triggers when calendar events are created, updated, cancelled, started, or ended',
   icon: googleCalendarIcon,
   color: '#4285F4',
   schema: eventTriggerSchema,
-  node: EventTriggerNode,
-  panel: EventTriggerPanel,
   execute: eventTriggerExecute,
   config: {
     requiresConnection: true,
@@ -54,4 +52,8 @@ export const eventTrigger = {
       minIntervalMinutes: 1,
     },
   },
-} satisfies WorkflowTrigger<typeof eventTriggerSchema>
+  workflow: {
+    node: EventTriggerNode,
+    panel: EventTriggerPanel,
+  },
+})

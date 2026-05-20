@@ -28,4 +28,5 @@ export const cancelStripeSubscriptionTool = defineTool({
   outputs: z.object({ subscription: subscriptionOutput }),
   config: { requiresConnection: true, timeout: 20000 },
   execute: cancelStripeSubscriptionExecute,
+  agent: { toolsetSlug: 'stripe.subscriptions.write' },
 })

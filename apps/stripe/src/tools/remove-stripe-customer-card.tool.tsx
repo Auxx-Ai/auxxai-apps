@@ -20,4 +20,5 @@ export const removeStripeCustomerCardTool = defineTool({
   }),
   config: { requiresConnection: true, timeout: 15000 },
   execute: removeStripeCustomerCardExecute,
+  agent: { toolsetSlug: 'stripe.customer-cards.write' },
 })

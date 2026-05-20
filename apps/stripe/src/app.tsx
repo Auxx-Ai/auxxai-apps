@@ -1,6 +1,4 @@
 import { TextBlock } from '@auxx/sdk/client'
-import { createCouponAction } from './actions/create-coupon/create-coupon.action'
-import { refundChargeAction } from './actions/refund-charge/refund-charge.action'
 import { stripeBlock } from './blocks/stripe/stripe.workflow'
 import { addStripeCustomerCardTool } from './tools/add-stripe-customer-card.tool'
 import { cancelStripeSubscriptionTool } from './tools/cancel-stripe-subscription.tool'
@@ -16,6 +14,25 @@ import { getStripeInvoiceTool } from './tools/get-stripe-invoice.tool'
 import { getStripePaymentIntentTool } from './tools/get-stripe-payment-intent.tool'
 import { getStripeRefundTool } from './tools/get-stripe-refund.tool'
 import { getStripeSubscriptionTool } from './tools/get-stripe-subscription.tool'
+import { balanceGetTool } from './tools/internal/balance-get.tool'
+import { chargeCreateTool } from './tools/internal/charge-create.tool'
+import { chargeGetTool } from './tools/internal/charge-get.tool'
+import { chargeGetManyTool } from './tools/internal/charge-get-many.tool'
+import { chargeUpdateTool } from './tools/internal/charge-update.tool'
+import { couponCreateTool } from './tools/internal/coupon-create.tool'
+import { couponGetManyTool } from './tools/internal/coupon-get-many.tool'
+import { customerCardAddTool } from './tools/internal/customer-card-add.tool'
+import { customerCardGetTool } from './tools/internal/customer-card-get.tool'
+import { customerCardRemoveTool } from './tools/internal/customer-card-remove.tool'
+import { customerCreateTool } from './tools/internal/customer-create.tool'
+import { customerDeleteTool } from './tools/internal/customer-delete.tool'
+import { customerGetTool } from './tools/internal/customer-get.tool'
+import { customerGetManyTool } from './tools/internal/customer-get-many.tool'
+import { customerUpdateTool } from './tools/internal/customer-update.tool'
+import { sourceCreateTool } from './tools/internal/source-create.tool'
+import { sourceDeleteTool } from './tools/internal/source-delete.tool'
+import { sourceGetTool } from './tools/internal/source-get.tool'
+import { tokenCreateTool } from './tools/internal/token-create.tool'
 import { issueStripeRefundTool } from './tools/issue-stripe-refund.tool'
 import { listStripeChargesTool } from './tools/list-stripe-charges.tool'
 import { listStripeChargesForCustomerTool } from './tools/list-stripe-charges-for-customer.tool'
@@ -48,9 +65,8 @@ export const app = {
     blocks: [stripeBlock],
     triggers: [],
   },
-  quickActions: [refundChargeAction, createCouponAction],
   tools: [
-    // Discovery (toolset-less; bridge auto-attaches)
+    // Discovery (toolset-less; auto-attached by the platform bridge)
     getStripeAccountTool,
     listStripeProductsTool,
     listStripePricesTool,
@@ -67,7 +83,7 @@ export const app = {
     listStripeChargesForCustomerTool,
     listStripeChargesTool,
 
-    // Refunds
+    // Refunds (issue_stripe_refund also surfaces as a ticket-header action)
     getStripeRefundTool,
     listStripeRefundsForChargeTool,
     issueStripeRefundTool,
@@ -86,7 +102,7 @@ export const app = {
     listStripeInvoicesForCustomerTool,
     sendStripeInvoiceTool,
 
-    // Coupons
+    // Coupons (create_stripe_coupon also surfaces as a ticket-header action)
     listStripeCouponsTool,
     getStripeCouponTool,
     createStripeCouponTool,
@@ -96,6 +112,27 @@ export const app = {
     getStripeCustomerCardTool,
     addStripeCustomerCardTool,
     removeStripeCustomerCardTool,
+
+    // Internal-only tools (dispatched by the Stripe workflow block)
+    balanceGetTool,
+    chargeCreateTool,
+    chargeGetTool,
+    chargeGetManyTool,
+    chargeUpdateTool,
+    couponCreateTool,
+    couponGetManyTool,
+    customerCreateTool,
+    customerDeleteTool,
+    customerGetTool,
+    customerGetManyTool,
+    customerUpdateTool,
+    customerCardAddTool,
+    customerCardGetTool,
+    customerCardRemoveTool,
+    sourceCreateTool,
+    sourceDeleteTool,
+    sourceGetTool,
+    tokenCreateTool,
   ],
   toolsets: stripeToolsets,
 }

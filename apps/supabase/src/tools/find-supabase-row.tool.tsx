@@ -27,4 +27,5 @@ export const findSupabaseRowTool = defineTool({
     timeout: 10000,
   },
   execute: findSupabaseRowExecute,
+  agent: { toolsetSlug: 'supabase.rows.read' },
 })
