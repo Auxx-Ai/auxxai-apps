@@ -6,6 +6,12 @@ import { eventTrigger } from './blocks/google-calendar/triggers/event-trigger/ev
 import { checkAvailabilityTool } from './tools/check-availability.tool'
 import { createCalendarEventTool } from './tools/create-event.tool'
 import { deleteCalendarEventTool } from './tools/delete-event.tool'
+import { gcalBlockCheckAvailabilityTool } from './tools/gcal-block-check-availability.tool'
+import { gcalBlockCreateEventTool } from './tools/gcal-block-create-event.tool'
+import { gcalBlockDeleteEventTool } from './tools/gcal-block-delete-event.tool'
+import { gcalBlockGetEventTool } from './tools/gcal-block-get-event.tool'
+import { gcalBlockGetManyEventsTool } from './tools/gcal-block-get-many-events.tool'
+import { gcalBlockUpdateEventTool } from './tools/gcal-block-update-event.tool'
 import { getCalendarEventTool } from './tools/get-event.tool'
 import { listMyCalendarsTool } from './tools/list-my-calendars.tool'
 import { scanCalendarsTool } from './tools/scan-calendars.tool'
@@ -37,6 +43,13 @@ export const app = {
     createCalendarEventTool,
     updateCalendarEventTool,
     deleteCalendarEventTool,
+    // Internal tools — back the Google Calendar block's dispatcher, no agent/action surface.
+    gcalBlockCheckAvailabilityTool,
+    gcalBlockCreateEventTool,
+    gcalBlockDeleteEventTool,
+    gcalBlockGetEventTool,
+    gcalBlockGetManyEventsTool,
+    gcalBlockUpdateEventTool,
   ],
   toolsets: calendarToolsets,
 }

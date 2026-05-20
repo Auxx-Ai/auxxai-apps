@@ -47,4 +47,5 @@ export const checkAvailabilityTool = defineTool({
     timeout: 15000,
   },
   execute: checkAvailabilityExecute,
+  agent: { toolsetSlug: 'gog-calendar.availability' },
 })

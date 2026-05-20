@@ -54,4 +54,5 @@ export const searchCalendarEventsTool = defineTool({
     timeout: 15000,
   },
   execute: searchEventsExecute,
+  agent: { toolsetSlug: 'gog-calendar.events' },
 })
