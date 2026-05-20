@@ -1,7 +1,8 @@
 // src/blocks/whatsapp/whatsapp.server.ts
 
 import type { WorkflowExecuteFunction } from '@auxx/sdk'
-import { whatsappBlock } from './whatsapp.workflow'
+import { whatsappSchema } from './whatsapp-schema'
+import { whatsappBlockToolMap } from './whatsapp-tool-map'
 
 /**
  * Project the block's flat union input shape onto the tool-specific input
@@ -92,18 +93,15 @@ function projectOutputForOp(
   return output
 }
 
-const execute: WorkflowExecuteFunction<typeof whatsappBlock.schema> = async (
-  input: any,
-  ctx: any
-) => {
-  const key = `${input.resource}.${input.operation}`
-  const toolId = (whatsappBlock.toolMap as Record<string, string>)[key]
+const execute: WorkflowExecuteFunction<typeof whatsappSchema> = async (input, ctx) => {
+  const key = `${input.resource}.${input.operation}` as keyof typeof whatsappBlockToolMap
+  const toolId = whatsappBlockToolMap[key]
   if (!toolId) {
     throw new Error(`Unknown op: ${key}`)
   }
-  const projected = projectInputsForOp(key, input)
+  const projected = projectInputsForOp(key, input as unknown as Record<string, any>)
   const result = await ctx.runTool(toolId, projected)
-  return projectOutputForOp(key, result) as any
+  return projectOutputForOp(key, result as Record<string, any>) as any
 }
 
 export default execute
