@@ -36,4 +36,5 @@ export const listShopifyStoresTool = defineTool({
     timeout: 10000,
   },
   execute: listShopifyStoresExecute,
+  agent: {},
 })

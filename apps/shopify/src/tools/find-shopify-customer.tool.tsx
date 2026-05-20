@@ -62,4 +62,5 @@ export const findShopifyCustomerTool = defineTool({
     timeout: 10000,
   },
   execute: findShopifyCustomerExecute,
+  agent: { toolsetSlug: 'shopify.customers' },
 })

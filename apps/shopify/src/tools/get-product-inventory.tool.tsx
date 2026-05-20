@@ -38,4 +38,5 @@ export const getProductInventoryTool = defineTool({
     timeout: 15000,
   },
   execute: getProductInventoryExecute,
+  agent: { toolsetSlug: 'shopify.products' },
 })

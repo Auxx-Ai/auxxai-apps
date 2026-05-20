@@ -43,4 +43,5 @@ export const searchShopifyProductsTool = defineTool({
     timeout: 15000,
   },
   execute: searchShopifyProductsExecute,
+  agent: { toolsetSlug: 'shopify.products' },
 })

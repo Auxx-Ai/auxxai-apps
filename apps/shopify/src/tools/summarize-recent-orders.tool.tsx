@@ -47,4 +47,5 @@ export const summarizeRecentOrdersTool = defineTool({
     streaming: true,
   },
   execute: summarizeRecentOrdersExecute,
+  agent: { toolsetSlug: 'shopify.orders.read', streaming: true },
 })

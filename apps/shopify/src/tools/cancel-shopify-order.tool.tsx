@@ -33,4 +33,5 @@ export const cancelShopifyOrderTool = defineTool({
     timeout: 20000,
   },
   execute: cancelShopifyOrderExecute,
+  agent: { toolsetSlug: 'shopify.orders.write' },
 })
