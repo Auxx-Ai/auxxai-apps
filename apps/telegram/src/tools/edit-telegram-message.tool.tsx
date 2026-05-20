@@ -30,4 +30,5 @@ export const editTelegramMessageTool = defineTool({
     timeout: 15000,
   },
   execute: editTelegramMessageExecute,
+  agent: { toolsetSlug: 'telegram.messages.write' },
 })

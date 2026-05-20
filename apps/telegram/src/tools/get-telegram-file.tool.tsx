@@ -32,4 +32,5 @@ export const getTelegramFileTool = defineTool({
     timeout: 10000,
   },
   execute: getTelegramFileExecute,
+  agent: { toolsetSlug: 'telegram.chats.read' },
 })

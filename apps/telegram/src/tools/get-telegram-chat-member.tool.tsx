@@ -27,4 +27,5 @@ export const getTelegramChatMemberTool = defineTool({
     timeout: 10000,
   },
   execute: getTelegramChatMemberExecute,
+  agent: { toolsetSlug: 'telegram.chats.read' },
 })

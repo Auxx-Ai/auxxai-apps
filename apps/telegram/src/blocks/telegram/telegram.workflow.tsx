@@ -1,4 +1,3 @@
-import type { WorkflowBlock } from '@auxx/sdk'
 import {
   WorkflowNode,
   WorkflowNodeHandle,
@@ -9,6 +8,7 @@ import {
 import telegramIcon from '../../assets/icon.png'
 import { TelegramPanel } from './telegram-panel'
 import { telegramSchema } from './telegram-schema'
+import { telegramToolMap } from './telegram-tool-map'
 import telegramExecute from './telegram.server'
 
 export { telegramSchema }
@@ -115,16 +115,17 @@ export const telegramBlock = {
   id: 'telegram',
   label: 'Telegram',
   description: 'Send messages, manage chats, and interact with Telegram bots',
-  category: 'action',
+  category: 'action' as const,
   icon: telegramIcon,
   color: '#0088CC',
   schema: telegramSchema,
   node: TelegramNode,
   panel: TelegramPanel,
+  toolMap: telegramToolMap,
   execute: telegramExecute,
   config: {
     timeout: 15000,
     retries: 1,
     requiresConnection: true,
   },
-} satisfies WorkflowBlock<typeof telegramSchema>
+}

@@ -35,4 +35,5 @@ export const getTelegramChatAdministratorsTool = defineTool({
     timeout: 10000,
   },
   execute: getTelegramChatAdministratorsExecute,
+  agent: { toolsetSlug: 'telegram.chats.read' },
 })
