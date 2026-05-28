@@ -1,0 +1,6 @@
+api_version = "2026-01"
+
+[[extensions]]
+name = "Auxx Chat"
+handle = "auxx-chat"
+type = "theme"
