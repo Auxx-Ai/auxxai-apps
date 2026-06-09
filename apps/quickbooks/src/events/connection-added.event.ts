@@ -1,10 +1,30 @@
 // src/events/connection-added.event.ts
 
-import type { Connection } from '@auxx/sdk/server'
+import type { Connection, ConnectionAddedResult } from '@auxx/sdk/server'
+import { quickbooksApi } from '../blocks/quickbooks/shared/quickbooks-api'
 
 /**
- * QuickBooks does not support webhooks, so this is a no-op.
+ * Label the connection with the QuickBooks company name (falling back to the
+ * realm id). QuickBooks has no webhook system, so no webhook setup here.
  */
-export default async function connectionAdded({ connection }: { connection: Connection }) {
-  // No-op — QuickBooks has no webhook system
+export default async function connectionAdded({
+  connection,
+}: {
+  connection: Connection
+}): Promise<ConnectionAddedResult> {
+  const realmId = connection.metadata?.realmId as string | undefined
+  if (!realmId) return {}
+
+  try {
+    const info = await quickbooksApi<{ CompanyInfo?: { CompanyName?: string } }>(
+      realmId,
+      `/companyinfo/${realmId}`,
+      connection.value
+    )
+    const name = info?.CompanyInfo?.CompanyName
+    if (name) return { label: name }
+  } catch {
+    // Fall back to the realm id below.
+  }
+  return { label: `Company ${realmId}` }
 }

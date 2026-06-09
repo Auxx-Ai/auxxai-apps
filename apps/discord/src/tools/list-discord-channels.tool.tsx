@@ -29,6 +29,26 @@ export const listDiscordChannelsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    channels: [
+      {
+        channelId: '1086542100000000001',
+        name: 'general',
+        type: 'text',
+        topic: 'Community-wide chit-chat',
+        parentId: '1086542100000000000',
+        position: 0,
+      },
+      {
+        channelId: '1086542100000000002',
+        name: 'support',
+        type: 'text',
+        topic: null,
+        parentId: '1086542100000000000',
+        position: 1,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

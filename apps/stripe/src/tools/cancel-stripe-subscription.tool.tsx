@@ -26,6 +26,30 @@ export const cancelStripeSubscriptionTool = defineTool({
       .describe('Free-form note stored in subscription.metadata.cancellation_reason.'),
   }),
   outputs: z.object({ subscription: subscriptionOutput }),
+  exampleOutput: {
+    subscription: {
+      subscriptionId: 'sub_1MrabC2eZvKYlo2C',
+      status: 'active',
+      customer: {
+        stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+        auxxRecordId: null,
+      },
+      items: [
+        {
+          itemId: 'si_Nffr3xQ1aBcDeF',
+          priceId: 'price_1MrabC2eZvKYlo2C',
+          productId: 'prod_NffrFeUfNV2Hib',
+          quantity: 1,
+        },
+      ],
+      currentPeriodStart: '2026-06-01T00:00:00Z',
+      currentPeriodEnd: '2026-07-01T00:00:00Z',
+      cancelAtPeriodEnd: true,
+      canceledAt: null,
+      trialEnd: null,
+      livemode: true,
+    },
+  },
   config: { requiresConnection: true, timeout: 20000 },
   execute: cancelStripeSubscriptionExecute,
   agent: { toolsetSlug: 'stripe.subscriptions.write' },

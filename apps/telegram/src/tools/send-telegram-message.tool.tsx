@@ -40,6 +40,12 @@ export const sendTelegramMessageTool = defineTool({
     text: z.string(),
     date: z.string().describe('ISO 8601 timestamp.'),
   }),
+  exampleOutput: {
+    messageId: '4522',
+    chatId: '123456789',
+    text: 'Thanks for reaching out — how can we help today?',
+    date: '2026-06-08T14:30:00Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

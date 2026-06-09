@@ -22,6 +22,24 @@ export const listSlackChannelsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    channels: [
+      {
+        id: 'C0123ABCDEF',
+        name: 'general',
+        isPrivate: false,
+        memberCount: 42,
+        isArchived: false,
+      },
+      {
+        id: 'C0456GHIJKL',
+        name: 'support',
+        isPrivate: false,
+        memberCount: 12,
+        isArchived: false,
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: listSlackChannelsExecute,
   agent: {},

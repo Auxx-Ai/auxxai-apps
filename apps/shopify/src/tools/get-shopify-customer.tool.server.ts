@@ -1,6 +1,5 @@
 // src/tools/get-shopify-customer.tool.server.ts
 
-import type { ToolExecuteContext } from '@auxx/sdk/tools'
 import { shopifyApi } from '../blocks/shopify/shared/shopify-api'
 import { getShopifyConnection } from './shared/connection'
 import {
@@ -21,8 +20,7 @@ interface GetShopifyCustomerOutput {
 }
 
 export default async function getShopifyCustomer(
-  input: GetShopifyCustomerInput,
-  ctx: ToolExecuteContext
+  input: GetShopifyCustomerInput
 ): Promise<GetShopifyCustomerOutput> {
   const { token, shopDomain } = getShopifyConnection()
   const numericId = gidToNumeric(input.shopifyCustomerId)
@@ -44,7 +42,7 @@ export default async function getShopifyCustomer(
   )
 
   const defaultCurrency = await getDefaultCurrency(shopDomain, token)
-  const auxxRecordId = await resolveContactRef(ctx, numericId)
+  const auxxRecordId = await resolveContactRef(numericId)
 
   return {
     found: true,

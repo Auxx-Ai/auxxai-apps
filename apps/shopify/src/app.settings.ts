@@ -8,7 +8,7 @@ export const appSettingsSchema = {
       label: 'Chat channel',
       description:
         'Auxx chat channel that powers the storefront widget. Auto-bound on install when the org has a single chat channel.',
-      optional: true,
+      isOptional: true,
     }),
   },
   user: {},

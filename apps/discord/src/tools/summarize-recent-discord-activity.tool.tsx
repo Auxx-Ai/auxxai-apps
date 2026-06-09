@@ -52,6 +52,43 @@ export const summarizeRecentDiscordActivityTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    summary:
+      'Scanned 142 messages across 2 channels in the last 24h. #support saw the most activity (98 messages, 21 authors), driven by the v2 migration timeout thread. #general was lighter (44 messages, 15 authors) with general chit-chat. Top authors: jane_cooper, dev_marcus.',
+    channels: [
+      {
+        channelId: '1086542100000000002',
+        channelName: 'support',
+        messageCount: 98,
+        uniqueAuthors: 21,
+        sampleMessages: [
+          {
+            authorUsername: 'jane_cooper',
+            content: 'Has anyone run into the v2 migration issue? Getting a timeout on import.',
+            timestamp: '2026-06-07T14:31:00Z',
+          },
+          {
+            authorUsername: 'dev_marcus',
+            content: 'The migration timeout is fixed in 2.1.3 — try bumping the package.',
+            timestamp: '2026-06-07T15:02:00Z',
+          },
+        ],
+      },
+      {
+        channelId: '1086542100000000001',
+        channelName: 'general',
+        messageCount: 44,
+        uniqueAuthors: 15,
+        sampleMessages: [
+          {
+            authorUsername: 'sam_lee',
+            content: 'Morning all! Anyone going to the meetup next week?',
+            timestamp: '2026-06-07T08:12:00Z',
+          },
+        ],
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 60000,

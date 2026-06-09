@@ -33,6 +33,12 @@ export const createQuickbooksEstimateTool = defineTool({
     totalAmt: z.number(),
     syncToken: z.string(),
   }),
+  exampleOutput: {
+    estimateId: '513',
+    docNumber: 'EST-1022',
+    totalAmt: 4200,
+    syncToken: '0',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

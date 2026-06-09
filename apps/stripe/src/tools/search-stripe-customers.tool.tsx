@@ -40,6 +40,21 @@ export const searchStripeCustomersTool = defineTool({
     ),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    customers: [
+      {
+        stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+        auxxRecordId: null,
+        email: 'jane@example.com',
+        name: 'Jane Cooper',
+        phone: '+14155551234',
+        delinquent: false,
+        created: '2026-05-12T09:00:00Z',
+        livemode: true,
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

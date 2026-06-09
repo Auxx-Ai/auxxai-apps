@@ -18,6 +18,10 @@ export const sendQuickbooksInvoiceTool = defineTool({
     invoiceId: z.string(),
     emailStatus: z.enum(['EmailSent']),
   }),
+  exampleOutput: {
+    invoiceId: '243',
+    emailStatus: 'EmailSent',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

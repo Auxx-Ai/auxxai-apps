@@ -1,4 +1,12 @@
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 export const STRIPE_API = 'https://api.stripe.com/v1'
 
@@ -93,26 +101,36 @@ export async function stripeApi<T = unknown>(
     fetchOptions.body = toFormBody(body).toString()
   }
 
-  const response = await fetch(url.toString(), fetchOptions)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), fetchOptions)
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Stripe request failed')
+  }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const errorBody = await response.json().catch(() => null)
     const stripeError = errorBody?.error
-
-    if (stripeError?.code && STRIPE_ERROR_CODES[stripeError.code]) {
-      throw new Error(STRIPE_ERROR_CODES[stripeError.code])
-    }
-    if (stripeError?.message) {
-      throw new Error(`Stripe error: ${stripeError.message}`)
-    }
-
     const message =
-      ERROR_MESSAGES[response.status] ??
+      (stripeError?.code && STRIPE_ERROR_CODES[stripeError.code]) ||
+      (stripeError?.message ? `Stripe error: ${stripeError.message}` : undefined) ||
+      ERROR_MESSAGES[response.status] ||
       `Stripe API error: ${response.status} ${response.statusText}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(message)
+    if (response.status === 409) throw new ConflictError(message)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Stripe error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(message)
+    }
     throw new Error(message)
   }
 

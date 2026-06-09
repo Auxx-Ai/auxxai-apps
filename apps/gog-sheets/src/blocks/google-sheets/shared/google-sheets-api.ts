@@ -1,6 +1,14 @@
 // src/blocks/google-sheets/shared/google-sheets-api.ts
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 const SHEETS_BASE_URL = 'https://sheets.googleapis.com'
 const DRIVE_BASE_URL = 'https://www.googleapis.com'
@@ -29,21 +37,39 @@ export async function sheetsApiRequest(
     }
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(
+      err instanceof Error ? err.message : 'Google Sheets request failed'
+    )
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     const message = (error as any)?.error?.message || `Google Sheets API error: ${response.status}`
 
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(message)
+    if (response.status === 409) throw new ConflictError(message)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Google Sheets error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(message)
     }
 
     throw new Error(message)

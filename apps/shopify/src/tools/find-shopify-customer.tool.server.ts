@@ -1,6 +1,5 @@
 // src/tools/find-shopify-customer.tool.server.ts
 
-import type { ToolExecuteContext } from '@auxx/sdk/tools'
 import { shopifyApi } from '../blocks/shopify/shared/shopify-api'
 import { getShopifyConnection } from './shared/connection'
 import { mapCustomer, type MappedShopifyCustomer } from './shared/map-customer'
@@ -18,8 +17,7 @@ interface FindShopifyCustomerOutput {
 }
 
 export default async function findShopifyCustomer(
-  input: FindShopifyCustomerInput,
-  ctx: ToolExecuteContext
+  input: FindShopifyCustomerInput
 ): Promise<FindShopifyCustomerOutput> {
   // XOR check covers the .refine() stripped by the JSON Schema converter.
   if (Number(!!input.email) + Number(!!input.phone) !== 1) {
@@ -45,7 +43,7 @@ export default async function findShopifyCustomer(
   if (!raw) return { found: false, customer: null }
 
   const defaultCurrency = await getDefaultCurrency(shopDomain, token)
-  const auxxRecordId = await resolveContactRef(ctx, raw.id)
+  const auxxRecordId = await resolveContactRef(raw.id)
 
   return {
     found: true,

@@ -30,6 +30,16 @@ export const getTelegramChatTool = defineTool({
         'Null for private chats; populated for groups/supergroups/channels when the bot can read it.'
       ),
   }),
+  exampleOutput: {
+    chatId: '-1001234567890',
+    type: 'supergroup',
+    title: 'Auxx Support',
+    username: '@auxx_support',
+    firstName: null,
+    lastName: null,
+    description: 'Customer support and announcements for Auxx.ai',
+    memberCount: 1284,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

@@ -24,6 +24,16 @@ export const findNotionDatabaseTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    found: true,
+    databases: [
+      {
+        databaseId: '2a3b4c5d-6e7f-8091-a2b3-c4d5e6f70819',
+        title: 'Customer Support Tickets',
+        url: 'https://www.notion.so/2a3b4c5d6e7f8091a2b3c4d5e6f70819',
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

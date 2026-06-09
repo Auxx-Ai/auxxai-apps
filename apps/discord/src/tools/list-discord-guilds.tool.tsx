@@ -23,6 +23,16 @@ export const listDiscordGuildsTool = defineTool({
       )
       .describe('All servers the bot is currently joined to.'),
   }),
+  exampleOutput: {
+    guilds: [
+      {
+        guildId: '1086542001234567890',
+        name: 'Acme Community',
+        iconUrl: 'https://cdn.discordapp.com/icons/1086542001234567890/a1b2c3d4e5f6.png',
+        owner: false,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

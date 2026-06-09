@@ -28,6 +28,27 @@ export const searchQuickbooksPaymentsTool = defineTool({
     ),
     hasMore: z.boolean(),
   }),
+  exampleOutput: {
+    payments: [
+      {
+        paymentId: '331',
+        customerId: '58',
+        customerName: 'Acme Corp',
+        txnDate: '2026-06-02',
+        totalAmt: 1000,
+        unappliedAmt: 0,
+      },
+      {
+        paymentId: '325',
+        customerId: '58',
+        customerName: 'Acme Corp',
+        txnDate: '2026-05-01',
+        totalAmt: 900,
+        unappliedAmt: 0,
+      },
+    ],
+    hasMore: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

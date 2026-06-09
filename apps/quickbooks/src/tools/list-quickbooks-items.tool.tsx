@@ -23,6 +23,26 @@ export const listQuickbooksItemsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    items: [
+      {
+        id: '12',
+        name: 'Consulting',
+        type: 'Service',
+        unitPrice: 150,
+        description: 'Hourly consulting services',
+        active: true,
+      },
+      {
+        id: '20',
+        name: 'Widget Pro',
+        type: 'Inventory',
+        unitPrice: 49.99,
+        description: 'Standard widget, blue',
+        active: true,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

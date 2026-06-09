@@ -44,6 +44,21 @@ export const findGithubIssueTool = defineTool({
       })
       .nullable(),
   }),
+  exampleOutput: {
+    found: true,
+    issue: {
+      issueNumber: 1042,
+      title: 'Login button unresponsive on mobile Safari',
+      state: 'open',
+      author: 'octocat',
+      url: 'https://github.com/octocat/hello-world/issues/1042',
+      createdAt: '2026-06-04T08:00:00Z',
+      updatedAt: '2026-06-08T11:30:00Z',
+      commentsCount: 4,
+      labels: ['bug', 'mobile'],
+      assignees: ['hubot'],
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

@@ -48,6 +48,29 @@ export const searchDiscordMessagesTool = defineTool({
     ),
     truncated: z.boolean().describe('True if the walk hit the hard cap before finishing.'),
   }),
+  exampleOutput: {
+    matches: [
+      {
+        messageId: '1086545000000000031',
+        channelId: '1086542100000000002',
+        channelName: 'support',
+        content: 'Has anyone run into the v2 migration issue? Getting a timeout on import.',
+        authorId: '1086543000000000011',
+        authorUsername: 'jane_cooper',
+        timestamp: '2026-06-07T14:31:00Z',
+      },
+      {
+        messageId: '1086545000000000045',
+        channelId: '1086542100000000002',
+        channelName: 'support',
+        content: 'The migration timeout is fixed in 2.1.3 — try bumping the package.',
+        authorId: '1086543000000000012',
+        authorUsername: 'dev_marcus',
+        timestamp: '2026-06-07T15:02:00Z',
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

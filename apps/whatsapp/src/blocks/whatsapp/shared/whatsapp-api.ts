@@ -1,6 +1,14 @@
 // src/blocks/whatsapp/shared/whatsapp-api.ts
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 export const WHATSAPP_API = 'https://graph.facebook.com/v21.0'
 
@@ -28,14 +36,19 @@ export async function whatsappApi<T = unknown>(
 ): Promise<T> {
   const { method = 'GET', body } = options
 
-  const response = await fetch(`${WHATSAPP_API}/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${credential}`,
-      'Content-Type': 'application/json',
-    },
-    ...(body && { body: JSON.stringify(body) }),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${WHATSAPP_API}/${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${credential}`,
+        'Content-Type': 'application/json',
+      },
+      ...(body && { body: JSON.stringify(body) }),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'WhatsApp request failed')
+  }
 
   if (response.status === 204) {
     return {} as T
@@ -44,13 +57,24 @@ export async function whatsappApi<T = unknown>(
   const data = await response.json()
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const apiError = data?.error?.message
     const message =
       ERROR_MESSAGES[response.status] ?? `WhatsApp API error: ${apiError ?? response.statusText}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(message)
+    if (response.status === 409) throw new ConflictError(message)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`WhatsApp error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(apiError ?? message)
+    }
     throw new Error(message)
   }
 
@@ -69,19 +93,40 @@ export async function whatsappUploadMedia(
   formData.append('type', mimeType)
   formData.append('file', new Blob([fileBuffer], { type: mimeType }), fileName)
 
-  const response = await fetch(`${WHATSAPP_API}/${phoneNumberId}/media`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${credential}`,
-    },
-    body: formData,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${WHATSAPP_API}/${phoneNumberId}/media`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${credential}`,
+      },
+      body: formData,
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'WhatsApp request failed')
+  }
 
   const data = await response.json()
 
   if (!response.ok) {
     const apiError = data?.error?.message
-    throw new Error(`Failed to upload media: ${apiError ?? response.statusText}`)
+    const message = `Failed to upload media: ${apiError ?? response.statusText}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(message)
+    if (response.status === 409) throw new ConflictError(message)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`WhatsApp error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(apiError ?? message)
+    }
+    throw new Error(message)
   }
 
   return data as { id: string }

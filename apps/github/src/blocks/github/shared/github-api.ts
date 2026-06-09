@@ -1,4 +1,12 @@
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 export const GITHUB_API = 'https://api.github.com'
 
@@ -44,18 +52,34 @@ export async function githubApi(
     fetchOptions.body = JSON.stringify(options.body)
   }
 
-  const response = await fetch(url.toString(), fetchOptions)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), fetchOptions)
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'GitHub request failed')
+  }
 
   if (response.status === 204) return {}
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const errorMsg =
       ERROR_MESSAGES[response.status] ??
       `GitHub API error: ${response.status} ${response.statusText}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(errorMsg)
+    if (response.status === 409) throw new ConflictError(errorMsg)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`GitHub error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(errorMsg)
+    }
     throw new Error(errorMsg)
   }
 

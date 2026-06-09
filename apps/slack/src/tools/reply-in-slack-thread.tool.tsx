@@ -18,6 +18,10 @@ export const replyInSlackThreadTool = defineTool({
     ts: z.string(),
     permalink: z.string().nullable(),
   }),
+  exampleOutput: {
+    ts: '1717000456.789012',
+    permalink: 'https://acme.slack.com/archives/C0123ABCDEF/p1717000456789012',
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: replyInSlackThreadExecute,
   agent: { toolsetSlug: 'slack.messages.write' },

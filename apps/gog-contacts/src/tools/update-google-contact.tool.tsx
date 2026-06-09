@@ -66,6 +66,13 @@ export const updateGoogleContactTool = defineTool({
     displayName: z.string().nullable(),
     etag: z.string().describe('Updated etag — use on the next update.'),
   }),
+  exampleOutput: {
+    auxxRecordId: null,
+    resourceName: 'people/c1234567890123456789',
+    contactId: 'c1234567890123456789',
+    displayName: 'Jane Cooper',
+    etag: '%EgUBAj0DLhoEAQIFByIMTm05cGRTbVZ4ZkU9',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

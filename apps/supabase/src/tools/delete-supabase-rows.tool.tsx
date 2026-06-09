@@ -40,6 +40,18 @@ export const deleteSupabaseRowsTool = defineTool({
       .describe('The deleted rows (or the rows that would be deleted when dryRun=true).'),
     dryRun: z.boolean(),
   }),
+  exampleOutput: {
+    affectedCount: 1,
+    rows: [
+      {
+        id: 42,
+        email: 'jane@example.com',
+        full_name: 'Jane Cooper',
+        created_at: '2026-06-01T12:00:00Z',
+      },
+    ],
+    dryRun: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

@@ -28,6 +28,11 @@ export const createNotionPageTool = defineTool({
     url: z.string(),
     createdTime: z.string(),
   }),
+  exampleOutput: {
+    pageId: '6e7f8091-a2b3-c4d5-e6f7-081920304050',
+    url: 'https://www.notion.so/Meeting-Notes-6e7f8091a2b3c4d5e6f7081920304050',
+    createdTime: '2026-06-08T10:15:00.000Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

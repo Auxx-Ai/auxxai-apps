@@ -29,10 +29,53 @@ export const listCustomerOrdersTool = defineTool({
     ),
     truncated: z.boolean().describe('True if more orders exist beyond the limit.'),
   }),
+  exampleOutput: {
+    orders: [
+      {
+        shopifyOrderId: 'gid://shopify/Order/5512033210',
+        name: '#1042',
+        createdAt: '2026-06-01T16:30:00Z',
+        totalPrice: { amount: '74.00', currencyCode: 'USD' },
+        financialStatus: 'PAID',
+        fulfillmentStatus: 'FULFILLED',
+        itemsCount: 3,
+      },
+      {
+        shopifyOrderId: 'gid://shopify/Order/5498871002',
+        name: '#1037',
+        createdAt: '2026-05-18T11:05:00Z',
+        totalPrice: { amount: '29.00', currencyCode: 'USD' },
+        financialStatus: 'PAID',
+        fulfillmentStatus: 'UNFULFILLED',
+        itemsCount: 1,
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,
   },
   execute: listCustomerOrdersExecute,
-  agent: { toolsetSlug: 'shopify.customers' },
+  agent: {
+    toolsetSlug: 'shopify.customers',
+    // Verified safe for a visitor: `shopifyCustomerId` is bound to the verified
+    // contact's Shopify customer id (see inputBindings), so the model can never
+    // widen the scope. See plans/chat/v8.
+    externalSafe: true,
+    idempotent: true,
+    // Author-default binding (v8 phase-3): the platform resolves
+    // `contact:@app:shopify:customerId` from the turn subject and clamps it onto
+    // `shopifyCustomerId` before execute — the model never supplies it. The input
+    // is required (see `inputs`), so an anonymous turn (the var resolves empty)
+    // refuses the call rather than running unscoped. The `@app:` segment resolves
+    // at turn time against the agent's bound store; the field is owned by this
+    // app (see ../fields.ts).
+    inputBindings: [
+      {
+        name: 'shopifyCustomerId',
+        default: { kind: 'var', ref: 'contact:@app:shopify:customerId' },
+      },
+    ],
+  },
 })

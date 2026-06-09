@@ -22,6 +22,9 @@ export const reactToDiscordMessageTool = defineTool({
   outputs: z.object({
     success: z.literal(true),
   }),
+  exampleOutput: {
+    success: true,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

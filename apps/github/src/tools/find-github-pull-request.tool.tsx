@@ -37,6 +37,21 @@ export const findGithubPullRequestTool = defineTool({
       })
       .nullable(),
   }),
+  exampleOutput: {
+    found: true,
+    pullRequest: {
+      prNumber: 1043,
+      title: 'Fix mobile Safari login button',
+      state: 'open',
+      isDraft: false,
+      author: 'octocat',
+      headRef: 'fix/mobile-login',
+      baseRef: 'main',
+      url: 'https://github.com/octocat/hello-world/pull/1043',
+      createdAt: '2026-06-07T09:00:00Z',
+      updatedAt: '2026-06-08T13:00:00Z',
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

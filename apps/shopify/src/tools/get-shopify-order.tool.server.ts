@@ -1,6 +1,5 @@
 // src/tools/get-shopify-order.tool.server.ts
 
-import type { ToolExecuteContext } from '@auxx/sdk/tools'
 import { shopifyApi } from '../blocks/shopify/shared/shopify-api'
 import { getShopifyConnection } from './shared/connection'
 import { gidToNumeric } from './shared/map-customer'
@@ -12,8 +11,7 @@ interface GetShopifyOrderInput {
 }
 
 export default async function getShopifyOrder(
-  input: GetShopifyOrderInput,
-  ctx: ToolExecuteContext
+  input: GetShopifyOrderInput
 ): Promise<OrderDetail> {
   const { token, shopDomain } = getShopifyConnection()
   const numericId = gidToNumeric(input.shopifyOrderId)
@@ -35,6 +33,6 @@ export default async function getShopifyOrder(
   const defaultCurrency = shop.shop?.currency ?? 'USD'
 
   const customerId = result.order.customer?.id
-  const auxxRecordId = customerId ? await resolveContactRef(ctx, customerId) : null
+  const auxxRecordId = customerId ? await resolveContactRef(customerId) : null
   return mapOrderDetail(result.order, defaultCurrency, auxxRecordId)
 }

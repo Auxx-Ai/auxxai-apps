@@ -57,6 +57,23 @@ export const findShopifyCustomerTool = defineTool({
         'Set when the Shopify customer exists but has no Auxx contact record (sync delay or never imported).'
       ),
   }),
+  exampleOutput: {
+    found: true,
+    customer: {
+      // refs.entity('contact') marker — null or a sample RecordId both validate.
+      auxxRecordId: null,
+      shopifyId: 'gid://shopify/Customer/6820315234',
+      email: 'jane@example.com',
+      phone: '+14155551212',
+      firstName: 'Jane',
+      lastName: 'Cooper',
+      createdAt: '2025-11-14T08:05:00Z',
+      ordersCount: 7,
+      totalSpent: { amount: '512.00', currencyCode: 'USD' },
+      state: 'enabled',
+      tags: ['vip', 'newsletter'],
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

@@ -27,6 +27,22 @@ export const listGoogleContactGroupsTool = defineTool({
       )
       .describe('All accessible contact groups on the connected account.'),
   }),
+  exampleOutput: {
+    groups: [
+      {
+        resourceName: 'contactGroups/myContacts',
+        name: 'My Contacts',
+        groupType: 'SYSTEM_CONTACT_GROUP',
+        memberCount: 184,
+      },
+      {
+        resourceName: 'contactGroups/3b2a1c0d9e8f7a6b',
+        name: 'VIP Customers',
+        groupType: 'USER_CONTACT_GROUP',
+        memberCount: 12,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

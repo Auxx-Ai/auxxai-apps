@@ -1,6 +1,14 @@
 // src/blocks/ms-teams/shared/ms-teams-api.ts
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 export const GRAPH_API = 'https://graph.microsoft.com'
 
@@ -38,24 +46,42 @@ export async function graphApi<T = unknown>(
   // Support both full URLs (for pagination @odata.nextLink) and relative paths
   const url = urlOrPath.startsWith('http') ? urlOrPath : `${GRAPH_API}/${version}${urlOrPath}`
 
-  const response = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    ...(body && { body: JSON.stringify(body) }),
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      ...(body && { body: JSON.stringify(body) }),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(
+      err instanceof Error ? err.message : 'Microsoft Graph request failed'
+    )
+  }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const message =
       ERROR_MESSAGES[response.status] ??
       `Microsoft Graph API error: ${response.status} ${response.statusText}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(message)
+    if (response.status === 409) throw new ConflictError(message)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Microsoft Graph error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(message)
+    }
     throw new Error(message)
   }
 

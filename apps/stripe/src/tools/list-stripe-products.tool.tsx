@@ -29,6 +29,17 @@ export const listStripeProductsTool = defineTool({
     ),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    products: [
+      {
+        productId: 'prod_NffrFeUfNV2Hib',
+        name: 'Pro Plan',
+        description: 'Full access to all features.',
+        active: true,
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

@@ -36,6 +36,13 @@ export const updateQuickbooksVendorTool = defineTool({
     auxxCompanyId: refs.entity('company').nullable(),
     notImportedReason: z.enum(['NOT_IMPORTED']).nullable(),
   }),
+  exampleOutput: {
+    vendorId: '74',
+    displayName: 'Pacific Office Supplies',
+    syncToken: '3',
+    auxxCompanyId: null,
+    notImportedReason: null,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

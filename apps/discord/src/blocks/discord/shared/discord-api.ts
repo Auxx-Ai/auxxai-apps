@@ -1,6 +1,14 @@
 // src/blocks/discord/shared/discord-api.ts
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 const DISCORD_API = 'https://discord.com/api/v10'
 
@@ -46,11 +54,16 @@ export async function discordApi<T = unknown>(
     headers['Content-Type'] = 'application/json'
   }
 
-  const response = await fetch(`${DISCORD_API}${endpoint}`, {
-    method,
-    headers,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${DISCORD_API}${endpoint}`, {
+      method,
+      headers,
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Discord request failed')
+  }
 
   // Respect Discord rate limits
   const remaining = Number(response.headers.get('x-ratelimit-remaining'))
@@ -75,26 +88,31 @@ export async function discordApi<T = unknown>(
   const data = await response.json()
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const discordCode = (data as any)?.code as number | undefined
     const discordMessage = (data as any)?.message as string | undefined
+    // Prefer a Discord-specific code message, then the HTTP-status message.
+    const detailMessage =
+      (discordCode && ERROR_MESSAGES[discordCode]) ||
+      HTTP_ERROR_MESSAGES[response.status] ||
+      discordMessage ||
+      `Discord API error: ${response.status} ${response.statusText}`
 
-    // Check Discord-specific error codes first
-    if (discordCode && ERROR_MESSAGES[discordCode]) {
-      throw new Error(ERROR_MESSAGES[discordCode])
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(detailMessage)
+    if (response.status === 409) throw new ConflictError(detailMessage)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Discord error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(detailMessage)
     }
 
-    // Check HTTP status codes
-    if (HTTP_ERROR_MESSAGES[response.status]) {
-      throw new Error(HTTP_ERROR_MESSAGES[response.status])
-    }
-
-    throw new Error(
-      discordMessage ?? `Discord API error: ${response.status} ${response.statusText}`
-    )
+    throw new Error(detailMessage)
   }
 
   return data as T

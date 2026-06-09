@@ -29,6 +29,11 @@ export const findWhatsappContactByPhoneTool = defineTool({
       .nullable()
       .describe('Set when no contact in Auxx has this phone.'),
   }),
+  exampleOutput: {
+    normalizedPhone: '+14155550132',
+    auxxRecordId: null,
+    notImportedReason: null,
+  },
   config: { requiresConnection: false, timeout: 5000 },
   execute: findWhatsappContactByPhoneExecute,
   agent: { toolsetSlug: 'whatsapp.contacts.read' },

@@ -1,6 +1,14 @@
 // src/blocks/twilio/shared/twilio-api.ts
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 const TWILIO_API = 'https://api.twilio.com/2010-04-01/Accounts'
 
@@ -38,26 +46,42 @@ export async function twilioApi<T = unknown>(
     : ''
   const url = `${TWILIO_API}/${accountSid}${path}${queryString ? `?${queryString}` : ''}`
 
-  const response = await fetch(url, {
-    method,
-    headers: {
-      Authorization: authHeader,
-      ...(body && { 'Content-Type': 'application/x-www-form-urlencoded' }),
-    },
-    ...(body && { body: new URLSearchParams(body).toString() }),
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: authHeader,
+        ...(body && { 'Content-Type': 'application/x-www-form-urlencoded' }),
+      },
+      ...(body && { body: new URLSearchParams(body).toString() }),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Twilio request failed')
+  }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const errorData = await response.json().catch(() => null)
     const twilioCode = errorData?.code
     const message =
       ERROR_MESSAGES[twilioCode] ??
       ERROR_MESSAGES[response.status] ??
       `Twilio API error: ${response.status} ${response.statusText}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(message)
+    if (response.status === 409) throw new ConflictError(message)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Twilio error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(message)
+    }
     throw new Error(message)
   }
 

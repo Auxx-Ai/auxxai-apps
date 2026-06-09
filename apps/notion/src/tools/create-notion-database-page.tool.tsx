@@ -75,6 +75,11 @@ export const createNotionDatabasePageTool = defineTool({
     url: z.string(),
     createdTime: z.string(),
   }),
+  exampleOutput: {
+    pageId: '7f8091a2-b3c4-d5e6-f708-192030405060',
+    url: 'https://www.notion.so/Login-issue-on-mobile-7f8091a2b3c4d5e6f708192030405060',
+    createdTime: '2026-06-08T10:20:00.000Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

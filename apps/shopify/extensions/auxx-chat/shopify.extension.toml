@@ -3,4 +3,5 @@ api_version = "2026-01"
 [[extensions]]
 name = "Auxx Chat"
 handle = "auxx-chat"
+uid = "a376cf20-5d08-b8d9-5f61-9d5c52c341761f578098"
 type = "theme"

@@ -4,7 +4,7 @@ import { Workflow } from '@auxx/sdk'
 
 export const customerAddressInputs = {
   // Shared -- required for all operations
-  customerId: Workflow.string({ label: 'Customer ID', acceptsVariables: true }),
+  customerId: Workflow.string({ label: 'Customer ID', required: true, acceptsVariables: true }),
 
   // --- Address: Create ---
   createAddress1: Workflow.string({ label: 'Address Line 1', acceptsVariables: true }),

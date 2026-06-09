@@ -34,6 +34,14 @@ export const makeTwilioCallTool = defineTool({
     direction: z.string().describe('"outbound-api" for tool-driven calls.'),
     dateCreated: z.string(),
   }),
+  exampleOutput: {
+    callSid: 'CA1a2b3c4d5e6f7890abcdef1234567890',
+    status: 'queued',
+    from: '+14155550132',
+    to: '+14155550199',
+    direction: 'outbound-api',
+    dateCreated: 'Mon, 01 Jun 2026 16:29:58 +0000',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

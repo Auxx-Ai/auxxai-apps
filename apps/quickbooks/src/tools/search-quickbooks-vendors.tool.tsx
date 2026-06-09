@@ -29,6 +29,31 @@ export const searchQuickbooksVendorsTool = defineTool({
     ),
     hasMore: z.boolean(),
   }),
+  exampleOutput: {
+    vendors: [
+      {
+        vendorId: '74',
+        displayName: 'Pacific Office Supplies',
+        email: 'billing@pacificoffice.com',
+        phone: '+1 206-555-0142',
+        companyName: 'Pacific Office Supplies',
+        balance: 320,
+        active: true,
+        auxxCompanyId: null,
+      },
+      {
+        vendorId: '75',
+        displayName: 'Pacific Freight Co',
+        email: null,
+        phone: null,
+        companyName: 'Pacific Freight Co',
+        balance: 0,
+        active: true,
+        auxxCompanyId: null,
+      },
+    ],
+    hasMore: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

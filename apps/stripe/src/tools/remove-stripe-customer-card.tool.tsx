@@ -18,6 +18,10 @@ export const removeStripeCustomerCardTool = defineTool({
     cardId: z.string(),
     deleted: z.boolean(),
   }),
+  exampleOutput: {
+    cardId: 'card_1MrabC2eZvKYlo2CqwPpVzwm',
+    deleted: true,
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: removeStripeCustomerCardExecute,
   agent: { toolsetSlug: 'stripe.customer-cards.write' },

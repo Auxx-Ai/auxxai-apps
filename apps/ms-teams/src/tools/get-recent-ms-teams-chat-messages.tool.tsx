@@ -26,6 +26,26 @@ export const getRecentMsTeamsChatMessagesTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    messages: [
+      {
+        id: '1718031200456',
+        fromUserId: '8b9f4c21-7d3e-4a1b-9f2c-1a2b3c4d5e6f',
+        fromDisplayName: 'Jane Cooper',
+        content: 'Did the final assets get uploaded?',
+        contentType: 'text',
+        createdAt: '2026-06-08T14:33:20Z',
+      },
+      {
+        id: '1718031000000',
+        fromUserId: 'a1b2c3d4-5e6f-4789-90ab-cdef12345678',
+        fromDisplayName: 'Marcus Lee',
+        content: '<p>Yes, uploaded to the shared folder.</p>',
+        contentType: 'html',
+        createdAt: '2026-06-08T14:30:00Z',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: getRecentMsTeamsChatMessagesExecute,
   agent: { toolsetSlug: 'ms-teams.messages.read' },

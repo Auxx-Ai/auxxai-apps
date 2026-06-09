@@ -48,10 +48,51 @@ export const getShopifyCustomerTool = defineTool({
       .nullable(),
     notImportedReason: z.enum(['NOT_IMPORTED']).optional(),
   }),
+  exampleOutput: {
+    found: true,
+    customer: {
+      // refs.entity('contact') marker — null or a sample RecordId both validate.
+      auxxRecordId: null,
+      shopifyId: 'gid://shopify/Customer/6820315234',
+      email: 'jane@example.com',
+      phone: '+14155550132',
+      firstName: 'Jane',
+      lastName: 'Cooper',
+      createdAt: '2025-11-02T08:14:00Z',
+      ordersCount: 7,
+      totalSpent: { amount: '482.50', currencyCode: 'USD' },
+      state: 'enabled',
+      tags: ['vip', 'newsletter'],
+      defaultAddress: {
+        address1: '548 Market St',
+        city: 'San Francisco',
+        country: 'United States',
+        zip: '94104',
+      },
+      recentOrderIds: [
+        'gid://shopify/Order/5512033210',
+        'gid://shopify/Order/5498871002',
+      ],
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,
   },
   execute: getShopifyCustomerExecute,
-  agent: { toolsetSlug: 'shopify.customers' },
+  agent: {
+    toolsetSlug: 'shopify.customers',
+    // Not `externalSafe` (full PII profile — chat/email agents flag it with a
+    // warning), but if an admin adds it to such an agent the customer-scope arg
+    // is still bound to the verified contact. Defense-in-depth. See plans/chat/v8.
+    // Author-default binding (v8 phase-3): `shopifyCustomerId` is clamped to the
+    // turn subject's `contact:@app:shopify:customerId`; the model never supplies
+    // it, and an anonymous turn refuses (the input is required, var resolves empty).
+    inputBindings: [
+      {
+        name: 'shopifyCustomerId',
+        default: { kind: 'var', ref: 'contact:@app:shopify:customerId' },
+      },
+    ],
+  },
 })

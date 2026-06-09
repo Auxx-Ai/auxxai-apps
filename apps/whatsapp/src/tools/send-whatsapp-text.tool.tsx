@@ -38,6 +38,13 @@ export const sendWhatsappTextTool = defineTool({
       .nullable()
       .describe('Set when no Auxx contact matches the recipient phone.'),
   }),
+  exampleOutput: {
+    messageId: 'wamid.HBgNMTU1NTU1NTU1NTUVAgARGBI4QkE3MTRDOEY0MUFFQzYwQTYA',
+    recipientWaId: '14155550132',
+    normalizedPhone: '+14155550132',
+    auxxRecordId: null,
+    notImportedReason: null,
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: sendWhatsappTextExecute,
   agent: { toolsetSlug: 'whatsapp.messages.write' },

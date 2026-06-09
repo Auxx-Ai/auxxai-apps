@@ -1,4 +1,12 @@
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 import { ERROR_MESSAGES } from './github-api'
 
 export const GITHUB_GRAPHQL = 'https://api.github.com/graphql'
@@ -33,24 +41,41 @@ export async function githubGraphql<T = unknown>(
   variables: Record<string, unknown>,
   token: string
 ): Promise<GraphqlResult<T>> {
-  const response = await fetch(GITHUB_GRAPHQL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-    body: JSON.stringify({ query, variables }),
-  })
+  let response: Response
+  try {
+    response = await fetch(GITHUB_GRAPHQL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({ query, variables }),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'GitHub request failed')
+  }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
     const errorMsg =
       ERROR_MESSAGES[response.status] ??
       `GitHub GraphQL error: ${response.status} ${response.statusText}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(errorMsg)
+    if (response.status === 409) throw new ConflictError(errorMsg)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`GitHub error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(errorMsg)
+    }
     throw new Error(errorMsg)
   }
 

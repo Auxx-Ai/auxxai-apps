@@ -37,6 +37,13 @@ export const updateQuickbooksInvoiceTool = defineTool({
     balance: z.number(),
     syncToken: z.string(),
   }),
+  exampleOutput: {
+    invoiceId: '243',
+    docNumber: '1037',
+    totalAmt: 1650,
+    balance: 650,
+    syncToken: '2',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

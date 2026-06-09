@@ -37,6 +37,27 @@ export const listDiscordMembersTool = defineTool({
     ),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    members: [
+      {
+        userId: '1086543000000000011',
+        username: 'jane_cooper',
+        displayName: 'Jane',
+        bot: false,
+        roles: ['1086544000000000021', '1086544000000000022'],
+        joinedAt: '2026-01-14T08:22:00Z',
+      },
+      {
+        userId: '1086543000000000099',
+        username: 'acme_bot',
+        displayName: 'Acme Bot',
+        bot: true,
+        roles: ['1086544000000000020'],
+        joinedAt: '2025-11-02T12:00:00Z',
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

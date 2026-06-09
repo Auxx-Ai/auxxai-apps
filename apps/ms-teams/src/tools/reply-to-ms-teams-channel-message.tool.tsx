@@ -22,6 +22,12 @@ export const replyToMsTeamsChannelMessageTool = defineTool({
     webUrl: z.string().nullable(),
     createdAt: z.string(),
   }),
+  exampleOutput: {
+    messageId: '1718031045123',
+    webUrl:
+      'https://teams.microsoft.com/l/message/19%3Aabc123def456ghi789%40thread.tacv2/1718031045123?groupId=2a4b6c8d-1e3f-4a5b-9c7d-0e1f2a3b4c5d&tenantId=11112222-3333-4444-5555-666677778888&parentMessageId=1718030999000',
+    createdAt: '2026-06-08T14:30:45Z',
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: replyToMsTeamsChannelMessageExecute,
   agent: { toolsetSlug: 'ms-teams.messages.write' },

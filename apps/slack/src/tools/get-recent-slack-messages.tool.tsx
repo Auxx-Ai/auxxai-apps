@@ -25,6 +25,24 @@ export const getRecentSlackMessagesTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    messages: [
+      {
+        ts: '1717000000.123456',
+        userId: 'U0123ABCDEF',
+        text: 'Hey team, can someone review the latest release notes?',
+        threadTs: '1717000000.123456',
+        replyCount: 3,
+      },
+      {
+        ts: '1717000123.456789',
+        userId: 'U0456GHIJKL',
+        text: 'On it now.',
+        threadTs: null,
+        replyCount: 0,
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: getRecentSlackMessagesExecute,
   agent: { toolsetSlug: 'slack.messages.read' },

@@ -39,6 +39,14 @@ export const createQuickbooksInvoiceTool = defineTool({
     dueDate: z.string().nullable(),
     syncToken: z.string(),
   }),
+  exampleOutput: {
+    invoiceId: '244',
+    docNumber: '1038',
+    totalAmt: 1500,
+    balance: 1500,
+    dueDate: '2026-07-08',
+    syncToken: '0',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

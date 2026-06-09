@@ -28,6 +28,21 @@ export const listTwilioPhoneNumbersTool = defineTool({
       )
       .describe('All Twilio numbers on the connected account.'),
   }),
+  exampleOutput: {
+    phoneNumbers: [
+      {
+        sid: 'PN1a2b3c4d5e6f7890abcdef1234567890',
+        phoneNumber: '+14155550132',
+        friendlyName: 'Support Line',
+        capabilities: {
+          sms: true,
+          mms: true,
+          voice: true,
+          fax: false,
+        },
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

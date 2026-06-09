@@ -33,6 +33,44 @@ export const getProductInventoryTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    shopifyProductId: 'gid://shopify/Product/7203948571',
+    title: 'Classic Tee',
+    totalInventory: 142,
+    variants: [
+      {
+        shopifyVariantId: 'gid://shopify/ProductVariant/41827364920',
+        title: 'Black / M',
+        sku: 'TEE-CLS-BLK-M',
+        available: 58,
+        locations: [
+          {
+            locationId: 'gid://shopify/Location/72648392',
+            name: 'Main Warehouse',
+            available: 50,
+          },
+          {
+            locationId: 'gid://shopify/Location/72648456',
+            name: 'Retail Store',
+            available: 8,
+          },
+        ],
+      },
+      {
+        shopifyVariantId: 'gid://shopify/ProductVariant/41827364921',
+        title: 'Black / L',
+        sku: 'TEE-CLS-BLK-L',
+        available: 84,
+        locations: [
+          {
+            locationId: 'gid://shopify/Location/72648392',
+            name: 'Main Warehouse',
+            available: 84,
+          },
+        ],
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

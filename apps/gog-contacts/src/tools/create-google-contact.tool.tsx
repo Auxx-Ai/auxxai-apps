@@ -94,6 +94,14 @@ export const createGoogleContactTool = defineTool({
         'Set on create — the new Google contact has not been imported into Auxx yet. The poll trigger or next sync will pick it up.'
       ),
   }),
+  exampleOutput: {
+    auxxRecordId: null,
+    resourceName: 'people/c1234567890123456789',
+    contactId: 'c1234567890123456789',
+    displayName: 'Jane Cooper',
+    etag: '%EgUBAj0DLhoEAQIFByIMSlc4cGRTbVZ4ZkU9',
+    notImportedReason: 'NOT_IMPORTED',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

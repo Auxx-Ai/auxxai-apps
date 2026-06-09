@@ -79,6 +79,7 @@ import { searchShopifyProductsTool } from './tools/search-shopify-products.tool'
 import { summarizeRecentOrdersTool } from './tools/summarize-recent-orders.tool'
 import { shopifyToolsets } from './tools/toolsets'
 import { shopifyTrigger } from './triggers/shopify-trigger/shopify-trigger.workflow'
+import { shopifyFields } from './fields'
 
 export const app = {
   record: {
@@ -86,6 +87,8 @@ export const app = {
     bulkActions: [],
     widgets: [],
   },
+  // Contact fields the app owns, provisioned per connected store. See ./fields.ts.
+  fields: shopifyFields,
   callRecording: {
     insight: { textActions: [] },
     summary: { textActions: [] },

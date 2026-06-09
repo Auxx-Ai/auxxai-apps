@@ -41,6 +41,20 @@ export const findNotionPageTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    found: true,
+    pages: [
+      {
+        pageId: '1f2e3d4c-5b6a-7980-1234-567890abcdef',
+        title: 'Q3 Product Roadmap',
+        url: 'https://www.notion.so/Q3-Product-Roadmap-1f2e3d4c5b6a79801234567890abcdef',
+        parentType: 'workspace',
+        parentId: null,
+        createdTime: '2026-05-12T09:30:00.000Z',
+        lastEditedTime: '2026-06-05T14:22:00.000Z',
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

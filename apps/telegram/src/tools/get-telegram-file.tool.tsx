@@ -27,6 +27,14 @@ export const getTelegramFileTool = defineTool({
         'Constructed download URL: https://api.telegram.org/file/bot{token}/{filePath}. Null if Telegram did not return a filePath (rare).'
       ),
   }),
+  exampleOutput: {
+    fileId: 'BAADBAADrwADBREAAYag2nQOAAEC',
+    fileUniqueId: 'AgADrwADBREAAQ',
+    fileSize: 24680,
+    filePath: 'documents/file_12.pdf',
+    downloadUrl:
+      'https://api.telegram.org/file/bot123456:ABC-DEF1234ghIkl/documents/file_12.pdf',
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

@@ -34,6 +34,17 @@ export const findMsTeamsUserTool = defineTool({
       })
       .nullable(),
   }),
+  exampleOutput: {
+    user: {
+      id: '8b9f4c21-7d3e-4a1b-9f2c-1a2b3c4d5e6f',
+      displayName: 'Jane Cooper',
+      email: 'jane.cooper@contoso.com',
+      userPrincipalName: 'jane.cooper@contoso.com',
+      jobTitle: 'Product Marketing Manager',
+      auxxRecordId: null,
+      notImportedReason: null,
+    },
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: findMsTeamsUserExecute,
   agent: { toolsetSlug: 'ms-teams.users.read' },

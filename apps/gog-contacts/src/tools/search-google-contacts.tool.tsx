@@ -40,6 +40,31 @@ export const searchGoogleContactsTool = defineTool({
     ),
     truncated: z.boolean().describe('True if more matches exist beyond the limit.'),
   }),
+  exampleOutput: {
+    contacts: [
+      {
+        auxxRecordId: null,
+        resourceName: 'people/c1234567890123456789',
+        contactId: 'c1234567890123456789',
+        displayName: 'Jane Cooper',
+        emails: [{ value: 'jane.cooper@example.com', type: 'work' }],
+        phones: [{ value: '+14155551212', type: 'mobile' }],
+        company: 'Acme Inc',
+        jobTitle: 'Operations Lead',
+      },
+      {
+        auxxRecordId: null,
+        resourceName: 'people/c9876543210987654321',
+        contactId: 'c9876543210987654321',
+        displayName: 'Robert Fox',
+        emails: [{ value: 'robert.fox@example.com', type: 'home' }],
+        phones: [],
+        company: null,
+        jobTitle: null,
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

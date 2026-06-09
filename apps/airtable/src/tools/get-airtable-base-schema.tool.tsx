@@ -52,6 +52,54 @@ export const getAirtableBaseSchemaTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    baseId: 'app0123456789AbCd',
+    tables: [
+      {
+        tableId: 'tbl0123456789AbCd',
+        name: 'Companies',
+        primaryFieldId: 'fld0123456789AbCd',
+        fields: [
+          {
+            fieldId: 'fld0123456789AbCd',
+            name: 'Name',
+            type: 'singleLineText',
+            writable: true,
+          },
+          {
+            fieldId: 'fld1234567890BcDe',
+            name: 'Status',
+            type: 'singleSelect',
+            writable: true,
+          },
+          {
+            fieldId: 'fld2345678901CdEf',
+            name: 'Annual Revenue',
+            type: 'number',
+            writable: true,
+          },
+          {
+            fieldId: 'fld3456789012DeFg',
+            name: 'Created',
+            type: 'createdTime',
+            writable: false,
+          },
+        ],
+        views: [
+          {
+            viewId: 'viw0123456789AbCd',
+            name: 'All companies',
+            type: 'grid',
+          },
+          {
+            viewId: 'viw1234567890BcDe',
+            name: 'Active',
+            type: 'grid',
+          },
+        ],
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

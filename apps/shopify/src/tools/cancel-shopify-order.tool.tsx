@@ -28,10 +28,18 @@ export const cancelShopifyOrderTool = defineTool({
     cancelledAt: z.string(),
     refunded: z.boolean(),
   }),
+  exampleOutput: {
+    shopifyOrderId: 'gid://shopify/Order/5512033210',
+    cancelledAt: '2026-06-03T14:22:00Z',
+    refunded: true,
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,
   },
   execute: cancelShopifyOrderExecute,
+  // Mutating order action. Offered on every surface (default) but NOT
+  // `externalSafe`, so a chat/email agent flags it with a warning until an admin
+  // locks it down with restrictions. See plans/chat/v6/chat-tool-availability.md.
   agent: { toolsetSlug: 'shopify.orders.write' },
 })

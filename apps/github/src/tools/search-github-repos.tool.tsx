@@ -46,6 +46,33 @@ export const searchGithubReposTool = defineTool({
     ),
     truncated: z.boolean().describe('True if more matches exist beyond `limit`.'),
   }),
+  exampleOutput: {
+    repos: [
+      {
+        owner: 'octocat',
+        name: 'hello-world',
+        fullName: 'octocat/hello-world',
+        description: 'My first repository on GitHub!',
+        defaultBranch: 'main',
+        private: false,
+        primaryLanguage: 'TypeScript',
+        stars: 1284,
+        url: 'https://github.com/octocat/hello-world',
+      },
+      {
+        owner: 'octocat',
+        name: 'spoon-knife',
+        fullName: 'octocat/spoon-knife',
+        description: null,
+        defaultBranch: 'main',
+        private: false,
+        primaryLanguage: 'HTML',
+        stars: 412,
+        url: 'https://github.com/octocat/spoon-knife',
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

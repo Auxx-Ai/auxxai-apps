@@ -44,6 +44,27 @@ export const searchNotionPagesTool = defineTool({
     ),
     truncated: z.boolean().describe('True if more results exist beyond the limit.'),
   }),
+  exampleOutput: {
+    pages: [
+      {
+        pageId: '1f2e3d4c-5b6a-7980-1234-567890abcdef',
+        title: 'Q3 Product Roadmap',
+        url: 'https://www.notion.so/Q3-Product-Roadmap-1f2e3d4c5b6a79801234567890abcdef',
+        parentType: 'workspace',
+        parentId: null,
+        lastEditedTime: '2026-06-05T14:22:00.000Z',
+      },
+      {
+        pageId: '4c5d6e7f-8091-a2b3-c4d5-e6f708192030',
+        title: 'Onboarding Guide',
+        url: 'https://www.notion.so/Onboarding-Guide-4c5d6e7f8091a2b3c4d5e6f708192030',
+        parentType: 'page',
+        parentId: '5d6e7f80-91a2-b3c4-d5e6-f70819203040',
+        lastEditedTime: '2026-06-02T11:05:00.000Z',
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

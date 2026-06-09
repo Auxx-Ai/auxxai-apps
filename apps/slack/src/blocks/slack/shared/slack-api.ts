@@ -5,7 +5,15 @@
  * the dynamic list loaders (channels, users).
  */
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 export const SLACK_API = 'https://slack.com/api'
 
@@ -78,18 +86,34 @@ export async function slackApi(
   token: string,
   body: Record<string, unknown>
 ): Promise<SlackApiResponse> {
-  const response = await fetch(`${SLACK_API}/${method}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-    body: JSON.stringify(body),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${SLACK_API}/${method}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Slack request failed')
+  }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError()
+    if (response.status === 409) throw new ConflictError()
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Slack error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(`Slack API request failed: ${response.status} ${response.statusText}`)
     }
     throw new Error(`Slack API request failed: ${response.status} ${response.statusText}`)
   }

@@ -24,6 +24,15 @@ export const insertSupabaseRowTool = defineTool({
       .record(z.string(), z.unknown())
       .describe('The inserted row, including auto-generated columns.'),
   }),
+  exampleOutput: {
+    row: {
+      id: 101,
+      email: 'newcustomer@example.com',
+      full_name: 'Sam Rivera',
+      created_at: '2026-06-08T09:30:00Z',
+      updated_at: '2026-06-08T09:30:00Z',
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

@@ -34,6 +34,33 @@ export const searchQuickbooksCustomersTool = defineTool({
     ),
     hasMore: z.boolean(),
   }),
+  exampleOutput: {
+    customers: [
+      {
+        customerId: '58',
+        displayName: 'Acme Corp',
+        email: 'jane@acmecorp.com',
+        phone: '+1 415-555-0188',
+        companyName: 'Acme Corp',
+        balance: 1240.5,
+        active: true,
+        auxxContactId: null,
+        auxxCompanyId: null,
+      },
+      {
+        customerId: '62',
+        displayName: 'Acme Holdings',
+        email: 'ap@acmeholdings.com',
+        phone: null,
+        companyName: 'Acme Holdings',
+        balance: 0,
+        active: true,
+        auxxContactId: null,
+        auxxCompanyId: null,
+      },
+    ],
+    hasMore: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

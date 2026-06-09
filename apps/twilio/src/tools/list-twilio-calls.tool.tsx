@@ -62,6 +62,26 @@ export const listTwilioCallsTool = defineTool({
     ),
     hasMore: z.boolean(),
   }),
+  exampleOutput: {
+    calls: [
+      {
+        sid: 'CA1a2b3c4d5e6f7890abcdef1234567890',
+        status: 'completed',
+        direction: 'outbound-api',
+        from: '+14155550132',
+        to: '+14155550199',
+        duration: '42',
+        price: '-0.0085',
+        priceUnit: 'USD',
+        startTime: 'Mon, 01 Jun 2026 16:30:00 +0000',
+        endTime: 'Mon, 01 Jun 2026 16:30:42 +0000',
+        dateCreated: 'Mon, 01 Jun 2026 16:29:58 +0000',
+        dateUpdated: 'Mon, 01 Jun 2026 16:30:42 +0000',
+        answeredBy: 'human',
+      },
+    ],
+    hasMore: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

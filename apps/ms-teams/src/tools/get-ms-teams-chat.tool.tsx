@@ -25,6 +25,23 @@ export const getMsTeamsChatTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    id: '19:meeting_NjQ2YWJmMTEtN2E4YS00@thread.v2',
+    topic: 'Q3 Launch Planning',
+    chatType: 'group',
+    members: [
+      {
+        userId: '8b9f4c21-7d3e-4a1b-9f2c-1a2b3c4d5e6f',
+        displayName: 'Jane Cooper',
+        email: 'jane.cooper@contoso.com',
+      },
+      {
+        userId: 'a1b2c3d4-5e6f-4789-90ab-cdef12345678',
+        displayName: 'Marcus Lee',
+        email: 'marcus.lee@contoso.com',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: getMsTeamsChatExecute,
   agent: { toolsetSlug: 'ms-teams.chats.read' },

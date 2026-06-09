@@ -28,6 +28,28 @@ export const listStripeChargesTool = defineTool({
     charges: z.array(chargeOutput),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    charges: [
+      {
+        chargeId: 'ch_3MrabC2eZvKYlo2C1',
+        amount: 2400,
+        currency: 'usd',
+        status: 'succeeded',
+        paid: true,
+        refunded: false,
+        amountRefunded: 0,
+        customer: {
+          stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+          auxxRecordId: null,
+        },
+        description: 'Order #1042',
+        receiptUrl: 'https://pay.stripe.com/receipts/payment/CAcaFwoVacct_1Mr',
+        created: '2026-06-01T16:30:00Z',
+        livemode: true,
+      },
+    ],
+    truncated: false,
+  },
   config: { requiresConnection: true, timeout: 20000, idempotent: true },
   execute: listStripeChargesExecute,
   agent: { toolsetSlug: 'stripe.charges.read' },

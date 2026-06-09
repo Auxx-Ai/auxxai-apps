@@ -42,6 +42,16 @@ export const checkAvailabilityTool = defineTool({
     busy: z.array(TimeRange).describe('Busy intervals in the window.'),
     suggestions: z.array(TimeRange).describe('Free slots of the requested length.'),
   }),
+  exampleOutput: {
+    busy: [
+      { start: '2026-06-10T15:00:00Z', end: '2026-06-10T16:00:00Z' },
+      { start: '2026-06-10T18:30:00Z', end: '2026-06-10T19:00:00Z' },
+    ],
+    suggestions: [
+      { start: '2026-06-10T16:00:00Z', end: '2026-06-10T16:30:00Z' },
+      { start: '2026-06-10T17:00:00Z', end: '2026-06-10T17:30:00Z' },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

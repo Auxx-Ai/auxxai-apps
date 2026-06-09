@@ -25,6 +25,26 @@ export const listQuickbooksAccountsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    accounts: [
+      {
+        id: '82',
+        name: 'Consulting',
+        fullyQualifiedName: 'Income:Sales:Consulting',
+        accountType: 'Income',
+        classification: 'Revenue',
+        active: true,
+      },
+      {
+        id: '35',
+        name: 'Accounts Receivable',
+        fullyQualifiedName: 'Accounts Receivable',
+        accountType: 'Accounts Receivable',
+        classification: 'Asset',
+        active: true,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

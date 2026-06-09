@@ -57,6 +57,21 @@ export const summarizeNotionDatabaseTool = defineTool({
     ),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    summary:
+      '12 tickets total. 4 open, 5 in progress, 3 resolved. High-priority items cluster around mobile login and checkout failures. Most recent activity on the mobile login ticket.',
+    pages: [
+      {
+        pageId: '7f8091a2-b3c4-d5e6-f708-192030405060',
+        title: 'Login issue on mobile',
+        url: 'https://www.notion.so/Login-issue-on-mobile-7f8091a2b3c4d5e6f708192030405060',
+        propertiesPreview: 'Status: In Progress · Priority: High · Tags: bug, mobile',
+        contentPreview:
+          'User reports being unable to log in on iOS Safari after the latest release. Repro steps attached; appears related to the new session cookie flag.',
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 60000,

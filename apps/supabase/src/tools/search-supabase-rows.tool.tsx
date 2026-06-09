@@ -62,6 +62,24 @@ export const searchSupabaseRowsTool = defineTool({
     totalCount: z.number().describe('Number of rows returned (≤ limit).'),
     truncated: z.boolean().describe('True if more rows likely matched but were cut off by limit.'),
   }),
+  exampleOutput: {
+    rows: [
+      {
+        id: 42,
+        email: 'jane@example.com',
+        full_name: 'Jane Cooper',
+        created_at: '2026-06-01T12:00:00Z',
+      },
+      {
+        id: 57,
+        email: 'sam@example.com',
+        full_name: 'Sam Rivera',
+        created_at: '2026-06-03T08:15:00Z',
+      },
+    ],
+    totalCount: 2,
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

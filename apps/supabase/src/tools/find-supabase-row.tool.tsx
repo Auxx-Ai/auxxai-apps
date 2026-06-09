@@ -22,6 +22,14 @@ export const findSupabaseRowTool = defineTool({
       .nullable()
       .describe('The matched row as a column→value object, or null if no row matched.'),
   }),
+  exampleOutput: {
+    row: {
+      id: 42,
+      email: 'jane@example.com',
+      full_name: 'Jane Cooper',
+      created_at: '2026-06-01T12:00:00Z',
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,
