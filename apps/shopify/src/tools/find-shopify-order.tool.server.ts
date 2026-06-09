@@ -56,7 +56,7 @@ export default async function findShopifyOrder(
     qs: { query: raw, status: 'any', limit: '1' },
   })
   const order = (result.orders ?? [])[0]
-  if (order?.id) return await fetchById(shopDomain, token, order.id, ctx)
+  if (order?.id) return await fetchById(shopDomain, token, order.id)
   return { found: false, order: null }
 }
 
