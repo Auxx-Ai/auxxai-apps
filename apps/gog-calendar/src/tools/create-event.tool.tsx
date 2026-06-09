@@ -45,6 +45,18 @@ export const createCalendarEventTool = defineTool({
     attendees: z.array(z.object({ email: z.string(), responseStatus: z.string() })),
     conferenceLink: z.string().nullable(),
   }),
+  exampleOutput: {
+    eventId: 'a1b2c3d4e5f6',
+    calendarId: 'primary',
+    htmlLink: 'https://www.google.com/calendar/event?eid=a1b2c3d4e5f6',
+    start: '2026-06-10T15:00:00Z',
+    end: '2026-06-10T16:00:00Z',
+    attendees: [
+      { email: 'jane@example.com', responseStatus: 'accepted' },
+      { email: 'sam@example.com', responseStatus: 'needsAction' },
+    ],
+    conferenceLink: 'https://meet.google.com/abc-defg-hij',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

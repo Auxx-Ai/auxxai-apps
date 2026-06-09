@@ -31,6 +31,19 @@ export const listShopifyStoresTool = defineTool({
         'Connected store. Today this is always exactly one entry — one credId per binding. Future multi-shop creds would surface here.'
       ),
   }),
+  exampleOutput: {
+    stores: [
+      {
+        shopId: 'gid://shopify/Shop/12345',
+        name: 'Acme Outfitters',
+        myshopifyDomain: 'acme-outfitters.myshopify.com',
+        primaryDomain: 'shop.acme.com',
+        currencyCode: 'USD',
+        ianaTimezone: 'America/New_York',
+        primaryLocationId: 'gid://shopify/Location/72648392',
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

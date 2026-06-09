@@ -22,6 +22,14 @@ export const getTelegramChatMemberTool = defineTool({
     lastName: z.string().nullable(),
     isBot: z.boolean(),
   }),
+  exampleOutput: {
+    status: 'administrator',
+    userId: '123456789',
+    username: '@janecooper',
+    firstName: 'Jane',
+    lastName: 'Cooper',
+    isBot: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

@@ -45,6 +45,19 @@ export const updateSupabaseRowsTool = defineTool({
       .describe('The updated rows (or the rows that would be updated when dryRun=true).'),
     dryRun: z.boolean(),
   }),
+  exampleOutput: {
+    affectedCount: 1,
+    rows: [
+      {
+        id: 42,
+        email: 'jane@example.com',
+        full_name: 'Jane Cooper',
+        status: 'active',
+        created_at: '2026-06-01T12:00:00Z',
+      },
+    ],
+    dryRun: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

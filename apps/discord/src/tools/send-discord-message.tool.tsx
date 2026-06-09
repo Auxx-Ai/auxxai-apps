@@ -30,6 +30,13 @@ export const sendDiscordMessageTool = defineTool({
     timestamp: z.string(),
     url: z.string().describe('https deep link to the posted message.'),
   }),
+  exampleOutput: {
+    messageId: '1086545000000000060',
+    channelId: '1086542100000000002',
+    content: 'Thanks for reporting — this is fixed in 2.1.3. Let us know if it persists!',
+    timestamp: '2026-06-08T09:15:00Z',
+    url: 'https://discord.com/channels/1086542001234567890/1086542100000000002/1086545000000000060',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

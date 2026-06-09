@@ -27,6 +27,16 @@ export const findMsTeamsChannelTool = defineTool({
       })
       .nullable(),
   }),
+  exampleOutput: {
+    channel: {
+      id: '19:abc123def456ghi789@thread.tacv2',
+      displayName: 'General',
+      description: 'Company-wide announcements and team updates.',
+      membershipType: 'standard',
+      webUrl:
+        'https://teams.microsoft.com/l/channel/19%3Aabc123def456ghi789%40thread.tacv2/General?groupId=2a4b6c8d-1e3f-4a5b-9c7d-0e1f2a3b4c5d&tenantId=11112222-3333-4444-5555-666677778888',
+    },
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: findMsTeamsChannelExecute,
   agent: { toolsetSlug: 'ms-teams.channels.read' },

@@ -53,6 +53,28 @@ export const listTwilioMessagesTool = defineTool({
     ),
     hasMore: z.boolean().describe('True if Twilio reports another page of results beyond limit.'),
   }),
+  exampleOutput: {
+    messages: [
+      {
+        sid: 'SM1a2b3c4d5e6f7890abcdef1234567890',
+        status: 'delivered',
+        direction: 'outbound-api',
+        from: '+14155550132',
+        to: '+14155550199',
+        body: 'Your order has shipped and will arrive Friday.',
+        numSegments: '1',
+        numMedia: '0',
+        price: '-0.0075',
+        priceUnit: 'USD',
+        errorCode: null,
+        errorMessage: null,
+        dateCreated: 'Mon, 01 Jun 2026 16:30:00 +0000',
+        dateSent: 'Mon, 01 Jun 2026 16:30:02 +0000',
+        dateUpdated: 'Mon, 01 Jun 2026 16:30:03 +0000',
+      },
+    ],
+    hasMore: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

@@ -1,6 +1,14 @@
 // src/blocks/shopify/shared/shopify-api.ts
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 const API_VERSION = '2024-10'
 
@@ -51,31 +59,50 @@ export async function shopifyApi<T = unknown>(
     }
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers: {
-      'X-Shopify-Access-Token': accessToken,
-      'Content-Type': 'application/json',
-    },
-    ...(body && { body: JSON.stringify(body) }),
-  })
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      ...(body && { body: JSON.stringify(body) }),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Shopify request failed')
+  }
 
   if (response.status === 204) return {} as T
 
   const data = await response.json()
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError()
+    if (response.status === 409) throw new ConflictError()
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Shopify error ${response.status}`, response.status)
     }
 
-    const statusMsg = ERROR_MESSAGES[response.status]
     const apiErrors = data?.errors
-    const message = apiErrors
+    const apiMessage = apiErrors
       ? typeof apiErrors === 'string'
         ? apiErrors
         : JSON.stringify(apiErrors)
-      : (statusMsg ?? `Shopify API error: ${response.status} ${response.statusText}`)
+      : undefined
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(apiMessage ?? ERROR_MESSAGES[response.status])
+    }
+
+    const statusMsg = ERROR_MESSAGES[response.status]
+    const message =
+      apiMessage ?? (statusMsg ?? `Shopify API error: ${response.status} ${response.statusText}`)
     throw new Error(message)
   }
 
@@ -101,18 +128,40 @@ export async function shopifyApiGetAll<T>(
   let currentUrl = url.toString()
 
   for (let page = 0; page < 50; page++) {
-    const response = await fetch(currentUrl, {
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(currentUrl, {
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json',
+        },
+      })
+    } catch (err) {
+      throw new UpstreamServiceError(err instanceof Error ? err.message : 'Shopify request failed')
+    }
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new ConnectionExpiredError('organization')
+      if (response.status === 401) throw new ConnectionExpiredError('organization')
+      if (response.status === 403) throw new InsufficientPermissionsError('organization')
+      if (response.status === 429) {
+        const ra = Number(response.headers.get('Retry-After'))
+        throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+      }
+      if (response.status === 404) throw new NotFoundError()
+      if (response.status === 409) throw new ConflictError()
+      if (response.status >= 500) {
+        throw new UpstreamServiceError(`Shopify error ${response.status}`, response.status)
       }
       const data = await response.json().catch(() => ({}))
+      if (response.status === 400 || response.status === 422) {
+        throw new InvalidInputError(
+          data?.errors
+            ? typeof data.errors === 'string'
+              ? data.errors
+              : JSON.stringify(data.errors)
+            : `Shopify API error: ${response.status}`
+        )
+      }
       throw new Error(data?.errors || `Shopify API error: ${response.status}`)
     }
 

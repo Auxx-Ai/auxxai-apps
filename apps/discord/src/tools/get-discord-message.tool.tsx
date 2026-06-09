@@ -37,6 +37,29 @@ export const getDiscordMessageTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    messageId: '1086545000000000031',
+    channelId: '1086542100000000002',
+    content: 'Has anyone run into the v2 migration issue? Getting a timeout on import.',
+    authorId: '1086543000000000011',
+    authorUsername: 'jane_cooper',
+    authorBot: false,
+    timestamp: '2026-06-07T14:31:00Z',
+    editedAt: null,
+    attachments: [
+      {
+        url: 'https://cdn.discordapp.com/attachments/1086542100000000002/1086545000000000032/error-log.txt',
+        filename: 'error-log.txt',
+        contentType: 'text/plain',
+      },
+    ],
+    reactions: [
+      {
+        emoji: '👀',
+        count: 3,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

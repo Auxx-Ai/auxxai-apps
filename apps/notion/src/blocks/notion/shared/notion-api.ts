@@ -5,7 +5,15 @@
  * dynamic list loaders (databases, properties, users, pages).
  */
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 export const NOTION_API = 'https://api.notion.com/v1'
 export const NOTION_VERSION = '2022-06-28'
@@ -63,17 +71,18 @@ export async function notionApi(
     headers['Content-Type'] = 'application/json'
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers,
-    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-  })
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers,
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Notion request failed')
+  }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     let errorMessage = `Notion API error: ${response.status} ${response.statusText}`
     try {
       const errorBody = await response.json()
@@ -84,6 +93,21 @@ export async function notionApi(
       }
     } catch {
       // Use default message
+    }
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(errorMessage)
+    if (response.status === 409) throw new ConflictError(errorMessage)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Notion error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(errorMessage)
     }
     throw new Error(errorMessage)
   }

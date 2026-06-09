@@ -36,6 +36,22 @@ export const getStripePaymentIntentTool = defineTool({
   icon: stripeIcon,
   inputs: z.object({ paymentIntentId: z.string().describe('Stripe payment intent id (pi_*).') }),
   outputs: z.object({ paymentIntent: paymentIntentOutput }),
+  exampleOutput: {
+    paymentIntent: {
+      paymentIntentId: 'pi_3MrabC2eZvKYlo2C1abcdEFG',
+      amount: 2400,
+      currency: 'usd',
+      status: 'succeeded',
+      customer: {
+        stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+        auxxRecordId: null,
+      },
+      latestChargeId: 'ch_3MrabC2eZvKYlo2C1',
+      description: 'Order #1042',
+      receiptEmail: 'jane@example.com',
+      created: '2026-06-01T16:30:00Z',
+    },
+  },
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripePaymentIntentExecute,
   agent: { toolsetSlug: 'stripe.payment-intents.read' },

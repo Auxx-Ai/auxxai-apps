@@ -30,6 +30,32 @@ export const getTelegramChatAdministratorsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    administrators: [
+      {
+        userId: '123456789',
+        username: '@janecooper',
+        firstName: 'Jane',
+        lastName: 'Cooper',
+        isBot: false,
+        isCreator: true,
+        canPostMessages: null,
+        canDeleteMessages: true,
+        canPinMessages: true,
+      },
+      {
+        userId: '987654321',
+        username: '@auxx_support_bot',
+        firstName: 'Auxx Support',
+        lastName: null,
+        isBot: true,
+        isCreator: false,
+        canPostMessages: null,
+        canDeleteMessages: true,
+        canPinMessages: false,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

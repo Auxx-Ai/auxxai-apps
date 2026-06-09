@@ -28,10 +28,19 @@ export const refundShopifyOrderTool = defineTool({
     amount: z.object({ amount: z.string(), currencyCode: z.string() }),
     createdAt: z.string(),
   }),
+  exampleOutput: {
+    refundId: 'gid://shopify/Refund/9281736450',
+    shopifyOrderId: 'gid://shopify/Order/5512033210',
+    amount: { amount: '74.00', currencyCode: 'USD' },
+    createdAt: '2026-06-03T14:22:00Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,
   },
   execute: refundShopifyOrderExecute,
+  // Mutating order action. Offered on every surface (default) but NOT
+  // `externalSafe`, so a chat/email agent flags it with a warning until an admin
+  // locks it down with restrictions. See plans/chat/v6/chat-tool-availability.md.
   agent: { toolsetSlug: 'shopify.orders.write' },
 })

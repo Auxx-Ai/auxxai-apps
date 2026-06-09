@@ -31,6 +31,31 @@ export const searchQuickbooksEstimatesTool = defineTool({
     ),
     hasMore: z.boolean(),
   }),
+  exampleOutput: {
+    estimates: [
+      {
+        estimateId: '512',
+        docNumber: 'EST-1021',
+        customerId: '58',
+        customerName: 'Acme Corp',
+        txnDate: '2026-05-28',
+        expirationDate: '2026-06-27',
+        totalAmt: 4200,
+        status: 'Pending',
+      },
+      {
+        estimateId: '508',
+        docNumber: 'EST-1017',
+        customerId: '58',
+        customerName: 'Acme Corp',
+        txnDate: '2026-04-02',
+        expirationDate: null,
+        totalAmt: 1800,
+        status: 'Accepted',
+      },
+    ],
+    hasMore: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

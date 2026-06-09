@@ -31,6 +31,12 @@ export const getNotionPageContentTool = defineTool({
     blockCount: z.number().int(),
     truncated: z.boolean().describe('True if more top-level blocks exist beyond the limit.'),
   }),
+  exampleOutput: {
+    content:
+      '# Q3 Product Roadmap\n\nOur focus for this quarter is reliability and onboarding.\n\n## Goals\n- Ship the new onboarding flow\n- Reduce p95 latency below 200ms\n\n[ ] Draft launch announcement\n[x] Finalize pricing tiers',
+    blockCount: 7,
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

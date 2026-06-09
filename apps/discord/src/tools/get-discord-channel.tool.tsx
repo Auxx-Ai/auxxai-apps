@@ -24,6 +24,15 @@ export const getDiscordChannelTool = defineTool({
     parentId: z.string().nullable(),
     nsfw: z.boolean(),
   }),
+  exampleOutput: {
+    channelId: '1086542100000000002',
+    guildId: '1086542001234567890',
+    name: 'support',
+    type: 'text',
+    topic: 'Ask questions and get help from the community',
+    parentId: '1086542100000000000',
+    nsfw: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

@@ -23,6 +23,16 @@ export const getQuickbooksItemTool = defineTool({
     qtyOnHand: z.number().nullable().describe('Inventory items only.'),
     syncToken: z.string(),
   }),
+  exampleOutput: {
+    itemId: '20',
+    name: 'Widget Pro',
+    type: 'Inventory',
+    unitPrice: 49.99,
+    description: 'Standard widget, blue',
+    active: true,
+    qtyOnHand: 142,
+    syncToken: '5',
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

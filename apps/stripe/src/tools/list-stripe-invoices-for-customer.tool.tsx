@@ -19,6 +19,28 @@ export const listStripeInvoicesForCustomerTool = defineTool({
     invoices: z.array(invoiceOutput),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    invoices: [
+      {
+        invoiceId: 'in_1MrabC2eZvKYlo2C',
+        number: 'INV-0042',
+        status: 'paid',
+        customer: {
+          stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+          auxxRecordId: null,
+        },
+        subscriptionId: 'sub_1MrabC2eZvKYlo2C',
+        amountDue: 2400,
+        amountPaid: 2400,
+        currency: 'usd',
+        dueDate: '2026-06-15T00:00:00Z',
+        hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1Mr/test_inv_0042',
+        pdfUrl: 'https://invoice.stripe.com/i/acct_1Mr/test_inv_0042/pdf',
+        created: '2026-06-01T16:30:00Z',
+      },
+    ],
+    truncated: false,
+  },
   config: { requiresConnection: true, timeout: 15000, idempotent: true },
   execute: listStripeInvoicesForCustomerExecute,
   agent: { toolsetSlug: 'stripe.invoices.read' },

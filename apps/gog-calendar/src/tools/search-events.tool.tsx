@@ -49,6 +49,34 @@ export const searchCalendarEventsTool = defineTool({
       .boolean()
       .describe('True if more results exist beyond the limit on at least one calendar.'),
   }),
+  exampleOutput: {
+    events: [
+      {
+        eventId: 'a1b2c3d4e5f6',
+        calendarId: 'primary',
+        summary: 'Product sync',
+        start: '2026-06-10T15:00:00Z',
+        end: '2026-06-10T16:00:00Z',
+        location: 'Conference Room A',
+        attendees: [
+          { email: 'jane@example.com', responseStatus: 'accepted' },
+          { email: 'sam@example.com', responseStatus: 'needsAction' },
+        ],
+        htmlLink: 'https://www.google.com/calendar/event?eid=a1b2c3d4e5f6',
+      },
+      {
+        eventId: 'f6e5d4c3b2a1',
+        calendarId: 'primary',
+        summary: 'Design review',
+        start: '2026-06-11T18:30:00Z',
+        end: '2026-06-11T19:00:00Z',
+        location: null,
+        attendees: [],
+        htmlLink: 'https://www.google.com/calendar/event?eid=f6e5d4c3b2a1',
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

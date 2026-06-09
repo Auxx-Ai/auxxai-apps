@@ -22,6 +22,20 @@ export const listAirtableBasesTool = defineTool({
       )
       .describe('All bases accessible to the connected Airtable account.'),
   }),
+  exampleOutput: {
+    bases: [
+      {
+        baseId: 'app0123456789AbCd',
+        name: 'CRM',
+        permissionLevel: 'owner',
+      },
+      {
+        baseId: 'app1234567890BcDe',
+        name: 'Product Roadmap',
+        permissionLevel: 'edit',
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

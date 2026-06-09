@@ -29,6 +29,26 @@ export const searchSlackMessagesTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    messages: [
+      {
+        ts: '1717000000.123456',
+        channelId: 'C0123ABCDEF',
+        channelName: 'general',
+        userId: 'U0123ABCDEF',
+        text: 'Reminder: the customer demo is scheduled for tomorrow at 10am.',
+        permalink: 'https://acme.slack.com/archives/C0123ABCDEF/p1717000000123456',
+      },
+      {
+        ts: '1717000789.012345',
+        channelId: 'C0456GHIJKL',
+        channelName: 'support',
+        userId: 'U0456GHIJKL',
+        text: 'Resolved the billing ticket for Jane Cooper.',
+        permalink: 'https://acme.slack.com/archives/C0456GHIJKL/p1717000789012345',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: searchSlackMessagesExecute,
   agent: { toolsetSlug: 'slack.messages.read' },

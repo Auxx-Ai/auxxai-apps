@@ -24,6 +24,25 @@ export const getSlackMessageThreadTool = defineTool({
     parent: threadMessage,
     replies: z.array(threadMessage),
   }),
+  exampleOutput: {
+    parent: {
+      ts: '1717000000.123456',
+      userId: 'U0123ABCDEF',
+      text: 'Hey team, can someone review the latest release notes?',
+    },
+    replies: [
+      {
+        ts: '1717000123.456789',
+        userId: 'U0456GHIJKL',
+        text: 'On it now.',
+      },
+      {
+        ts: '1717000456.789012',
+        userId: 'U0789MNOPQR',
+        text: 'Looks good to me, shipping it.',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: getSlackMessageThreadExecute,
   agent: { toolsetSlug: 'slack.messages.read' },

@@ -19,6 +19,10 @@ export const sendMsTeamsChatMessageTool = defineTool({
     messageId: z.string(),
     createdAt: z.string(),
   }),
+  exampleOutput: {
+    messageId: '1718031200456',
+    createdAt: '2026-06-08T14:33:20Z',
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: sendMsTeamsChatMessageExecute,
   agent: { toolsetSlug: 'ms-teams.messages.write' },

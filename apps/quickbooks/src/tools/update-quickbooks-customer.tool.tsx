@@ -36,6 +36,14 @@ export const updateQuickbooksCustomerTool = defineTool({
     auxxCompanyId: refs.entity('company').nullable(),
     notImportedReason: z.enum(['NOT_IMPORTED']).nullable(),
   }),
+  exampleOutput: {
+    customerId: '58',
+    displayName: 'Acme Corp',
+    syncToken: '4',
+    auxxContactId: null,
+    auxxCompanyId: null,
+    notImportedReason: null,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

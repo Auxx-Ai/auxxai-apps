@@ -18,6 +18,17 @@ export const addStripeCustomerCardTool = defineTool({
       .describe('A Stripe card token (tok_*) obtained via Stripe.js or a test token.'),
   }),
   outputs: z.object({ card: cardOutput }),
+  exampleOutput: {
+    card: {
+      cardId: 'card_1MrabC2eZvKYlo2CqwPpVzwm',
+      brand: 'visa',
+      last4: '4242',
+      expMonth: 12,
+      expYear: 2028,
+      funding: 'credit',
+      isDefault: false,
+    },
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: addStripeCustomerCardExecute,
   agent: { toolsetSlug: 'stripe.customer-cards.write' },

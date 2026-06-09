@@ -21,6 +21,11 @@ export const commentOnGithubIssueTool = defineTool({
     url: z.string(),
     createdAt: z.string(),
   }),
+  exampleOutput: {
+    commentId: '2456789012',
+    url: 'https://github.com/octocat/hello-world/issues/1042#issuecomment-2456789012',
+    createdAt: '2026-06-08T14:22:00Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

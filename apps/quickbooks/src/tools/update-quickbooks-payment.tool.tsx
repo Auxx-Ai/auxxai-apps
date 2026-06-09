@@ -21,6 +21,12 @@ export const updateQuickbooksPaymentTool = defineTool({
     customerId: z.string(),
     syncToken: z.string(),
   }),
+  exampleOutput: {
+    paymentId: '331',
+    totalAmt: 1000,
+    customerId: '58',
+    syncToken: '1',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

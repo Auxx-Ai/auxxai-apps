@@ -40,6 +40,19 @@ export const findStripeCustomerTool = defineTool({
       .nullable()
       .describe('null when no Stripe customer matches the email.'),
   }),
+  exampleOutput: {
+    customer: {
+      stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+      auxxRecordId: null,
+      email: 'jane@example.com',
+      name: 'Jane Cooper',
+      phone: '+14155551234',
+      description: null,
+      delinquent: false,
+      created: '2026-05-12T09:00:00Z',
+      livemode: true,
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

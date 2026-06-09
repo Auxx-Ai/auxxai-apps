@@ -25,6 +25,11 @@ export const commentOnGithubPullRequestTool = defineTool({
     url: z.string(),
     createdAt: z.string(),
   }),
+  exampleOutput: {
+    commentId: '2456790345',
+    url: 'https://github.com/octocat/hello-world/pull/1043#issuecomment-2456790345',
+    createdAt: '2026-06-08T14:25:00Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

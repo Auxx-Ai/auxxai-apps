@@ -28,6 +28,13 @@ export const replyToTelegramMessageTool = defineTool({
     date: z.string(),
     replyToMessageId: z.string(),
   }),
+  exampleOutput: {
+    messageId: '4523',
+    chatId: '123456789',
+    text: 'Happy to help — your refund has been processed.',
+    date: '2026-06-08T14:31:00Z',
+    replyToMessageId: '4519',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

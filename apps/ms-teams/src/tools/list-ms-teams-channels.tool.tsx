@@ -23,6 +23,22 @@ export const listMsTeamsChannelsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    channels: [
+      {
+        id: '19:abc123def456ghi789@thread.tacv2',
+        displayName: 'General',
+        description: 'Company-wide announcements and team updates.',
+        membershipType: 'standard',
+      },
+      {
+        id: '19:def456ghi789jkl012@thread.tacv2',
+        displayName: 'Campaign Launch',
+        description: null,
+        membershipType: 'private',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: listMsTeamsChannelsExecute,
   agent: { toolsetSlug: 'ms-teams.channels.read' },

@@ -44,6 +44,30 @@ export const getStripeSubscriptionTool = defineTool({
   icon: stripeIcon,
   inputs: z.object({ subscriptionId: z.string().describe('Stripe subscription id (sub_*).') }),
   outputs: z.object({ subscription: subscriptionOutput }),
+  exampleOutput: {
+    subscription: {
+      subscriptionId: 'sub_1MrabC2eZvKYlo2C',
+      status: 'active',
+      customer: {
+        stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+        auxxRecordId: null,
+      },
+      items: [
+        {
+          itemId: 'si_Nffr3xQ1aBcDeF',
+          priceId: 'price_1MrabC2eZvKYlo2C',
+          productId: 'prod_NffrFeUfNV2Hib',
+          quantity: 1,
+        },
+      ],
+      currentPeriodStart: '2026-06-01T00:00:00Z',
+      currentPeriodEnd: '2026-07-01T00:00:00Z',
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      trialEnd: null,
+      livemode: true,
+    },
+  },
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: getStripeSubscriptionExecute,
   agent: { toolsetSlug: 'stripe.subscriptions.read' },

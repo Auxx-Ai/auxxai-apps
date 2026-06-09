@@ -39,6 +39,17 @@ export const sendTwilioSmsTool = defineTool({
     errorCode: z.string().nullable(),
     errorMessage: z.string().nullable(),
   }),
+  exampleOutput: {
+    messageSid: 'SM1a2b3c4d5e6f7890abcdef1234567890',
+    status: 'queued',
+    from: '+14155550132',
+    to: '+14155550199',
+    body: 'Your order has shipped and will arrive Friday.',
+    dateCreated: 'Mon, 01 Jun 2026 16:30:00 +0000',
+    price: null,
+    errorCode: null,
+    errorMessage: null,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

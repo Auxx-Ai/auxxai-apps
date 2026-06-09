@@ -1,7 +1,7 @@
 // src/events/connection-added.event.ts
 
 import { createWebhookHandler } from '@auxx/sdk/server'
-import type { Connection } from '@auxx/sdk/server'
+import type { Connection, ConnectionAddedResult } from '@auxx/sdk/server'
 
 /**
  * Called when a Slack OAuth2 connection is added.
@@ -12,7 +12,11 @@ import type { Connection } from '@auxx/sdk/server'
  * page to the URL returned by createWebhookHandler. The handler will respond to Slack's
  * URL verification challenge automatically.
  */
-export default async function connectionAdded({ connection }: { connection: Connection }) {
+export default async function connectionAdded({
+  connection,
+}: {
+  connection: Connection
+}): Promise<ConnectionAddedResult> {
   const webhookHandler = await createWebhookHandler({
     fileName: 'slack-events',
     connectionId: connection.id,
@@ -22,4 +26,16 @@ export default async function connectionAdded({ connection }: { connection: Conn
   // Event Subscriptions → Request URL field. The webhook handler will
   // automatically respond to Slack's url_verification challenge.
   console.log('[slack] Webhook handler created:', webhookHandler.url)
+
+  // Name the connection after the Slack workspace. auth.test works with bot
+  // tokens and returns the team name.
+  try {
+    const auth = await fetch('https://slack.com/api/auth.test', {
+      headers: { Authorization: `Bearer ${connection.value}` },
+    }).then((r) => r.json())
+    if (auth?.ok && auth.team) return { label: auth.team }
+  } catch {
+    // Fall back to the default label.
+  }
+  return {}
 }

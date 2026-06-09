@@ -20,6 +20,15 @@ export const listWhatsappPhoneNumbersTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    phoneNumbers: [
+      {
+        id: '109876543210987',
+        displayPhoneNumber: '+14155550132',
+        verifiedName: 'Acme Support',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: listWhatsappPhoneNumbersExecute,
   agent: {},

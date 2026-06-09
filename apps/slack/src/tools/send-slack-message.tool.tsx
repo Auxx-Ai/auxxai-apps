@@ -34,6 +34,11 @@ export const sendSlackMessageTool = defineTool({
     ts: z.string(),
     permalink: z.string().nullable(),
   }),
+  exampleOutput: {
+    channelId: 'C0123ABCDEF',
+    ts: '1717000000.123456',
+    permalink: 'https://acme.slack.com/archives/C0123ABCDEF/p1717000000123456',
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: sendSlackMessageExecute,
   agent: { toolsetSlug: 'slack.messages.write' },

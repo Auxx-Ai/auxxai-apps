@@ -103,7 +103,18 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
       if (input.getManyUpdatedAtMax) qs.updated_at_max = input.getManyUpdatedAtMax
       if (input.getManyFields?.length) qs.fields = input.getManyFields.join(',')
 
-      const result = await shopifyApi<{ orders: any[] }>(shopDomain, token, '/orders.json', { qs })
+      // Scope to a single customer when supplied. Shopify REST has no
+      // `customer_id` filter on `/orders.json`, so route through the
+      // customer-scoped collection endpoint. Accepts a bare numeric id or a
+      // customer GID (last path segment is the numeric id).
+      const customerId = String(input.getManyCustomerId ?? '')
+        .split('/')
+        .pop()
+      const path = customerId
+        ? `/customers/${encodeURIComponent(customerId)}/orders.json`
+        : '/orders.json'
+
+      const result = await shopifyApi<{ orders: any[] }>(shopDomain, token, path, { qs })
       const orders = (result.orders || []).map(mapOrderResponse)
       return {
         orders,

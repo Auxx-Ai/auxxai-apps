@@ -72,6 +72,24 @@ export const queryNotionDatabaseTool = defineTool({
     ),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    pages: [
+      {
+        pageId: '7f8091a2-b3c4-d5e6-f708-192030405060',
+        url: 'https://www.notion.so/Login-issue-on-mobile-7f8091a2b3c4d5e6f708192030405060',
+        title: 'Login issue on mobile',
+        properties: [
+          { name: 'Name', type: 'title', value: 'Login issue on mobile' },
+          { name: 'Status', type: 'status', value: 'In Progress' },
+          { name: 'Priority', type: 'select', value: 'High' },
+          { name: 'Tags', type: 'multi_select', value: 'bug, mobile' },
+        ],
+        createdTime: '2026-06-06T08:00:00.000Z',
+        lastEditedTime: '2026-06-07T16:45:00.000Z',
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

@@ -28,6 +28,13 @@ export const createQuickbooksPaymentTool = defineTool({
     unappliedAmt: z.number(),
     syncToken: z.string(),
   }),
+  exampleOutput: {
+    paymentId: '332',
+    totalAmt: 1000,
+    customerId: '58',
+    unappliedAmt: 0,
+    syncToken: '0',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

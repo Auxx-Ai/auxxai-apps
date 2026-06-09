@@ -20,6 +20,20 @@ export const listMsTeamsTeamsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    teams: [
+      {
+        id: '2a4b6c8d-1e3f-4a5b-9c7d-0e1f2a3b4c5d',
+        displayName: 'Marketing',
+        description: 'Marketing team workspace for campaigns and content.',
+      },
+      {
+        id: '7f8e9d0c-1b2a-4c3d-8e5f-6a7b8c9d0e1f',
+        displayName: 'Engineering',
+        description: null,
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: listMsTeamsTeamsExecute,
   agent: {},

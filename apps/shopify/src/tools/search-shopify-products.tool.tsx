@@ -38,6 +38,43 @@ export const searchShopifyProductsTool = defineTool({
     ),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    products: [
+      {
+        shopifyProductId: 'gid://shopify/Product/7203948571',
+        title: 'Classic Tee',
+        handle: 'classic-tee',
+        status: 'active',
+        vendor: 'Acme',
+        productType: 'Shirts',
+        tags: ['cotton', 'unisex'],
+        totalInventory: 142,
+        priceRange: {
+          min: { amount: '24.00', currencyCode: 'USD' },
+          max: { amount: '28.00', currencyCode: 'USD' },
+        },
+        variantsCount: 6,
+        featuredImageUrl: 'https://cdn.shopify.com/s/files/1/0001/0001/products/classic-tee.jpg',
+      },
+      {
+        shopifyProductId: 'gid://shopify/Product/7203948572',
+        title: 'Canvas Tote',
+        handle: 'canvas-tote',
+        status: 'active',
+        vendor: 'Acme',
+        productType: 'Bags',
+        tags: ['accessories'],
+        totalInventory: 30,
+        priceRange: {
+          min: { amount: '16.00', currencyCode: 'USD' },
+          max: { amount: '16.00', currencyCode: 'USD' },
+        },
+        variantsCount: 1,
+        featuredImageUrl: null,
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

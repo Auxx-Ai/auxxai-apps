@@ -35,6 +35,34 @@ export const getMsTeamsMessageRepliesTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    parent: {
+      id: '1718030999000',
+      fromUserId: '8b9f4c21-7d3e-4a1b-9f2c-1a2b3c4d5e6f',
+      fromDisplayName: 'Jane Cooper',
+      content: 'Reminder: launch retro is at 3pm today.',
+      contentType: 'text',
+      createdAt: '2026-06-08T13:05:12Z',
+    },
+    replies: [
+      {
+        id: '1718031045123',
+        fromUserId: 'a1b2c3d4-5e6f-4789-90ab-cdef12345678',
+        fromDisplayName: 'Marcus Lee',
+        content: 'Thanks, I will be there.',
+        contentType: 'text',
+        createdAt: '2026-06-08T13:10:45Z',
+      },
+      {
+        id: '1718031200456',
+        fromUserId: 'c3d4e5f6-7a8b-49c0-91d2-3e4f5a6b7c8d',
+        fromDisplayName: 'Priya Nair',
+        content: '<p>Can we push it to 3:30?</p>',
+        contentType: 'html',
+        createdAt: '2026-06-08T13:13:20Z',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 15000 },
   execute: getMsTeamsMessageRepliesExecute,
   agent: { toolsetSlug: 'ms-teams.messages.read' },

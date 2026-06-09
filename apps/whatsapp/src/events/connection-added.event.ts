@@ -1,16 +1,24 @@
 // src/events/connection-added.event.ts
 
-import type { Connection } from '@auxx/sdk/server'
+import type { Connection, ConnectionAddedResult } from '@auxx/sdk/server'
 import {
   createWebhookHandler,
   updateWebhookHandler,
   getOrganizationSettings,
 } from '@auxx/sdk/server'
-import { WHATSAPP_API } from '../blocks/whatsapp/shared/whatsapp-api'
+import { WHATSAPP_API, whatsappApi } from '../blocks/whatsapp/shared/whatsapp-api'
 
-export default async function connectionAdded({ connection }: { connection: Connection }) {
+export default async function connectionAdded({
+  connection,
+}: {
+  connection: Connection
+}): Promise<ConnectionAddedResult> {
   const accessToken = connection.value
-  const settings = await getOrganizationSettings<{ appId?: string; appSecret?: string }>()
+  const settings = await getOrganizationSettings<{
+    appId?: string
+    appSecret?: string
+    businessAccountId?: string
+  }>()
   const appId = settings?.appId
   const appSecret = settings?.appSecret
 
@@ -18,7 +26,7 @@ export default async function connectionAdded({ connection }: { connection: Conn
     console.error(
       '[whatsapp] Missing appId or appSecret in settings. Skipping webhook registration.'
     )
-    return
+    return await whatsappLabel(settings?.businessAccountId, accessToken)
   }
 
   // 1. Create webhook handler with trigger + connection binding
@@ -65,4 +73,33 @@ export default async function connectionAdded({ connection }: { connection: Conn
   })
 
   console.log('[whatsapp] Webhook registered:', handler.url)
+
+  return await whatsappLabel(settings?.businessAccountId, accessToken)
+}
+
+/**
+ * Label the connection with the first WhatsApp business phone number
+ * (e.g. "+1 555-0100 (Acme)"), falling back to the default label.
+ */
+async function whatsappLabel(
+  businessAccountId: string | undefined,
+  accessToken: string
+): Promise<ConnectionAddedResult> {
+  if (!businessAccountId) return {}
+  try {
+    const response = await whatsappApi<{
+      data: { display_phone_number: string; verified_name: string }[]
+    }>(`${businessAccountId}/phone_numbers`, accessToken)
+    const phone = response.data?.[0]
+    if (phone) {
+      return {
+        label: phone.verified_name
+          ? `${phone.display_phone_number} (${phone.verified_name})`
+          : phone.display_phone_number,
+      }
+    }
+  } catch {
+    // Fall back to the default label.
+  }
+  return {}
 }

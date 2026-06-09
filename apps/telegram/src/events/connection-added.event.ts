@@ -1,10 +1,14 @@
 // src/events/connection-added.event.ts
 
-import type { Connection } from '@auxx/sdk/server'
+import type { Connection, ConnectionAddedResult } from '@auxx/sdk/server'
 import { createWebhookHandler, updateWebhookHandler } from '@auxx/sdk/server'
 import { TELEGRAM_API } from '../blocks/telegram/shared/telegram-api'
 
-export default async function connectionAdded({ connection }: { connection: Connection }) {
+export default async function connectionAdded({
+  connection,
+}: {
+  connection: Connection
+}): Promise<ConnectionAddedResult> {
   const botToken = connection.value
 
   // 1. Create webhook handler with trigger + connection binding.
@@ -55,4 +59,18 @@ export default async function connectionAdded({ connection }: { connection: Conn
   })
 
   console.log('[telegram] Webhook registered:', handler.url)
+
+  // Name the connection after the bot (e.g. "@mybot").
+  try {
+    const me = (await fetch(`${TELEGRAM_API}/bot${botToken}/getMe`).then((r) => r.json())) as {
+      ok: boolean
+      result?: { username?: string; first_name?: string }
+    }
+    const username = me?.result?.username
+    if (username) return { label: `@${username}` }
+    if (me?.result?.first_name) return { label: me.result.first_name }
+  } catch {
+    // Fall back to the default label.
+  }
+  return {}
 }

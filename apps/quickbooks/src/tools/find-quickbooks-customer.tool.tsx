@@ -60,6 +60,24 @@ export const findQuickbooksCustomerTool = defineTool({
         'Set when the customer exists in QB but at least one expected Auxx ref is missing.'
       ),
   }),
+  exampleOutput: {
+    found: true,
+    customer: {
+      customerId: '58',
+      displayName: 'Acme Corp',
+      givenName: 'Jane',
+      familyName: 'Cooper',
+      companyName: 'Acme Corp',
+      email: 'jane@acmecorp.com',
+      phone: '+1 415-555-0188',
+      balance: 1240.5,
+      active: true,
+      syncToken: '3',
+      auxxContactId: null,
+      auxxCompanyId: null,
+    },
+    notImportedReason: null,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

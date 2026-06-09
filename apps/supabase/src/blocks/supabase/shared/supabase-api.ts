@@ -6,7 +6,15 @@
  * Don't fork this into src/tools/ — keep the transport single-source.
  */
 
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 const MAX_PAGES = 50
 export const POSTGREST_PAGE_SIZE = 1000
@@ -89,17 +97,18 @@ export async function supabaseApi(
     }
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers,
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-  })
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers,
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Supabase request failed')
+  }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     let errorMessage =
       HTTP_ERROR_MESSAGES[response.status] ??
       `Supabase API error: ${response.status} ${response.statusText}`
@@ -115,6 +124,21 @@ export async function supabaseApi(
       }
     } catch {
       // Use default message
+    }
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(errorMessage)
+    if (response.status === 409) throw new ConflictError(errorMessage)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`Supabase error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(errorMessage)
     }
     throw new Error(errorMessage)
   }

@@ -19,6 +19,14 @@ export const getStripeAccountTool = defineTool({
     livemode: z.boolean().describe('true = live Stripe account, false = test mode.'),
     email: z.string().nullable().describe('Account-level email on file with Stripe.'),
   }),
+  exampleOutput: {
+    accountId: 'acct_1MrabC2eZvKYlo2C',
+    businessName: 'Acme Inc.',
+    country: 'US',
+    defaultCurrency: 'usd',
+    livemode: true,
+    email: 'billing@acme.example.com',
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

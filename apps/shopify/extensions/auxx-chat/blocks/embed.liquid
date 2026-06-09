@@ -1,0 +1,41 @@
+{% comment %}
+  Auxx Chat — app embed block.
+  Reads channel + audience from shop metafields (written by Auxx at
+  install / on rebind), renders nothing when the binding isn't set.
+{% endcomment %}
+
+{% assign auxx_channel = shop.metafields.app.channel_id %}
+{% assign auxx_audience = shop.metafields.app.audience | default: 'visitors' %}
+
+{% if auxx_channel != blank %}
+  <script
+    src="{{ 'boot.js' | asset_url }}"
+    data-shop="{{ shop.permanent_domain }}"
+    data-channel-id="{{ auxx_channel }}"
+    data-audience="{{ auxx_audience }}"
+    data-customer-id="{{ customer.id }}"
+    data-customer-email="{{ customer.email }}"
+    data-placement="{{ block.settings.placement }}"
+    defer
+  ></script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Auxx Chat",
+  "target": "head",
+  "settings": [
+    {
+      "type": "select",
+      "id": "placement",
+      "label": "Placement",
+      "default": "default",
+      "options": [
+        { "value": "default", "label": "Default (channel setting)" },
+        { "value": "bottom-right", "label": "Bottom right" },
+        { "value": "bottom-left", "label": "Bottom left" }
+      ]
+    }
+  ]
+}
+{% endschema %}

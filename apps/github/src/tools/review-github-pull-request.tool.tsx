@@ -32,6 +32,12 @@ export const reviewGithubPullRequestTool = defineTool({
     submittedAt: z.string(),
     url: z.string(),
   }),
+  exampleOutput: {
+    reviewId: 'PRR_kwDOABCD67890',
+    state: 'APPROVED',
+    submittedAt: '2026-06-08T14:40:00Z',
+    url: 'https://github.com/octocat/hello-world/pull/1043#pullrequestreview-1987655000',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

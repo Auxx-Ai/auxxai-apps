@@ -20,6 +20,13 @@ export const getWhatsappMediaUrlTool = defineTool({
     fileSize: z.number().int(),
     sha256: z.string(),
   }),
+  exampleOutput: {
+    mediaId: '1234567890123456',
+    url: 'https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1234567890123456&ext=1717840800&hash=ATtEXAMPLEhashValue',
+    mimeType: 'image/jpeg',
+    fileSize: 184523,
+    sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: getWhatsappMediaUrlExecute,
   agent: { toolsetSlug: 'whatsapp.media.read' },

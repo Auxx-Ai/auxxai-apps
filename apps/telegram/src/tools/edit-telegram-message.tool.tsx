@@ -25,6 +25,12 @@ export const editTelegramMessageTool = defineTool({
     text: z.string(),
     editDate: z.string().describe('ISO 8601 timestamp of the edit.'),
   }),
+  exampleOutput: {
+    messageId: '4521',
+    chatId: '123456789',
+    text: 'Updated: your order has shipped and is on its way.',
+    editDate: '2026-06-08T14:32:00Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

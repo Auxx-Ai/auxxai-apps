@@ -86,6 +86,31 @@ export const searchAirtableRecordsTool = defineTool({
     baseId: z.string(),
     tableId: z.string(),
   }),
+  exampleOutput: {
+    records: [
+      {
+        recordId: 'rec0AbCdEfGh1234',
+        createdTime: '2026-06-01T16:30:00Z',
+        fields: {
+          Name: 'Acme Corp',
+          Status: 'Active',
+          'Annual Revenue': 1250000,
+        },
+      },
+      {
+        recordId: 'rec1BcDeFgHi5678',
+        createdTime: '2026-06-02T09:12:00Z',
+        fields: {
+          Name: 'Globex',
+          Status: 'Active',
+          'Annual Revenue': 480000,
+        },
+      },
+    ],
+    truncated: false,
+    baseId: 'app0123456789AbCd',
+    tableId: 'tbl0123456789AbCd',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

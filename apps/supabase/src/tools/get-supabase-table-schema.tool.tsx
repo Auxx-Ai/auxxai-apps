@@ -53,6 +53,33 @@ export const getSupabaseTableSchemaTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    schema: 'public',
+    table: 'customers',
+    columns: [
+      {
+        name: 'id',
+        type: 'integer',
+        format: 'int8',
+        nullable: false,
+        primary: true,
+      },
+      {
+        name: 'email',
+        type: 'text',
+        format: 'text',
+        nullable: false,
+        primary: false,
+      },
+      {
+        name: 'created_at',
+        type: 'timestamp with time zone',
+        format: 'timestamptz',
+        nullable: false,
+        primary: false,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

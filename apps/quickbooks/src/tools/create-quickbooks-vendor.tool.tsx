@@ -34,6 +34,13 @@ export const createQuickbooksVendorTool = defineTool({
     auxxCompanyId: refs.entity('company').nullable(),
     notImportedReason: z.enum(['NOT_IMPORTED']).nullable(),
   }),
+  exampleOutput: {
+    vendorId: '75',
+    displayName: 'Northwind Logistics',
+    syncToken: '0',
+    auxxCompanyId: null,
+    notImportedReason: null,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

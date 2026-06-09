@@ -36,6 +36,33 @@ export const searchQuickbooksInvoicesTool = defineTool({
     ),
     hasMore: z.boolean(),
   }),
+  exampleOutput: {
+    invoices: [
+      {
+        invoiceId: '243',
+        docNumber: '1037',
+        customerId: '58',
+        customerName: 'Acme Corp',
+        txnDate: '2026-05-20',
+        dueDate: '2026-06-19',
+        totalAmt: 1500,
+        balance: 500,
+        status: 'PartiallyPaid',
+      },
+      {
+        invoiceId: '240',
+        docNumber: '1034',
+        customerId: '58',
+        customerName: 'Acme Corp',
+        txnDate: '2026-04-15',
+        dueDate: '2026-05-15',
+        totalAmt: 900,
+        balance: 0,
+        status: 'Paid',
+      },
+    ],
+    hasMore: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

@@ -21,6 +21,22 @@ export const listMsTeamsChatsTool = defineTool({
       })
     ),
   }),
+  exampleOutput: {
+    chats: [
+      {
+        id: '19:meeting_NjQ2YWJmMTEtN2E4YS00@thread.v2',
+        topic: 'Q3 Launch Planning',
+        chatType: 'group',
+        lastUpdatedAt: '2026-06-08T14:33:20Z',
+      },
+      {
+        id: '19:8b9f4c21-7d3e-4a1b-9f2c-1a2b3c4d5e6f_a1b2c3d4-5e6f-4789-90ab-cdef12345678@unq.gbl.spaces',
+        topic: null,
+        chatType: 'oneOnOne',
+        lastUpdatedAt: '2026-06-07T09:42:00Z',
+      },
+    ],
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: listMsTeamsChatsExecute,
   agent: {},

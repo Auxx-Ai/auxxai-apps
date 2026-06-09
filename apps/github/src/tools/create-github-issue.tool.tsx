@@ -30,6 +30,12 @@ export const createGithubIssueTool = defineTool({
     state: z.literal('open'),
     createdAt: z.string(),
   }),
+  exampleOutput: {
+    issueNumber: 1051,
+    url: 'https://github.com/octocat/hello-world/issues/1051',
+    state: 'open',
+    createdAt: '2026-06-08T14:30:00Z',
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

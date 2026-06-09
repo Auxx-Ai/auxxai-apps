@@ -28,6 +28,22 @@ export const listStripeCouponsTool = defineTool({
     coupons: z.array(couponOutput),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    coupons: [
+      {
+        couponId: 'SUMMER25',
+        name: 'Summer Sale 25% Off',
+        percentOff: 25,
+        amountOff: null,
+        currency: null,
+        duration: 'once',
+        durationInMonths: null,
+        valid: true,
+        timesRedeemed: 42,
+      },
+    ],
+    truncated: false,
+  },
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: listStripeCouponsExecute,
   agent: { toolsetSlug: 'stripe.coupons.read' },

@@ -18,6 +18,24 @@ export const listStripeRefundsForChargeTool = defineTool({
     refunds: z.array(refundOutput),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    refunds: [
+      {
+        refundId: 're_1MrabC2eZvKYlo2C',
+        chargeId: 'ch_3MrabC2eZvKYlo2C1',
+        amount: 2400,
+        currency: 'usd',
+        status: 'succeeded',
+        reason: 'requested_by_customer',
+        customer: {
+          stripeCustomerId: 'cus_Nffr3xQ1aBcDeF',
+          auxxRecordId: null,
+        },
+        created: '2026-06-02T10:15:00Z',
+      },
+    ],
+    truncated: false,
+  },
   config: { requiresConnection: true, timeout: 10000, idempotent: true },
   execute: listStripeRefundsForChargeExecute,
   agent: { toolsetSlug: 'stripe.refunds.read' },

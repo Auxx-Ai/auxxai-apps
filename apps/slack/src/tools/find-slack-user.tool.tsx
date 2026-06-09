@@ -35,6 +35,18 @@ export const findSlackUserTool = defineTool({
       })
       .nullable(),
   }),
+  exampleOutput: {
+    user: {
+      id: 'U0123ABCDEF',
+      name: 'jane.cooper',
+      realName: 'Jane Cooper',
+      email: 'jane@example.com',
+      isBot: false,
+      isDeleted: false,
+      auxxRecordId: null,
+      notImportedReason: null,
+    },
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: findSlackUserExecute,
   agent: { toolsetSlug: 'slack.users.read' },

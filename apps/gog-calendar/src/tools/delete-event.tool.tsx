@@ -17,6 +17,9 @@ export const deleteCalendarEventTool = defineTool({
   outputs: z.object({
     deleted: z.literal(true),
   }),
+  exampleOutput: {
+    deleted: true,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

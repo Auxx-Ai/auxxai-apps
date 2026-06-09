@@ -35,6 +35,21 @@ export const scanCalendarsTool = defineTool({
       .int()
       .describe('Aggregate busy interval count across every calendar scanned.'),
   }),
+  exampleOutput: {
+    perCalendar: [
+      {
+        calendarId: 'primary',
+        busyCount: 3,
+        totalBusyMinutes: 150,
+      },
+      {
+        calendarId: 'team@example.com',
+        busyCount: 1,
+        totalBusyMinutes: 60,
+      },
+    ],
+    totalBusyIntervals: 4,
+  },
   config: {
     requiresConnection: true,
     // Streaming tools have a higher hard cap (120s) per plans/kopilot/apps/README.md §10;

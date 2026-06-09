@@ -25,6 +25,16 @@ export const findSlackChannelTool = defineTool({
       })
       .nullable(),
   }),
+  exampleOutput: {
+    channel: {
+      id: 'C0123ABCDEF',
+      name: 'general',
+      isPrivate: false,
+      memberCount: 42,
+      topic: 'Company-wide announcements and general chatter',
+      purpose: 'This channel is for workspace-wide communication and announcements.',
+    },
+  },
   config: { requiresConnection: true, timeout: 10000 },
   execute: findSlackChannelExecute,
   agent: { toolsetSlug: 'slack.channels.read' },

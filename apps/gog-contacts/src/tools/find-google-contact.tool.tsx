@@ -54,6 +54,24 @@ export const findGoogleContactTool = defineTool({
       .optional()
       .describe('Set when the Google contact exists but has no Auxx contact record.'),
   }),
+  exampleOutput: {
+    found: true,
+    contact: {
+      auxxRecordId: null,
+      resourceName: 'people/c1234567890123456789',
+      contactId: 'c1234567890123456789',
+      givenName: 'Jane',
+      familyName: 'Cooper',
+      displayName: 'Jane Cooper',
+      emails: [{ value: 'jane.cooper@example.com', type: 'work' }],
+      phones: [{ value: '+14155551212', type: 'mobile' }],
+      company: 'Acme Inc',
+      jobTitle: 'Operations Lead',
+      notes: 'Prefers email contact.',
+      birthday: '1990-04-12',
+      groups: [{ resourceName: 'contactGroups/myContacts', name: 'My Contacts' }],
+    },
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

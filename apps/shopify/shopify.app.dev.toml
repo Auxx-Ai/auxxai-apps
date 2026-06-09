@@ -1,0 +1,30 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "a34d5f05c6a335cd31ceebbfa3242f50"
+name = "auxxai-dev"
+application_url = "https://coyote-alert-wildly.ngrok-free.app/api/apps/shopify/install"
+embedded = false
+
+[webhooks]
+api_version = "2026-04"
+
+  [[webhooks.subscriptions]]
+  uri = "https://coyote-alert-wildly.ngrok-free.app/api/shopify/compliance"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_orders,write_orders,read_products,write_products,read_locations,read_customers,read_draft_orders,read_inventory,read_merchant_managed_fulfillment_orders,read_assigned_fulfillment_orders"
+optional_scopes = [ ]
+use_legacy_install_flow = true
+
+[auth]
+redirect_urls = [
+  "https://coyote-alert-wildly.ngrok-free.app/api/apps/shopify/oauth2/callback",
+  "https://coyote-alert-wildly.ngrok-free.app/api/apps/shopify/install/callback",
+]
+
+[app_proxy]
+url = "https://coyote-alert-wildly.ngrok-free.app/api/chat/shopify-proxy"
+subpath = "auxx-chat"
+prefix = "apps"

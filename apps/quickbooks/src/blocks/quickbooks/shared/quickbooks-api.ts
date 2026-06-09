@@ -1,4 +1,12 @@
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 const QUICKBOOKS_PRODUCTION_API = 'https://quickbooks.api.intuit.com'
 const QUICKBOOKS_SANDBOX_API = 'https://sandbox-quickbooks.api.intuit.com'
@@ -35,30 +43,47 @@ export async function quickbooksApi<T = unknown>(
   const { method = 'GET', body, sandbox = false, headers: extraHeaders } = options
   const baseUrl = sandbox ? QUICKBOOKS_SANDBOX_API : QUICKBOOKS_PRODUCTION_API
 
-  const response = await fetch(`${baseUrl}/v3/company/${realmId}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${credential}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...extraHeaders,
-    },
-    ...(body && { body: JSON.stringify(body) }),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}/v3/company/${realmId}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${credential}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...extraHeaders,
+      },
+      ...(body && { body: JSON.stringify(body) }),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'QuickBooks request failed')
+  }
 
   if (response.status === 204) return {} as T
 
   const data = await response.json()
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const fault = data?.Fault?.Error?.[0]
     const faultMsg = fault?.Detail || fault?.Message
     const statusMsg = ERROR_MESSAGES[response.status]
-    throw new Error(faultMsg ?? statusMsg ?? `QuickBooks API error: ${response.status}`)
+    const message = faultMsg ?? statusMsg ?? `QuickBooks API error: ${response.status}`
+
+    if (response.status === 401) throw new ConnectionExpiredError('organization')
+    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 429) {
+      const ra = Number(response.headers.get('Retry-After'))
+      throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+    }
+    if (response.status === 404) throw new NotFoundError(message)
+    if (response.status === 409) throw new ConflictError(message)
+    if (response.status >= 500) {
+      throw new UpstreamServiceError(`QuickBooks error ${response.status}`, response.status)
+    }
+    if (response.status === 400 || response.status === 422) {
+      throw new InvalidInputError(message)
+    }
+    throw new Error(message)
   }
 
   return data as T

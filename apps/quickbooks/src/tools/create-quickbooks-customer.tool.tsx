@@ -35,6 +35,14 @@ export const createQuickbooksCustomerTool = defineTool({
     auxxCompanyId: refs.entity('company').nullable(),
     notImportedReason: z.enum(['NOT_IMPORTED']).nullable(),
   }),
+  exampleOutput: {
+    customerId: '59',
+    displayName: 'Globex LLC',
+    syncToken: '0',
+    auxxContactId: null,
+    auxxCompanyId: null,
+    notImportedReason: null,
+  },
   config: {
     requiresConnection: true,
     timeout: 15000,

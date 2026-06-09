@@ -28,6 +28,10 @@ export const listSupabaseTablesTool = defineTool({
       )
       .describe('All tables in the schema visible to the Service Role key.'),
   }),
+  exampleOutput: {
+    schema: 'public',
+    tables: [{ name: 'customers' }, { name: 'orders' }],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

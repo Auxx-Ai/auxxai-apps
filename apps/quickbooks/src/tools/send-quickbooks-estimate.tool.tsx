@@ -17,6 +17,10 @@ export const sendQuickbooksEstimateTool = defineTool({
     estimateId: z.string(),
     emailStatus: z.enum(['EmailSent']),
   }),
+  exampleOutput: {
+    estimateId: '512',
+    emailStatus: 'EmailSent',
+  },
   config: {
     requiresConnection: true,
     timeout: 20000,

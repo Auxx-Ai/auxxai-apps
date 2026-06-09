@@ -1,4 +1,12 @@
-import { ConnectionExpiredError } from '@auxx/sdk/server'
+import {
+  ConflictError,
+  ConnectionExpiredError,
+  InsufficientPermissionsError,
+  InvalidInputError,
+  NotFoundError,
+  RateLimitError,
+  UpstreamServiceError,
+} from '@auxx/sdk/server'
 
 export const TELEGRAM_API = 'https://api.telegram.org'
 
@@ -36,22 +44,38 @@ export async function telegramApi<T = unknown>(
   botToken: string,
   params?: Record<string, unknown>
 ): Promise<T> {
-  const response = await fetch(`${TELEGRAM_API}/bot${botToken}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    ...(params && { body: JSON.stringify(params) }),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${TELEGRAM_API}/bot${botToken}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      ...(params && { body: JSON.stringify(params) }),
+    })
+  } catch (err) {
+    throw new UpstreamServiceError(err instanceof Error ? err.message : 'Telegram request failed')
+  }
 
   const data = (await response.json()) as TelegramApiResponse<T>
 
   if (!data.ok) {
     const statusCode = data.error_code ?? response.status
-    if (statusCode === 401 || statusCode === 403) {
-      throw new ConnectionExpiredError('organization')
-    }
-
     const message =
       ERROR_MESSAGES[statusCode] ?? `Telegram API error: ${data.description ?? response.statusText}`
+
+    if (statusCode === 401) throw new ConnectionExpiredError('organization')
+    if (statusCode === 403) throw new InsufficientPermissionsError('organization')
+    if (statusCode === 429) {
+      const ra = data.parameters?.retry_after
+      throw new RateLimitError(typeof ra === 'number' ? ra : undefined)
+    }
+    if (statusCode === 404) throw new NotFoundError(message)
+    if (statusCode === 409) throw new ConflictError(message)
+    if (statusCode >= 500) {
+      throw new UpstreamServiceError(`Telegram error ${statusCode}`, statusCode)
+    }
+    if (statusCode === 400 || statusCode === 422) {
+      throw new InvalidInputError(message)
+    }
     throw new Error(message)
   }
 

@@ -23,6 +23,22 @@ export const listMyCalendarsTool = defineTool({
       )
       .describe('All accessible calendars on the connected account.'),
   }),
+  exampleOutput: {
+    calendars: [
+      {
+        calendarId: 'primary',
+        summary: 'Jane Cooper',
+        primary: true,
+        accessRole: 'owner',
+      },
+      {
+        calendarId: 'team@example.com',
+        summary: 'Team Calendar',
+        primary: false,
+        accessRole: 'writer',
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

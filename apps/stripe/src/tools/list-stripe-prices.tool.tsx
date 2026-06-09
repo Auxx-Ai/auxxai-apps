@@ -40,6 +40,23 @@ export const listStripePricesTool = defineTool({
     ),
     truncated: z.boolean(),
   }),
+  exampleOutput: {
+    prices: [
+      {
+        priceId: 'price_1MrabC2eZvKYlo2C',
+        productId: 'prod_NffrFeUfNV2Hib',
+        nickname: 'Pro Monthly',
+        currency: 'usd',
+        unitAmount: 2400,
+        recurring: {
+          interval: 'month',
+          intervalCount: 1,
+        },
+        active: true,
+      },
+    ],
+    truncated: false,
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,

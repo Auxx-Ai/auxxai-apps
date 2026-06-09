@@ -167,6 +167,12 @@ export const orderInputs = {
   }),
 
   // --- Order: Get Many ---
+  getManyCustomerId: Workflow.string({
+    label: 'Customer ID',
+    description:
+      'Scope to a single customer (Shopify customer id). Leave empty for store-wide.',
+    acceptsVariables: true,
+  }),
   getManyStatus: Workflow.select({
     label: 'Status',
     options: [

@@ -43,6 +43,31 @@ export const getNotionDatabaseTool = defineTool({
         'Property schema. The LLM uses this to construct typed properties for create_notion_database_page.'
       ),
   }),
+  exampleOutput: {
+    databaseId: '2a3b4c5d-6e7f-8091-a2b3-c4d5e6f70819',
+    title: 'Customer Support Tickets',
+    url: 'https://www.notion.so/2a3b4c5d6e7f8091a2b3c4d5e6f70819',
+    properties: [
+      {
+        name: 'Name',
+        type: 'title',
+        options: null,
+        writable: true,
+      },
+      {
+        name: 'Status',
+        type: 'status',
+        options: ['Open', 'In Progress', 'Resolved'],
+        writable: true,
+      },
+      {
+        name: 'Created time',
+        type: 'created_time',
+        options: null,
+        writable: false,
+      },
+    ],
+  },
   config: {
     requiresConnection: true,
     timeout: 10000,
