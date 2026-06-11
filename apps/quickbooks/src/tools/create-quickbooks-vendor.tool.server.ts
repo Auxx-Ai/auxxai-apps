@@ -70,7 +70,7 @@ export default async function createQuickbooksVendor(
   })
   const raw = result.Vendor
   const vendorId = String(raw.Id)
-  const auxxCompanyId = await resolveVendorRef(ctx, vendorId)
+  const auxxCompanyId = await resolveVendorRef(vendorId)
 
   return {
     vendorId,

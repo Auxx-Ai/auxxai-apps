@@ -51,7 +51,7 @@ export default async function findQuickbooksCustomer(
 
   const raw = matches[0]
   const mapped = mapCustomerDetail(raw)
-  const refs = await resolveCustomerRefs(ctx, raw)
+  const refs = await resolveCustomerRefs(raw)
 
   return {
     found: true,

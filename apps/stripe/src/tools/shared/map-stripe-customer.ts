@@ -7,7 +7,7 @@
  * mapper keeps the structure typed.
  *
  * The mapper itself doesn't resolve the contact ref — callers are
- * expected to merge `auxxRecordId` from `resolveContactRef(ctx, id)`.
+ * expected to merge `auxxRecordId` from `resolveContactRef(id)`.
  * Keeping the ref-resolve out of the mapper means list-shaped tools
  * can resolve refs in one pass over the page (or skip it entirely
  * when the input pins one customer already).

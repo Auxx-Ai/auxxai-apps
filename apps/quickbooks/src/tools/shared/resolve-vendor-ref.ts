@@ -7,21 +7,17 @@
  *
  * See plans/kopilot/apps/quickbooks-overhaul.md §6.
  */
-import type { ToolExecuteContext } from '@auxx/sdk/tools'
+import { findByIntegrationId } from '@auxx/sdk/server'
 
 const SOURCE = 'quickbooks'
 
 export async function resolveVendorRef(
-  ctx: ToolExecuteContext | undefined,
   vendorId: string | null | undefined
 ): Promise<string | null> {
-  if (!ctx || !vendorId) return null
-
-  const entities = ctx.entities as ToolExecuteContext['entities'] | undefined
-  if (!entities || typeof entities.findByIntegrationId !== 'function') return null
+  if (!vendorId) return null
 
   try {
-    const hit = await entities.findByIntegrationId({
+    const hit = await findByIntegrationId({
       kind: 'company',
       source: SOURCE,
       externalId: vendorId,

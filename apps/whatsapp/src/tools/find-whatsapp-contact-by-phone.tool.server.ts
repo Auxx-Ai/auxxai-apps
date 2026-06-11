@@ -19,7 +19,7 @@ export default async function findWhatsappContactByPhone(
   ctx: ToolExecuteContext
 ): Promise<FindWhatsappContactByPhoneOutput> {
   const normalized = normalizePhone(input.phone)
-  const recordId = normalized ? await resolveContactRefByPhone(ctx, normalized) : null
+  const recordId = normalized ? await resolveContactRefByPhone(normalized) : null
   return {
     normalizedPhone: normalized,
     auxxRecordId: recordId,

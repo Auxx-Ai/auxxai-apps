@@ -29,7 +29,7 @@ export default async function getQuickbooksVendor(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await quickbooksApi<any>(realmId, `/vendor/${id}`, credential, { sandbox })
   const mapped = mapVendorDetail(result.Vendor)
-  const auxxCompanyId = await resolveVendorRef(ctx, mapped.vendorId)
+  const auxxCompanyId = await resolveVendorRef(mapped.vendorId)
 
   return {
     ...mapped,

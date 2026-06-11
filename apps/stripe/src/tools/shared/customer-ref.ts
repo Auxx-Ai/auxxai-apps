@@ -39,7 +39,7 @@ export async function buildCustomerRef(
   if (!stripeCustomerId) {
     return { stripeCustomerId: null, auxxRecordId: null }
   }
-  const auxxRecordId = await resolveContactRef(ctx, stripeCustomerId)
+  const auxxRecordId = await resolveContactRef(stripeCustomerId)
   return {
     stripeCustomerId,
     auxxRecordId,

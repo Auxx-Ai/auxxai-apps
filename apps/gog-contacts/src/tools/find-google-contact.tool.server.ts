@@ -76,7 +76,7 @@ export default async function findGoogleContact(
   if (!match) return { found: false, contact: null }
 
   const mapped = mapContactForTool(match)
-  const auxxRecordId = await resolveContactRef(ctx, mapped.resourceName)
+  const auxxRecordId = await resolveContactRef(mapped.resourceName)
 
   return {
     found: true,

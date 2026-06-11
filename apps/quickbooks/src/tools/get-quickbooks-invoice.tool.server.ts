@@ -41,7 +41,7 @@ export default async function getQuickbooksInvoice(
     credential,
     { sandbox }
   )
-  const refsResolved = await resolveCustomerRefs(ctx, customerResult.Customer)
+  const refsResolved = await resolveCustomerRefs(customerResult.Customer)
 
   return {
     ...mapped,

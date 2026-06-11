@@ -45,7 +45,7 @@ export default async function findQuickbooksVendor(
 
   const raw = matches[0]
   const mapped = mapVendorDetail(raw)
-  const auxxCompanyId = await resolveVendorRef(ctx, mapped.vendorId)
+  const auxxCompanyId = await resolveVendorRef(mapped.vendorId)
 
   return {
     found: true,

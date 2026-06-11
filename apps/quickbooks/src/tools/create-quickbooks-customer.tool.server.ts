@@ -68,7 +68,7 @@ export default async function createQuickbooksCustomer(
     sandbox,
   })
   const raw = result.Customer
-  const refsResolved = await resolveCustomerRefs(ctx, raw)
+  const refsResolved = await resolveCustomerRefs(raw)
 
   return {
     customerId: String(raw.Id),

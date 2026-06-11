@@ -44,7 +44,7 @@ export default async function searchQuickbooksVendors(
   const vendors = await Promise.all(
     trimmed.map(async (v) => {
       const mapped = mapVendorSummary(v)
-      const auxxCompanyId = await resolveVendorRef(ctx, mapped.vendorId)
+      const auxxCompanyId = await resolveVendorRef(mapped.vendorId)
       return { ...mapped, auxxCompanyId }
     })
   )

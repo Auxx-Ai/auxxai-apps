@@ -3,5 +3,12 @@
   "packageManager": "pnpm@10.17.0",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "scripts": {
+    "check-all": "tsx scripts/push-all.ts --check",
+    "push-all": "tsx scripts/push-all.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
   }
 }

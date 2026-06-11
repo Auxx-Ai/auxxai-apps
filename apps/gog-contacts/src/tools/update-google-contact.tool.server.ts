@@ -209,7 +209,7 @@ export default async function updateGoogleContact(
     `${updated.names?.[0]?.givenName ?? ''} ${updated.names?.[0]?.familyName ?? ''}`.trim() ??
     null
 
-  const auxxRecordId = await resolveContactRef(ctx, newResourceName)
+  const auxxRecordId = await resolveContactRef(newResourceName)
 
   return {
     auxxRecordId,

@@ -48,7 +48,7 @@ export default async function sendWhatsappText(
   })
 
   const normalized = normalizePhone(input.recipientPhone)
-  const recordId = await resolveContactRefByPhone(ctx, normalized)
+  const recordId = await resolveContactRefByPhone(normalized)
 
   return {
     messageId: result.messages?.[0]?.id ?? '',

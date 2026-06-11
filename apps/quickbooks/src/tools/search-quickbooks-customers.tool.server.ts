@@ -47,7 +47,7 @@ export default async function searchQuickbooksCustomers(
 
   const customers = await Promise.all(
     trimmed.map(async (c) => {
-      const refs = await resolveCustomerRefs(ctx, c)
+      const refs = await resolveCustomerRefs(c)
       return {
         ...mapCustomerSummary(c),
         auxxContactId: refs.auxxContactId,

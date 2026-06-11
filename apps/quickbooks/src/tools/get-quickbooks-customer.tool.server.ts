@@ -31,7 +31,7 @@ export default async function getQuickbooksCustomer(
   const result = await quickbooksApi<any>(realmId, `/customer/${id}`, credential, { sandbox })
   const raw = result.Customer
   const mapped = mapCustomerDetail(raw)
-  const refs = await resolveCustomerRefs(ctx, raw)
+  const refs = await resolveCustomerRefs(raw)
 
   return {
     ...mapped,
