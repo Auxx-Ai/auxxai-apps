@@ -66,7 +66,7 @@ export default async function searchStripeCustomers(
   const customers = await Promise.all(
     raws.map(async (raw) => {
       const mapped = mapStripeCustomer(raw)
-      const auxxRecordId = await resolveContactRef(ctx, mapped.stripeCustomerId)
+      const auxxRecordId = await resolveContactRef(mapped.stripeCustomerId)
       return {
         stripeCustomerId: mapped.stripeCustomerId,
         auxxRecordId,

@@ -61,7 +61,7 @@ export default async function searchGoogleContacts(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     trimmed.map(async (person: any) => {
       const m = mapContactForTool(person)
-      const auxxRecordId = await resolveContactRef(ctx, m.resourceName)
+      const auxxRecordId = await resolveContactRef(m.resourceName)
       return {
         auxxRecordId,
         resourceName: m.resourceName,

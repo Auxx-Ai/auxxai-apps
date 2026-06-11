@@ -35,7 +35,7 @@ export async function mapUser(
   ctx: ToolExecuteContext | undefined
 ): Promise<MappedMsTeamsUser> {
   const email = pickEmail(u ?? {})
-  const recordId = await resolveContactRefByEmail(ctx, email)
+  const recordId = await resolveContactRefByEmail(email)
   return {
     id: String(u?.id ?? ''),
     displayName: String(u?.displayName ?? ''),

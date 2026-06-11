@@ -66,7 +66,7 @@ export default async function updateStripeCustomer(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = await stripeApi<any>('POST', `/customers/${input.stripeCustomerId}`, apiKey, { body })
   const mapped = mapStripeCustomer(raw)
-  const auxxRecordId = await resolveContactRef(ctx, mapped.stripeCustomerId)
+  const auxxRecordId = await resolveContactRef(mapped.stripeCustomerId)
 
   return {
     customer: {

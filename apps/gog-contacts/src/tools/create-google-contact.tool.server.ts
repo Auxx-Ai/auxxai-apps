@@ -131,7 +131,7 @@ export default async function createGoogleContact(
     `${created.names?.[0]?.givenName ?? ''} ${created.names?.[0]?.familyName ?? ''}`.trim() ??
     null
 
-  const auxxRecordId = await resolveContactRef(ctx, resourceName)
+  const auxxRecordId = await resolveContactRef(resourceName)
 
   return {
     auxxRecordId,

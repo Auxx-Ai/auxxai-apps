@@ -26,7 +26,7 @@ export async function mapUser(
   ctx: ToolExecuteContext | undefined
 ): Promise<MappedSlackUser> {
   const email = u?.profile?.email ? String(u.profile.email) : null
-  const recordId = await resolveContactRefByEmail(ctx, email)
+  const recordId = await resolveContactRefByEmail(email)
   return {
     id: String(u?.id ?? ''),
     name: String(u?.profile?.display_name || u?.real_name || u?.name || ''),

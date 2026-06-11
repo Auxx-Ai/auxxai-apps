@@ -40,7 +40,7 @@ export default async function findStripeCustomer(
   if (!raw) return { customer: null }
 
   const mapped = mapStripeCustomer(raw)
-  const auxxRecordId = await resolveContactRef(ctx, mapped.stripeCustomerId)
+  const auxxRecordId = await resolveContactRef(mapped.stripeCustomerId)
 
   return {
     customer: {

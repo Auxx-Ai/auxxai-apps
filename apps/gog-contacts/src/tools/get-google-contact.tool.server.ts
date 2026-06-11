@@ -29,7 +29,7 @@ export default async function getGoogleContact(
   })
 
   const mapped = mapContactForToolFull(person)
-  const auxxRecordId = await resolveContactRef(ctx, mapped.resourceName)
+  const auxxRecordId = await resolveContactRef(mapped.resourceName)
 
   return {
     ...mapped,

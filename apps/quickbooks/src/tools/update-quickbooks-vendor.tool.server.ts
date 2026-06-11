@@ -87,7 +87,7 @@ export default async function updateQuickbooksVendor(
         sandbox,
       })
       const raw = result.Vendor
-      const auxxCompanyId = await resolveVendorRef(ctx, String(raw.Id))
+      const auxxCompanyId = await resolveVendorRef(String(raw.Id))
       return {
         vendorId: String(raw.Id),
         displayName: raw.DisplayName,
