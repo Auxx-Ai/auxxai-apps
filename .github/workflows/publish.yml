@@ -1,58 +1,22 @@
 name: Publish Apps
 
+# Manual only — publishing is deliberately decoupled from merge to main. Apps
+# may land features ahead of the production SDK/API supporting them, so a human
+# triggers this once the platform side is ready (Actions tab → Run workflow).
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/**"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Test mode (check-all): type-check + bundle every app, no upload/publish'
+        type: boolean
+        default: false
 
+# No changed-path filter: the server skips no-op releases (identical bundles +
+# catalog return the existing deployment unchanged), so publishing every app is
+# cheap. push-all exits non-zero if any app fails → red CI.
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      apps: ${{ steps.filter.outputs.apps }}
-      has_changes: ${{ steps.filter.outputs.has_changes }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - id: filter
-        name: Detect changed apps
-        run: |
-          if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
-            BASE_SHA="HEAD~1"
-          else
-            BASE_SHA="${{ github.event.before }}"
-          fi
-          CHANGED_FILES=$(git diff --name-only $BASE_SHA HEAD)
-
-          VALID_APPS=()
-          for dir in apps/*/; do
-            APP_NAME=$(basename "$dir")
-            if echo "$CHANGED_FILES" | grep -q "^apps/$APP_NAME/"; then
-              VALID_APPS+=("$APP_NAME")
-            fi
-          done
-
-          if [ ${#VALID_APPS[@]} -eq 0 ]; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "apps=[]" >> $GITHUB_OUTPUT
-          else
-            JSON=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R . | jq -s -c .)
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "apps=$JSON" >> $GITHUB_OUTPUT
-            echo "Publishing apps: $JSON"
-          fi
-
   publish:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        app: ${{ fromJson(needs.detect-changes.outputs.apps) }}
-      fail-fast: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -60,30 +24,49 @@ jobs:
         with:
           node-version: 20
 
-      - name: Replace local SDK link with published version
-        working-directory: apps/${{ matrix.app }}
+      # Real publish needs the key; dry-run (check-all) only builds locally, no auth.
+      - name: Require AUXX_API_KEY
+        if: ${{ !inputs.dry_run }}
         run: |
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            if (pkg.dependencies?.['@auxx/sdk']?.startsWith('link:')) {
-              pkg.dependencies['@auxx/sdk'] = 'latest';
-              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-              console.log('Replaced @auxx/sdk local link with latest');
-            }
-          "
+          if [ -z "${{ secrets.AUXX_API_KEY }}" ]; then
+            echo "::error::AUXX_API_KEY secret is not set — mint a developer key in the build portal and add it as a repo secret."
+            exit 1
+          fi
 
-      - name: Install dependencies
-        working-directory: apps/${{ matrix.app }}
+      # Apps pin @auxx/sdk via a local `link:` path that doesn't exist in CI.
+      # Rewrite each to the published `latest` and install per-app deps so
+      # `npx auxx` resolves inside every app dir (push-all/check-all shell out per app).
+      - name: Resolve @auxx/sdk and install app deps
+        run: |
+          for dir in apps/*/; do
+            app=$(basename "$dir")
+            [ "$app" = "__template" ] || [ "$app" = "test" ] && continue
+            [ -f "$dir/package.json" ] || continue
+            node -e "
+              const fs = require('fs');
+              const p = '$dir/package.json';
+              const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+              if (pkg.dependencies?.['@auxx/sdk']?.startsWith('link:')) {
+                pkg.dependencies['@auxx/sdk'] = 'latest';
+                fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+              }
+            "
+            (cd "$dir" && pnpm install --no-frozen-lockfile)
+          done
+
+      # Root deps (tsx, for scripts/push-all.ts)
+      - name: Install root deps
         run: pnpm install --no-frozen-lockfile
 
-      - name: Authenticate with Auxx
-        working-directory: apps/${{ matrix.app }}
-        run: pnpm exec auxx login --token "${{ secrets.AUXX_DEPLOY_TOKEN }}"
-
-      - name: Build and publish
-        working-directory: apps/${{ matrix.app }}
-        run: pnpm exec auxx version create
+      - name: Publish (or test) all apps
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Test mode — running check-all (no upload/publish)"
+            pnpm check-all
+          else
+            pnpm push-all
+          fi
         env:
           AUXX_ENV: production
           AUXX_API_URL: ${{ secrets.AUXX_API_URL }}
+          AUXX_API_KEY: ${{ secrets.AUXX_API_KEY }}
