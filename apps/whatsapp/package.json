@@ -15,7 +15,7 @@
   "dependencies": {
     "@auxx/sdk": "link:/Users/mklooth/Sites/auxxai/packages/sdk",
     "react": "19.1.0",
-    "zod": "~3.23.8"
+    "zod": "^3.25.64"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
