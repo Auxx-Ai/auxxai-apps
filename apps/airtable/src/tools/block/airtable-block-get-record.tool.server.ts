@@ -31,9 +31,7 @@ export default async function airtableBlockGetRecord(input: Input): Promise<Outp
   }
   const recordId = input.recordId?.trim()
   if (!recordId) {
-    throw new BlockValidationError([
-      { field: 'getRecordId', message: 'Record ID is required.' },
-    ])
+    throw new BlockValidationError([{ field: 'getRecordId', message: 'Record ID is required.' }])
   }
 
   const result = await airtableApi('GET', `/${baseId}/${tableId}/${recordId}`, token)

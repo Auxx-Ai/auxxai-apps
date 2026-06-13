@@ -9,7 +9,7 @@ export default async function listCustomers(): Promise<{ value: string; label: s
     connection.metadata.realmId,
     'Customer',
     connection.value,
-    { returnAll: true },
+    { returnAll: true }
   )
 
   return customers.map((c: any) => ({

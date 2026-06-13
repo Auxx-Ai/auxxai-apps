@@ -36,7 +36,10 @@ export async function executeBill(operation: string, input: any): Promise<Record
         const accountId = input.createBillAccountId?.trim()
         if (!accountId)
           throw new BlockValidationError([
-            { field: 'createBillAccountId', message: 'Account is required for account-based expenses.' },
+            {
+              field: 'createBillAccountId',
+              message: 'Account is required for account-based expenses.',
+            },
           ])
         lineDetail.AccountBasedExpenseLineDetail = {
           AccountRef: { value: accountId },
@@ -88,9 +91,7 @@ export async function executeBill(operation: string, input: any): Promise<Record
     case 'delete': {
       const id = input.deleteBillId?.trim()
       if (!id)
-        throw new BlockValidationError([
-          { field: 'deleteBillId', message: 'Bill ID is required.' },
-        ])
+        throw new BlockValidationError([{ field: 'deleteBillId', message: 'Bill ID is required.' }])
 
       const { syncToken } = await getSyncToken(realmId, 'Bill', id, credential, { sandbox })
 
@@ -106,9 +107,7 @@ export async function executeBill(operation: string, input: any): Promise<Record
     case 'get': {
       const id = input.getBillId?.trim()
       if (!id)
-        throw new BlockValidationError([
-          { field: 'getBillId', message: 'Bill ID is required.' },
-        ])
+        throw new BlockValidationError([{ field: 'getBillId', message: 'Bill ID is required.' }])
 
       const result = await quickbooksApi<any>(realmId, `/bill/${id}`, credential, { sandbox })
       const b = result.Bill
@@ -145,9 +144,7 @@ export async function executeBill(operation: string, input: any): Promise<Record
     case 'update': {
       const id = input.updateBillId?.trim()
       if (!id)
-        throw new BlockValidationError([
-          { field: 'updateBillId', message: 'Bill ID is required.' },
-        ])
+        throw new BlockValidationError([{ field: 'updateBillId', message: 'Bill ID is required.' }])
 
       const { syncToken } = await getSyncToken(realmId, 'Bill', id, credential, { sandbox })
 
@@ -171,10 +168,7 @@ export async function executeBill(operation: string, input: any): Promise<Record
           lineDetail.AccountBasedExpenseLineDetail = {
             AccountRef: { value: input.updateBillAccountId },
           }
-        } else if (
-          resolvedDetailType === 'ItemBasedExpenseLineDetail' &&
-          input.updateBillItemId
-        ) {
+        } else if (resolvedDetailType === 'ItemBasedExpenseLineDetail' && input.updateBillItemId) {
           lineDetail.ItemBasedExpenseLineDetail = {
             ItemRef: { value: input.updateBillItemId },
           }

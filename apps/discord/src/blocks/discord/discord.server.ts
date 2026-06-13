@@ -109,7 +109,9 @@ function projectInputsForOp(opKey: string, input: BlockInput): ToolInput {
       return {
         guildId: input.roleAddGuild,
         userId:
-          typeof input.roleAddUserId === 'string' ? input.roleAddUserId.trim() : input.roleAddUserId,
+          typeof input.roleAddUserId === 'string'
+            ? input.roleAddUserId.trim()
+            : input.roleAddUserId,
         roleIds: splitRoleIds(input.roleAddRoles),
       }
     case 'member.roleRemove':

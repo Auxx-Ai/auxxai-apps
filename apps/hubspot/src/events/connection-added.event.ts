@@ -12,10 +12,9 @@ export default async function connectionAdded({
   connection: Connection
 }): Promise<ConnectionAddedResult> {
   try {
-    const info = await fetch(
-      `https://api.hubapi.com/oauth/v1/access-tokens/${connection.value}`,
-      { headers: { Accept: 'application/json' } }
-    ).then((r) => r.json())
+    const info = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${connection.value}`, {
+      headers: { Accept: 'application/json' },
+    }).then((r) => r.json())
     const label = info?.hub_domain || info?.user
     if (label) return { label }
   } catch {

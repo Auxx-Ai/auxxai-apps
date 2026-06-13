@@ -13,7 +13,7 @@ async function getConnectionAndRealm() {
 
 export async function executeTransaction(
   operation: string,
-  input: any,
+  input: any
 ): Promise<Record<string, any>> {
   const { credential, realmId, sandbox } = await getConnectionAndRealm()
 
@@ -53,8 +53,7 @@ export async function executeTransaction(
       const result = await quickbooksApi<any>(realmId, path, credential, { sandbox })
 
       const report = result
-      const reportColumns =
-        report.Columns?.Column?.map((c: any) => c.ColTitle) ?? []
+      const reportColumns = report.Columns?.Column?.map((c: any) => c.ColTitle) ?? []
       const rows = report.Rows?.Row ?? []
 
       const transactions = rows.flatMap((row: any) => {

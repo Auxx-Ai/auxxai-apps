@@ -30,9 +30,7 @@ export default async function airtableBlockDeleteRecord(input: Input): Promise<O
   }
   const recordId = input.recordId?.trim()
   if (!recordId) {
-    throw new BlockValidationError([
-      { field: 'deleteRecordId', message: 'Record ID is required.' },
-    ])
+    throw new BlockValidationError([{ field: 'deleteRecordId', message: 'Record ID is required.' }])
   }
 
   const result = await airtableApi('DELETE', `/${baseId}/${tableId}/${recordId}`, token)

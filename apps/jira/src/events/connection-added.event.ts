@@ -12,10 +12,9 @@ export default async function connectionAdded({
   connection: Connection
 }): Promise<ConnectionAddedResult> {
   try {
-    const resources = await fetch(
-      'https://api.atlassian.com/oauth/token/accessible-resources',
-      { headers: { Authorization: `Bearer ${connection.value}`, Accept: 'application/json' } }
-    ).then((r) => r.json())
+    const resources = await fetch('https://api.atlassian.com/oauth/token/accessible-resources', {
+      headers: { Authorization: `Bearer ${connection.value}`, Accept: 'application/json' },
+    }).then((r) => r.json())
     const site = Array.isArray(resources) ? resources[0] : undefined
     const label = site?.name || site?.url
     if (label) return { label }

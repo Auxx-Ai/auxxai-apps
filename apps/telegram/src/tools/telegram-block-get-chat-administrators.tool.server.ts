@@ -7,8 +7,6 @@ import { getChatAdministratorsInputs, getChatAdministratorsOutputs } from './sch
 type Input = z.infer<typeof getChatAdministratorsInputs>
 type Output = z.infer<typeof getChatAdministratorsOutputs>
 
-export default async function telegramBlockGetChatAdministrators(
-  input: Input,
-): Promise<Output> {
+export default async function telegramBlockGetChatAdministrators(input: Input): Promise<Output> {
   return executeChat('getAdministrators', input) as Promise<Output>
 }

@@ -18,14 +18,13 @@ export type Filter = {
 
 export type MatchType = 'allFilters' | 'anyFilter'
 
-export function buildFilterQuery(
-  filters: Filter[],
-  matchType: MatchType
-): Record<string, string> {
+export function buildFilterQuery(filters: Filter[], matchType: MatchType): Record<string, string> {
   if (!filters || filters.length === 0) return {}
 
   if (matchType === 'anyFilter') {
-    const conditions = filters.map((f) => `${f.column}.${f.condition}.${encodeFilterValue(f.value)}`)
+    const conditions = filters.map(
+      (f) => `${f.column}.${f.condition}.${encodeFilterValue(f.value)}`
+    )
     return { or: `(${conditions.join(',')})` }
   }
 

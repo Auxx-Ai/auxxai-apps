@@ -46,15 +46,7 @@ function getCurrentSchema(data: any): string {
 
 export function SupabasePanel() {
   const api = useWorkflow<typeof supabaseSchema>(supabaseSchema)
-  const {
-    data,
-    updateData,
-    OptionsInput,
-    VarFieldGroup,
-    FieldRow,
-    FieldDivider,
-    Section,
-  } = api
+  const { data, updateData, OptionsInput, VarFieldGroup, FieldRow, FieldDivider, Section } = api
 
   const resource = (data?.resource ?? 'row') as keyof typeof OPERATIONS
   const operation = data?.operation ?? 'create'

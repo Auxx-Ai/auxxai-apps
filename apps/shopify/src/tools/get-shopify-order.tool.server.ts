@@ -10,9 +10,7 @@ interface GetShopifyOrderInput {
   shopifyOrderId: string
 }
 
-export default async function getShopifyOrder(
-  input: GetShopifyOrderInput
-): Promise<OrderDetail> {
+export default async function getShopifyOrder(input: GetShopifyOrderInput): Promise<OrderDetail> {
   const { token, shopDomain } = getShopifyConnection()
   const numericId = gidToNumeric(input.shopifyOrderId)
 
