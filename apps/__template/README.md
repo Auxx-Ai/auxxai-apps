@@ -135,6 +135,21 @@ export const exampleTrigger = defineTrigger({
 The same pattern as tools: `workflow` gates visibility in the workflow
 trigger picker; `agent` (optional) gates fan-out to agents.
 
+## Connections
+
+`getConnection()` from `@auxx/sdk/server` returns the credential bound to the
+invocation. Single-secret and OAuth definitions expose the value directly;
+definitions with connection variables (multi-field secret, e.g. client ID +
+client secret + account number) expose the merged map on `fields`:
+
+```ts
+import { getConnection } from '@auxx/sdk/server'
+
+const connection = getConnection()
+const token = connection.value                                   // single secret / OAuth token
+const { client_id, client_secret } = connection.fields ?? {}     // multi-field secret
+```
+
 ## Toolsets
 
 `src/tools/toolsets.ts` groups agent-exposed tools into admin-approvable
