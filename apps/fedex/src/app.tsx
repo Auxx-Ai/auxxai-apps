@@ -1,14 +1,23 @@
 // src/app.tsx
 
 /**
- * FedEx app registry — 5 tracking tools (one toolset) + one polling trigger.
+ * FedEx app registry.
  *
- * Agent-first tracking on the free Basic Track API: track shipments by number
- * or reference, watch shipments, and fan out status changes to agents/workflows.
- * No workflow action block in phase 1.
+ * Agent surface: 5 tracking tools (one toolset) + the watch-registry polling
+ * trigger (`fedex.shipment-status-changed`).
+ *
+ * Workflow surface: the `fedex` action block (track / track-by-reference /
+ * watch / unwatch, backed by internal block tools) + the workflow-native
+ * `fedex.shipment-tracker` trigger, which is configured from its own panel
+ * rather than the agent watch registry.
  */
 
 import { TextBlock } from '@auxx/sdk/client'
+import { fedexBlock } from './blocks/fedex/fedex.workflow'
+import { fedexBlockTrackTool } from './tools/fedex-block-track.tool'
+import { fedexBlockTrackByReferenceTool } from './tools/fedex-block-track-by-reference.tool'
+import { fedexBlockWatchTool } from './tools/fedex-block-watch.tool'
+import { fedexBlockUnwatchTool } from './tools/fedex-block-unwatch.tool'
 import { listWatchedShipmentsTool } from './tools/list-watched-shipments.tool'
 import { fedexToolsets } from './tools/toolsets'
 import { trackByReferenceTool } from './tools/track-by-reference.tool'
@@ -16,6 +25,7 @@ import { trackShipmentTool } from './tools/track-shipment.tool'
 import { unwatchShipmentTool } from './tools/unwatch-shipment.tool'
 import { watchShipmentTool } from './tools/watch-shipment.tool'
 import { shipmentStatusChangedTrigger } from './triggers/shipment-status-changed/shipment-status-changed.workflow'
+import { shipmentTrackerTrigger } from './triggers/shipment-tracker/shipment-tracker.workflow'
 
 export const app = {
   record: {
@@ -29,15 +39,21 @@ export const app = {
     transcript: { textActions: [] },
   },
   workflow: {
-    blocks: [],
-    triggers: [shipmentStatusChangedTrigger],
+    blocks: [fedexBlock],
+    triggers: [shipmentStatusChangedTrigger, shipmentTrackerTrigger],
   },
   tools: [
+    // Agent tools
     trackShipmentTool,
     trackByReferenceTool,
     watchShipmentTool,
     unwatchShipmentTool,
     listWatchedShipmentsTool,
+    // Internal-only block-dispatch tools (no agent surface)
+    fedexBlockTrackTool,
+    fedexBlockTrackByReferenceTool,
+    fedexBlockWatchTool,
+    fedexBlockUnwatchTool,
   ],
   toolsets: fedexToolsets,
 }
