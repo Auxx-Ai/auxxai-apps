@@ -23,6 +23,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # No root pnpm-lock.yaml (apps manage deps individually); v5 enables
+          # package-manager caching by default, which then errors on the missing lockfile.
+          package-manager-cache: false
 
       # Real publish needs the key; dry-run (check-all) only builds locally, no auth.
       - name: Require AUXX_API_KEY
