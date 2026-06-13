@@ -50,10 +50,7 @@ export const appendNotionBlocksTool = defineTool({
     blockCount: z.number().int(),
   }),
   exampleOutput: {
-    blockIds: [
-      '8091a2b3-c4d5-e6f7-0819-203040506070',
-      '91a2b3c4-d5e6-f708-1920-304050607080',
-    ],
+    blockIds: ['8091a2b3-c4d5-e6f7-0819-203040506070', '91a2b3c4-d5e6-f708-1920-304050607080'],
     blockCount: 2,
   },
   config: {

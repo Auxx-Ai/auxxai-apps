@@ -53,7 +53,8 @@ export async function gcalApiRequest(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    const message = (error as any)?.error?.message || `Google Calendar API error: ${response.status}`
+    const message =
+      (error as any)?.error?.message || `Google Calendar API error: ${response.status}`
 
     if (response.status === 401) throw new ConnectionExpiredError('organization')
     if (response.status === 403) throw new InsufficientPermissionsError('organization')

@@ -77,10 +77,7 @@ function projectInputsForOp(key: string, input: Record<string, any>): Record<str
  * shape for the dispatched op. Only `media.getUrl` needs renaming today
  * (`url` → `mediaUrl`); the rest pass through.
  */
-function projectOutputForOp(
-  key: string,
-  output: Record<string, any>
-): Record<string, unknown> {
+function projectOutputForOp(key: string, output: Record<string, any>): Record<string, unknown> {
   if (key === 'media.getUrl') {
     return {
       mediaId: output.mediaId,

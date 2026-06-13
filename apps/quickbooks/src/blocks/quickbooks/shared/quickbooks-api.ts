@@ -38,7 +38,7 @@ export async function quickbooksApi<T = unknown>(
     body?: Record<string, unknown>
     sandbox?: boolean
     headers?: Record<string, string>
-  } = {},
+  } = {}
 ): Promise<T> {
   const { method = 'GET', body, sandbox = false, headers: extraHeaders } = options
   const baseUrl = sandbox ? QUICKBOOKS_SANDBOX_API : QUICKBOOKS_PRODUCTION_API
@@ -98,7 +98,7 @@ export async function quickbooksQuery<T>(
     limit?: number
     returnAll?: boolean
     sandbox?: boolean
-  } = {},
+  } = {}
 ): Promise<T[]> {
   const { where, limit = 50, returnAll = false, sandbox = false } = options
   const items: T[] = []
@@ -110,7 +110,7 @@ export async function quickbooksQuery<T>(
     realmId,
     `/query?query=${encodeURIComponent(countQuery)}`,
     credential,
-    { sandbox },
+    { sandbox }
   )
   const totalCount = countResult?.QueryResponse?.totalCount ?? 0
   if (totalCount === 0) return []
@@ -122,7 +122,7 @@ export async function quickbooksQuery<T>(
       realmId,
       `/query?query=${encodeURIComponent(query)}`,
       credential,
-      { sandbox },
+      { sandbox }
     )
 
     const batch = result?.QueryResponse?.[resource] ?? []
@@ -142,13 +142,13 @@ export async function getSyncToken(
   resource: string,
   id: string,
   credential: string,
-  options: { sandbox?: boolean } = {},
+  options: { sandbox?: boolean } = {}
 ): Promise<{ syncToken: string; entity: Record<string, any> }> {
   const result = await quickbooksApi<any>(
     realmId,
     `/${resource.toLowerCase()}/${id}`,
     credential,
-    options,
+    options
   )
   const entity = result[resource]
   return { syncToken: entity.SyncToken, entity }

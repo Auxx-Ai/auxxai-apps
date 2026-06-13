@@ -11,8 +11,7 @@ import googleSheetsBlockDeleteRowsOrColumnsExecute from './gog-sheets-block-dele
 export const googleSheetsBlockDeleteRowsOrColumnsTool = defineTool({
   id: 'gog_sheets_block_delete_rows_or_columns',
   name: 'Google Sheets: delete rows or columns (block)',
-  description:
-    'Internal — backs the Google Sheets block sheet.deleteRowsOrColumns operation.',
+  description: 'Internal — backs the Google Sheets block sheet.deleteRowsOrColumns operation.',
   icon: googleSheetsIcon,
   inputs: z.record(z.string(), z.unknown()),
   outputs: z.record(z.string(), z.unknown()),

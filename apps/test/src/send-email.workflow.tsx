@@ -111,9 +111,7 @@ function SendEmailNode() {
       <WorkflowNodeRow label="Send Email" />
 
       {data.to && (
-        <WorkflowNodeText className="text-xs text-muted-foreground">
-          To: {data.to}
-        </WorkflowNodeText>
+        <WorkflowNodeText className="text-xs text-muted-foreground">To: {data.to}</WorkflowNodeText>
       )}
 
       {data.subject && (
@@ -143,7 +141,8 @@ function SendEmailNode() {
  * Uses the useWorkflow hook to get type-safe, pre-bound input components.
  */
 function SendEmailPanel() {
-  const { StringInput, SelectInput, BooleanInput, Section } = useWorkflow<typeof sendEmailSchema>(sendEmailSchema)
+  const { StringInput, SelectInput, BooleanInput, Section } =
+    useWorkflow<typeof sendEmailSchema>(sendEmailSchema)
 
   return (
     <WorkflowPanel>

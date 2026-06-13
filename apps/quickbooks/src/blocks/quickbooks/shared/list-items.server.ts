@@ -5,12 +5,9 @@ export default async function listItems(): Promise<{ value: string; label: strin
   const connection = getOrganizationConnection()
   if (!connection?.value || !connection?.metadata?.realmId) return []
 
-  const items = await quickbooksQuery<any>(
-    connection.metadata.realmId,
-    'Item',
-    connection.value,
-    { returnAll: true },
-  )
+  const items = await quickbooksQuery<any>(connection.metadata.realmId, 'Item', connection.value, {
+    returnAll: true,
+  })
 
   return items.map((item: any) => ({
     value: item.Id,

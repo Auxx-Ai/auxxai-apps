@@ -50,11 +50,7 @@ export function EstimatePanel({
               />
             </VarField>
             <VarField>
-              <OptionsInput
-                name={'createEstimateItemId'}
-                options={items}
-                loading={itemsLoading}
-              />
+              <OptionsInput name={'createEstimateItemId'} options={items} loading={itemsLoading} />
             </VarField>
             <VarField>
               <NumberInput name={'createEstimateAmount'} />
@@ -156,11 +152,7 @@ export function EstimatePanel({
               />
             </VarField>
             <VarField>
-              <OptionsInput
-                name={'updateEstimateItemId'}
-                options={items}
-                loading={itemsLoading}
-              />
+              <OptionsInput name={'updateEstimateItemId'} options={items} loading={itemsLoading} />
             </VarField>
             <VarField>
               <NumberInput name={'updateEstimateAmount'} />

@@ -113,7 +113,9 @@ export async function slackApi(
       throw new UpstreamServiceError(`Slack error ${response.status}`, response.status)
     }
     if (response.status === 400 || response.status === 422) {
-      throw new InvalidInputError(`Slack API request failed: ${response.status} ${response.statusText}`)
+      throw new InvalidInputError(
+        `Slack API request failed: ${response.status} ${response.statusText}`
+      )
     }
     throw new Error(`Slack API request failed: ${response.status} ${response.statusText}`)
   }

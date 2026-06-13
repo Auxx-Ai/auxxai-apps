@@ -9,9 +9,9 @@ import { getOrganizationSetting } from '@auxx/sdk/server'
  * Label the connection with the project host when the projectUrl setting is
  * already configured.
  */
-export default async function connectionAdded(
-  _args: { connection: Connection }
-): Promise<ConnectionAddedResult> {
+export default async function connectionAdded(_args: {
+  connection: Connection
+}): Promise<ConnectionAddedResult> {
   try {
     const projectUrl = await getOrganizationSetting<string>('projectUrl')
     if (projectUrl) {

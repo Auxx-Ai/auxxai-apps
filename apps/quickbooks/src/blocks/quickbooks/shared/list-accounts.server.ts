@@ -9,7 +9,7 @@ export default async function listAccounts(): Promise<{ value: string; label: st
     connection.metadata.realmId,
     'Account',
     connection.value,
-    { returnAll: true },
+    { returnAll: true }
   )
 
   return accounts.map((a: any) => ({

@@ -34,7 +34,9 @@ export const deleteSupabaseRowsTool = defineTool({
       ),
   }),
   outputs: z.object({
-    affectedCount: z.number().describe('Number of rows deleted (or that would be deleted when dryRun=true).'),
+    affectedCount: z
+      .number()
+      .describe('Number of rows deleted (or that would be deleted when dryRun=true).'),
     rows: z
       .array(z.record(z.string(), z.unknown()))
       .describe('The deleted rows (or the rows that would be deleted when dryRun=true).'),

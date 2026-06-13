@@ -21,7 +21,10 @@ function RowTriggerNode() {
   const { data } = useWorkflowNode()
   const triggerOn = Array.isArray(data.triggerOn) ? data.triggerOn : [data.triggerOn]
   const label =
-    triggerOn.map((v: string) => triggerLabels[v]).filter(Boolean).join(' & ') || 'Sheets Trigger'
+    triggerOn
+      .map((v: string) => triggerLabels[v])
+      .filter(Boolean)
+      .join(' & ') || 'Sheets Trigger'
 
   return (
     <WorkflowNode>

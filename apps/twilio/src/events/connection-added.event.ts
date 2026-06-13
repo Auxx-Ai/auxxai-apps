@@ -7,9 +7,9 @@ import { getOrganizationSettings } from '@auxx/sdk/server'
  * Twilio auth tokens don't require webhook registration. Label the connection
  * with the configured Account SID so it's recognizable in the list.
  */
-export default async function connectionAdded(
-  _args: { connection: Connection }
-): Promise<ConnectionAddedResult> {
+export default async function connectionAdded(_args: {
+  connection: Connection
+}): Promise<ConnectionAddedResult> {
   try {
     const settings = await getOrganizationSettings<{ accountSid?: string }>()
     const accountSid = settings?.accountSid?.trim()

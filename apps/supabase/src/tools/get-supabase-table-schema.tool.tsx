@@ -11,13 +11,8 @@ export const getSupabaseTableSchemaTool = defineTool({
     'Inspect the columns of a Supabase table. Use this before search/find/insert to learn column names, types, and which columns are required. Reads from the PostgREST OpenAPI spec.',
   icon: supabaseIcon,
   inputs: z.object({
-    table: z
-      .string()
-      .describe('Table name (e.g. "orders"). Use list_supabase_tables if unknown.'),
-    schema: z
-      .string()
-      .optional()
-      .describe('Postgres schema name. Defaults to "public".'),
+    table: z.string().describe('Table name (e.g. "orders"). Use list_supabase_tables if unknown.'),
+    schema: z.string().optional().describe('Postgres schema name. Defaults to "public".'),
   }),
   outputs: z.object({
     schema: z.string(),
@@ -26,25 +21,17 @@ export const getSupabaseTableSchemaTool = defineTool({
       z.object({
         name: z
           .string()
-          .describe(
-            'Column name (this is what the LLM uses in filter columns and insert keys).'
-          ),
+          .describe('Column name (this is what the LLM uses in filter columns and insert keys).'),
         type: z
           .string()
-          .describe(
-            'Postgres type — integer, text, timestamp with time zone, jsonb, etc.'
-          ),
+          .describe('Postgres type — integer, text, timestamp with time zone, jsonb, etc.'),
         format: z
           .string()
           .optional()
-          .describe(
-            'PostgREST-reported format. Disambiguates e.g. int8 vs int4 within "integer".'
-          ),
+          .describe('PostgREST-reported format. Disambiguates e.g. int8 vs int4 within "integer".'),
         nullable: z
           .boolean()
-          .describe(
-            'True if the column accepts NULL. Required columns must be set on insert.'
-          ),
+          .describe('True if the column accepts NULL. Required columns must be set on insert.'),
         primary: z
           .boolean()
           .describe(

@@ -9,7 +9,10 @@
  * The projectUrl lives in org settings (per the overhaul plan §8 Q1).
  */
 import { getConnection, getOrganizationSetting } from '@auxx/sdk/server'
-import { throwConnectionNotFound, throwProjectUrlNotSet } from '../../blocks/supabase/shared/supabase-api'
+import {
+  throwConnectionNotFound,
+  throwProjectUrlNotSet,
+} from '../../blocks/supabase/shared/supabase-api'
 
 export interface SupabaseAuth {
   serviceRoleKey: string

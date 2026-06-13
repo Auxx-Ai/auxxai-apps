@@ -1,6 +1,10 @@
 import { getOrganizationConnection, getOrganizationSettings } from '@auxx/sdk/server'
 import { BlockValidationError } from '@auxx/sdk/shared'
-import { quickbooksApi, quickbooksQuery, throwConnectionNotFound } from '../../shared/quickbooks-api'
+import {
+  quickbooksApi,
+  quickbooksQuery,
+  throwConnectionNotFound,
+} from '../../shared/quickbooks-api'
 
 async function getConnectionAndRealm() {
   const connection = getOrganizationConnection()
@@ -12,10 +16,7 @@ async function getConnectionAndRealm() {
   return { credential: connection.value, realmId, sandbox }
 }
 
-export async function executePurchase(
-  operation: string,
-  input: any,
-): Promise<Record<string, any>> {
+export async function executePurchase(operation: string, input: any): Promise<Record<string, any>> {
   const { credential, realmId, sandbox } = await getConnectionAndRealm()
 
   switch (operation) {

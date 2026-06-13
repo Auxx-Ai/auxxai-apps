@@ -62,24 +62,20 @@ export function QuickBooksPanel() {
   const { data: customers, loading: customersLoading } = useQuickBooksData(
     'customers',
     listCustomers,
-    { enabled: needsCustomers },
+    { enabled: needsCustomers }
   )
 
-  const { data: vendors, loading: vendorsLoading } = useQuickBooksData(
-    'vendors',
-    listVendors,
-    { enabled: needsVendors },
-  )
+  const { data: vendors, loading: vendorsLoading } = useQuickBooksData('vendors', listVendors, {
+    enabled: needsVendors,
+  })
 
   const { data: items, loading: itemsLoading } = useQuickBooksData('items', listItems, {
     enabled: needsItems,
   })
 
-  const { data: accounts, loading: accountsLoading } = useQuickBooksData(
-    'accounts',
-    listAccounts,
-    { enabled: needsAccounts },
-  )
+  const { data: accounts, loading: accountsLoading } = useQuickBooksData('accounts', listAccounts, {
+    enabled: needsAccounts,
+  })
 
   return (
     <WorkflowPanel>

@@ -14,7 +14,12 @@
  */
 
 import type { WorkflowBlock } from '@auxx/sdk'
-import { WorkflowNode, WorkflowNodeHandle, WorkflowNodeRow, useWorkflowNode } from '@auxx/sdk/client'
+import {
+  WorkflowNode,
+  WorkflowNodeHandle,
+  WorkflowNodeRow,
+  useWorkflowNode,
+} from '@auxx/sdk/client'
 import icon from '../../assets/icon.png'
 import { TemplatePanel } from './template-panel'
 import { templateSchema } from './template-schema'

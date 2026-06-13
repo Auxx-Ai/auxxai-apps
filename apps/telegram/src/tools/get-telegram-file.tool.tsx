@@ -32,8 +32,7 @@ export const getTelegramFileTool = defineTool({
     fileUniqueId: 'AgADrwADBREAAQ',
     fileSize: 24680,
     filePath: 'documents/file_12.pdf',
-    downloadUrl:
-      'https://api.telegram.org/file/bot123456:ABC-DEF1234ghIkl/documents/file_12.pdf',
+    downloadUrl: 'https://api.telegram.org/file/bot123456:ABC-DEF1234ghIkl/documents/file_12.pdf',
   },
   config: {
     requiresConnection: true,

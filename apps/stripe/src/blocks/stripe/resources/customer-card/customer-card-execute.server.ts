@@ -43,9 +43,7 @@ export async function customerCardGet(input: Record<string, any>): Promise<Recor
   }
 }
 
-export async function customerCardRemove(
-  input: Record<string, any>
-): Promise<Record<string, any>> {
+export async function customerCardRemove(input: Record<string, any>): Promise<Record<string, any>> {
   const apiKey = getApiKey()
   const result = await stripeApi<any>(
     'DELETE',
