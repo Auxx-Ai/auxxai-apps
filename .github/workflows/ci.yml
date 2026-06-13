@@ -11,7 +11,7 @@ jobs:
       apps: ${{ steps.filter.outputs.apps }}
       has_changes: ${{ steps.filter.outputs.has_changes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -25,6 +25,8 @@ jobs:
           VALID_APPS=()
           for dir in apps/*/; do
             APP_NAME=$(basename "$dir")
+            # Skip scaffolding/fixtures — they aren't publishable apps (matches publish.yml).
+            if [ "$APP_NAME" = "__template" ] || [ "$APP_NAME" = "test" ]; then continue; fi
             if echo "$CHANGED_FILES" | grep -q "^apps/$APP_NAME/"; then
               VALID_APPS+=("$APP_NAME")
             fi
@@ -49,11 +51,11 @@ jobs:
         app: ${{ fromJson(needs.detect-changes.outputs.apps) }}
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Replace local SDK link with published version
         working-directory: apps/${{ matrix.app }}
