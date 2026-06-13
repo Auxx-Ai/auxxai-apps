@@ -56,6 +56,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # Apps install deps individually (no root lockfile); v5 caching defaults
+          # to on and would error on the missing pnpm-lock.yaml.
+          package-manager-cache: false
 
       - name: Replace local SDK link with published version
         working-directory: apps/${{ matrix.app }}
