@@ -45,7 +45,8 @@ export const getNotionPageTool = defineTool({
     parentType: 'workspace',
     parentId: null,
     databaseId: null,
-    properties: '{"title":{"id":"title","type":"title","title":[{"plain_text":"Q3 Product Roadmap"}]}}',
+    properties:
+      '{"title":{"id":"title","type":"title","title":[{"plain_text":"Q3 Product Roadmap"}]}}',
     createdTime: '2026-05-12T09:30:00.000Z',
     lastEditedTime: '2026-06-05T14:22:00.000Z',
     archived: false,

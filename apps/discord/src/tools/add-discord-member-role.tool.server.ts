@@ -22,11 +22,9 @@ export default async function addDiscordMemberRole(
 
   for (const roleId of input.roleIds) {
     try {
-      await discordApi(
-        `/guilds/${input.guildId}/members/${input.userId}/roles/${roleId}`,
-        token,
-        { method: 'PUT' }
-      )
+      await discordApi(`/guilds/${input.guildId}/members/${input.userId}/roles/${roleId}`, token, {
+        method: 'PUT',
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.message?.includes('Missing Permissions') || error.message?.includes('permission')) {

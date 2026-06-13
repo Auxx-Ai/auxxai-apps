@@ -69,10 +69,7 @@ export const getShopifyCustomerTool = defineTool({
         country: 'United States',
         zip: '94104',
       },
-      recentOrderIds: [
-        'gid://shopify/Order/5512033210',
-        'gid://shopify/Order/5498871002',
-      ],
+      recentOrderIds: ['gid://shopify/Order/5512033210', 'gid://shopify/Order/5498871002'],
     },
   },
   config: {

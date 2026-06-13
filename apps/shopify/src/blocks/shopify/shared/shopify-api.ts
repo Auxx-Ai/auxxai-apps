@@ -102,7 +102,7 @@ export async function shopifyApi<T = unknown>(
 
     const statusMsg = ERROR_MESSAGES[response.status]
     const message =
-      apiMessage ?? (statusMsg ?? `Shopify API error: ${response.status} ${response.statusText}`)
+      apiMessage ?? statusMsg ?? `Shopify API error: ${response.status} ${response.statusText}`
     throw new Error(message)
   }
 

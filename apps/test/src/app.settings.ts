@@ -148,13 +148,11 @@ export const appSettingsSchema = {
     //   label: 'Theme',
     //   description: 'Color theme preference',
     // }),
-
     // notifications: struct({
     //   email: boolean({ label: 'Email Notifications', default: true }),
     //   desktop: boolean({ label: 'Desktop Notifications', default: true }),
     //   sound: boolean({ label: 'Sound Alerts', default: false }),
     // }),
-
     // // Optional custom signature
     // emailSignature: string({
     //   label: 'Email Signature',

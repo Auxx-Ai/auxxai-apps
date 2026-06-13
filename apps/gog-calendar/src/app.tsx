@@ -57,8 +57,8 @@ export const app = {
 export function App() {
   return (
     <>
-      <TextBlock align='center'>Google Calendar</TextBlock>
-      <TextBlock align='left'>
+      <TextBlock align="center">Google Calendar</TextBlock>
+      <TextBlock align="left">
         Manage Google Calendar events — create, update, delete, check availability, and trigger
         workflows based on calendar activity.
       </TextBlock>

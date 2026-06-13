@@ -33,9 +33,7 @@ export default async function airtableBlockUpdateRecord(input: Input): Promise<O
   }
   const recordId = input.recordId?.trim()
   if (!recordId) {
-    throw new BlockValidationError([
-      { field: 'updateRecordId', message: 'Record ID is required.' },
-    ])
+    throw new BlockValidationError([{ field: 'updateRecordId', message: 'Record ID is required.' }])
   }
 
   const fields = parseFieldsJson(input.fields, 'updateFields')

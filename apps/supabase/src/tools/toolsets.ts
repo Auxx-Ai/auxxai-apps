@@ -17,8 +17,7 @@ export const supabaseToolsets: Toolset[] = [
   {
     id: 'supabase.rows.read',
     name: 'Supabase rows (read)',
-    description:
-      'Discover tables, inspect column schemas, and query rows. No writes.',
+    description: 'Discover tables, inspect column schemas, and query rows. No writes.',
     tools: ['find_supabase_row', 'search_supabase_rows'],
   },
   {

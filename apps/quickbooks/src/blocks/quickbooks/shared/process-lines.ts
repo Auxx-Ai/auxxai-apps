@@ -7,7 +7,7 @@ export function processLineItems(
     accountId?: string
     quantity?: number
   }>,
-  resource: 'bill' | 'estimate' | 'invoice',
+  resource: 'bill' | 'estimate' | 'invoice'
 ): Array<Record<string, any>> {
   return lines.map((line, i) => {
     const base = {

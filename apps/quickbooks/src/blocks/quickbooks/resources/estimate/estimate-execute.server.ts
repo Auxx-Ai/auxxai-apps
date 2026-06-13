@@ -17,10 +17,7 @@ async function getConnectionAndRealm() {
   return { credential: connection.value, realmId, sandbox }
 }
 
-export async function executeEstimate(
-  operation: string,
-  input: any,
-): Promise<Record<string, any>> {
+export async function executeEstimate(operation: string, input: any): Promise<Record<string, any>> {
   const { credential, realmId, sandbox } = await getConnectionAndRealm()
 
   switch (operation) {

@@ -39,7 +39,9 @@ export const updateSupabaseRowsTool = defineTool({
       ),
   }),
   outputs: z.object({
-    affectedCount: z.number().describe('Number of rows updated (or that would be updated when dryRun=true).'),
+    affectedCount: z
+      .number()
+      .describe('Number of rows updated (or that would be updated when dryRun=true).'),
     rows: z
       .array(z.record(z.string(), z.unknown()))
       .describe('The updated rows (or the rows that would be updated when dryRun=true).'),

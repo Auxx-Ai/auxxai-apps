@@ -6,16 +6,21 @@
  */
 
 import { useRef } from 'react'
-import { Forms, Form, FormField, FormSubmit, type FormRef, type InferFormValues } from '@auxx/sdk/client'
+import {
+  Forms,
+  Form,
+  FormField,
+  FormSubmit,
+  type FormRef,
+  type InferFormValues,
+} from '@auxx/sdk/client'
 
 // ============================================================================
 // Example 1: Simple Login Form
 // ============================================================================
 
 const loginFormSchema = {
-  email: Forms.string()
-    .email('Please enter a valid email')
-    .placeholder('you@example.com'),
+  email: Forms.string().email('Please enter a valid email').placeholder('you@example.com'),
 
   password: Forms.string()
     .minLength(8, 'Password must be at least 8 characters')
@@ -45,14 +50,9 @@ export function LoginForm() {
 // ============================================================================
 
 const productConfigSchema = {
-  productName: Forms.string()
-    .minLength(3)
-    .maxLength(100)
-    .placeholder('Enter product name'),
+  productName: Forms.string().minLength(3).maxLength(100).placeholder('Enter product name'),
 
-  price: Forms.number()
-    .positive('Price must be positive')
-    .placeholder('0.00'),
+  price: Forms.number().positive('Price must be positive').placeholder('0.00'),
 
   quantity: Forms.number()
     .integer('Quantity must be a whole number')
@@ -88,34 +88,14 @@ export function ProductConfigForm() {
   }
 
   return (
-    <Form
-      schema={productConfigSchema}
-      ref={formRef}
-      onSubmit={handleSubmit}
-      mode="onChange">
-      <FormField
-        name="productName"
-        label="Product Name"
-        description="The name of your product"
-      />
+    <Form schema={productConfigSchema} ref={formRef} onSubmit={handleSubmit} mode="onChange">
+      <FormField name="productName" label="Product Name" description="The name of your product" />
 
-      <FormField
-        name="price"
-        label="Price (USD)"
-        description="Product price in US dollars"
-      />
+      <FormField name="price" label="Price (USD)" description="Product price in US dollars" />
 
-      <FormField
-        name="quantity"
-        label="Quantity"
-        description="Available quantity in stock"
-      />
+      <FormField name="quantity" label="Quantity" description="Available quantity in stock" />
 
-      <FormField
-        name="category"
-        label="Category"
-        description="Select a product category"
-      />
+      <FormField name="category" label="Category" description="Select a product category" />
 
       <FormField
         name="description"
@@ -123,10 +103,7 @@ export function ProductConfigForm() {
         description="Optional product description"
       />
 
-      <FormField
-        name="inStock"
-        label="Currently in stock"
-      />
+      <FormField name="inStock" label="Currently in stock" />
 
       <FormSubmit loadingText="Saving...">Save Product</FormSubmit>
     </Form>
@@ -195,7 +172,8 @@ export function UserProfileForm() {
       onSubmit={handleSubmit}
       onError={handleError}
       onValidationError={handleValidationError}
-      mode="onBlur">
+      mode="onBlur"
+    >
       <FormField name="firstName" label="First Name" />
       <FormField name="lastName" label="Last Name" />
       <FormField name="email" label="Email Address" />
@@ -216,9 +194,7 @@ const settingsFormSchema = {
     .minLength(20, 'API key must be at least 20 characters')
     .placeholder('Enter your API key'),
 
-  endpoint: Forms.string()
-    .url('Please enter a valid URL')
-    .default('https://api.example.com'),
+  endpoint: Forms.string().url('Please enter a valid URL').default('https://api.example.com'),
 
   timeout: Forms.number()
     .positive('Timeout must be positive')
@@ -260,21 +236,10 @@ export function SettingsForm() {
 
   return (
     <>
-      <Form
-        schema={settingsFormSchema}
-        ref={formRef}
-        onSubmit={handleSubmit}>
-        <FormField
-          name="apiKey"
-          label="API Key"
-          description="Your authentication key"
-        />
+      <Form schema={settingsFormSchema} ref={formRef} onSubmit={handleSubmit}>
+        <FormField name="apiKey" label="API Key" description="Your authentication key" />
 
-        <FormField
-          name="endpoint"
-          label="API Endpoint"
-          description="The base URL for API calls"
-        />
+        <FormField name="endpoint" label="API Endpoint" description="The base URL for API calls" />
 
         <FormField
           name="timeout"
@@ -282,10 +247,7 @@ export function SettingsForm() {
           description="Request timeout in milliseconds"
         />
 
-        <FormField
-          name="enableLogging"
-          label="Enable debug logging"
-        />
+        <FormField name="enableLogging" label="Enable debug logging" />
 
         <FormSubmit>Save Settings</FormSubmit>
       </Form>
@@ -303,13 +265,9 @@ export function SettingsForm() {
 // ============================================================================
 
 const feedbackFormSchema = {
-  name: Forms.string()
-    .minLength(2)
-    .placeholder('Your name'),
+  name: Forms.string().minLength(2).placeholder('Your name'),
 
-  email: Forms.string()
-    .email()
-    .placeholder('your@email.com'),
+  email: Forms.string().email().placeholder('your@email.com'),
 
   rating: Forms.select([
     { value: '5', label: '⭐⭐⭐⭐⭐ Excellent' },
@@ -342,11 +300,7 @@ export function FeedbackForm() {
   }
 
   return (
-    <Form
-      schema={feedbackFormSchema}
-      onSubmit={handleSubmit}
-      onChange={handleChange}
-      mode="onBlur">
+    <Form schema={feedbackFormSchema} onSubmit={handleSubmit} onChange={handleChange} mode="onBlur">
       <FormField name="name" label="Name" />
       <FormField name="email" label="Email" />
       <FormField name="rating" label="How would you rate your experience?" />

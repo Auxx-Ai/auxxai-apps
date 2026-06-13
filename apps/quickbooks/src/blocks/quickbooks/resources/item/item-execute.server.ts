@@ -23,9 +23,7 @@ export async function executeItem(operation: string, input: any): Promise<Record
     case 'get': {
       const id = input.getItemId?.trim()
       if (!id)
-        throw new BlockValidationError([
-          { field: 'getItemId', message: 'Item ID is required.' },
-        ])
+        throw new BlockValidationError([{ field: 'getItemId', message: 'Item ID is required.' }])
 
       const result = await quickbooksApi<any>(realmId, `/item/${id}`, credential, { sandbox })
       const item = result.Item

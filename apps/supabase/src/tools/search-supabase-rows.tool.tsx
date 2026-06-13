@@ -53,9 +53,7 @@ export const searchSupabaseRowsTool = defineTool({
     orderBy: z
       .string()
       .optional()
-      .describe(
-        'Column to order by. Prefix with "-" for descending (e.g. "-created_at").'
-      ),
+      .describe('Column to order by. Prefix with "-" for descending (e.g. "-created_at").'),
   }),
   outputs: z.object({
     rows: z.array(z.record(z.string(), z.unknown())),

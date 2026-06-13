@@ -6,14 +6,7 @@ interface TransactionPanelProps {
 }
 
 export function TransactionPanel({ api }: TransactionPanelProps) {
-  const {
-    StringInput,
-    OptionsInput,
-    VarField,
-    VarFieldGroup,
-    Section,
-    ConditionalRender,
-  } = api
+  const { StringInput, OptionsInput, VarField, VarFieldGroup, Section, ConditionalRender } = api
 
   return (
     <>

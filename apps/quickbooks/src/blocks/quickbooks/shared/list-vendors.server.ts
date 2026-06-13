@@ -9,7 +9,7 @@ export default async function listVendors(): Promise<{ value: string; label: str
     connection.metadata.realmId,
     'Vendor',
     connection.value,
-    { returnAll: true },
+    { returnAll: true }
   )
 
   return vendors.map((v: any) => ({

@@ -45,9 +45,9 @@ export function App() {
     <>
       <TextBlock align="center">Supabase Integration</TextBlock>
       <TextBlock align="left">
-        Connect your Supabase project to read and write table rows directly from Auxx workflows
-        and Kopilot agents. Set your project URL in Settings and paste your Service Role key in
-        the connection dialog.
+        Connect your Supabase project to read and write table rows directly from Auxx workflows and
+        Kopilot agents. Set your project URL in Settings and paste your Service Role key in the
+        connection dialog.
       </TextBlock>
     </>
   )
