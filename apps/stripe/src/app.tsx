@@ -1,6 +1,7 @@
 import { TextBlock } from '@auxx/sdk/client'
 import { stripeBlock } from './blocks/stripe/stripe.workflow'
 import { stripeFields } from './fields'
+import { linkStripeCustomerAction } from './record-actions/link-stripe-customer'
 import { addStripeCustomerCardTool } from './tools/add-stripe-customer-card.tool'
 import { cancelStripeSubscriptionTool } from './tools/cancel-stripe-subscription.tool'
 import { createStripeCouponTool } from './tools/create-stripe-coupon.tool'
@@ -53,7 +54,7 @@ import { updateStripeCustomerTool } from './tools/update-stripe-customer.tool'
 
 export const app = {
   record: {
-    actions: [],
+    actions: [linkStripeCustomerAction],
     bulkActions: [],
     widgets: [],
   },
