@@ -1,5 +1,6 @@
 import { TextBlock } from '@auxx/sdk/client'
 import { stripeBlock } from './blocks/stripe/stripe.workflow'
+import { stripeFields } from './fields'
 import { addStripeCustomerCardTool } from './tools/add-stripe-customer-card.tool'
 import { cancelStripeSubscriptionTool } from './tools/cancel-stripe-subscription.tool'
 import { createStripeCouponTool } from './tools/create-stripe-coupon.tool'
@@ -135,6 +136,7 @@ export const app = {
     tokenCreateTool,
   ],
   toolsets: stripeToolsets,
+  fields: stripeFields,
 }
 
 export function App() {
