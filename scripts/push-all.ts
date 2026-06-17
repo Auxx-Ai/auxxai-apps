@@ -62,10 +62,18 @@ function pushApp(app: string): Promise<PushResult> {
     });
     child.on('close', (code) => {
       const clean = out.replace(ANSI, '');
+      const cleanErr = err.replace(ANSI, '');
       if (code !== 0) {
+        // A deployment already in review isn't a failure — the prior version is
+        // still queued, so there's nothing to publish. Skip instead of failing CI.
+        if (/already in review for this app/.test(clean + cleanErr)) {
+          const created = /Deployment (\S+) created/.exec(clean);
+          resolve({ app, version: created?.[1], outcome: 'skipped', detail: 'already in review' });
+          return;
+        }
         // Keep the full build output — TS/esbuild errors are multi-line boxes;
         // a last-line heuristic just captures box-drawing. Printed in full below.
-        const detail = [clean.trim(), err.replace(ANSI, '').trim()].filter(Boolean).join('\n');
+        const detail = [clean.trim(), cleanErr.trim()].filter(Boolean).join('\n');
         resolve({ app, outcome: 'failed', detail: detail || `exited with code ${code}` });
         return;
       }
@@ -130,8 +138,11 @@ async function main(): Promise<void> {
   const pad = Math.max(...results.map((r) => r.app.length));
   process.stdout.write('\nSummary\n');
   for (const r of results) {
+    const note = r.outcome === 'skipped' && r.detail ? ` — ${r.detail}` : '';
     const label =
-      r.outcome === 'failed' ? 'failed' : `${r.outcome}${r.version ? ` (${r.version})` : ''}`;
+      r.outcome === 'failed'
+        ? 'failed'
+        : `${r.outcome}${r.version ? ` (${r.version})` : ''}${note}`;
     process.stdout.write(`  ${ICON[r.outcome]} ${r.app.padEnd(pad)}  ${label}\n`);
   }
 
