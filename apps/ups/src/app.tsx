@@ -1,20 +1,28 @@
 // src/app.tsx
 
 /**
- * UPS app registry — 4 tracking tools (one toolset) + one polling trigger.
+ * UPS app registry.
  *
- * Agent-first tracking on the free Tracking v1 API: track shipments by number,
- * watch shipments, and fan out status changes to agents/workflows. No workflow
- * action block in phase 1.
+ * Agent surface: 4 tracking tools (one toolset) + the watch-registry polling
+ * trigger (`ups.shipment-status-changed`).
+ *
+ * Workflow surface: the `ups` action block (track / watch / unwatch, backed by
+ * internal block tools) + the workflow-native `ups.shipment-tracker` trigger,
+ * which is configured from its own panel rather than the agent watch registry.
  */
 
 import { TextBlock } from '@auxx/sdk/client'
+import { upsBlock } from './blocks/ups/ups.workflow'
 import { listWatchedShipmentsTool } from './tools/list-watched-shipments.tool'
 import { trackShipmentTool } from './tools/track-shipment.tool'
 import { unwatchShipmentTool } from './tools/unwatch-shipment.tool'
+import { upsBlockTrackTool } from './tools/ups-block-track.tool'
+import { upsBlockWatchTool } from './tools/ups-block-watch.tool'
+import { upsBlockUnwatchTool } from './tools/ups-block-unwatch.tool'
 import { upsToolsets } from './tools/toolsets'
 import { watchShipmentTool } from './tools/watch-shipment.tool'
 import { shipmentStatusChangedTrigger } from './triggers/shipment-status-changed/shipment-status-changed.workflow'
+import { shipmentTrackerTrigger } from './triggers/shipment-tracker/shipment-tracker.workflow'
 
 export const app = {
   record: {
@@ -28,10 +36,20 @@ export const app = {
     transcript: { textActions: [] },
   },
   workflow: {
-    blocks: [],
-    triggers: [shipmentStatusChangedTrigger],
+    blocks: [upsBlock],
+    triggers: [shipmentStatusChangedTrigger, shipmentTrackerTrigger],
   },
-  tools: [trackShipmentTool, watchShipmentTool, unwatchShipmentTool, listWatchedShipmentsTool],
+  tools: [
+    // Agent tools
+    trackShipmentTool,
+    watchShipmentTool,
+    unwatchShipmentTool,
+    listWatchedShipmentsTool,
+    // Internal-only block-dispatch tools (no agent surface)
+    upsBlockTrackTool,
+    upsBlockWatchTool,
+    upsBlockUnwatchTool,
+  ],
   toolsets: upsToolsets,
 }
 
