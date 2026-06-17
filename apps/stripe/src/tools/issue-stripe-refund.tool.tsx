@@ -54,5 +54,24 @@ export const issueStripeRefundTool = defineTool({
     surface: 'ticket-header',
     requiresConfirmation: true,
     confirmationMessage: 'Issue this refund?',
+    inputs: {
+      // Replace the blind `ch_…` text input with a live picker of the contact's
+      // recent charges. Options come from list_stripe_charges_for_customer,
+      // scoped to the contact's stored Stripe customer id. See
+      // plans/actions/09-dynamic-action-inputs.md.
+      chargeId: {
+        kind: 'dynamic-select',
+        dynamicSelect: {
+          optionsFrom: 'list_stripe_charges_for_customer',
+          bindArgsFrom: { stripeCustomerId: 'contact:@app:stripe:customerId' },
+          args: { limit: 20 },
+          itemsPath: 'charges',
+          valuePath: 'chargeId',
+          labelTemplate: '{amount} {currency} · {status}',
+          sublabelTemplate: '{description}',
+          emptyHint: 'No Stripe customer linked to this contact',
+        },
+      },
+    },
   },
 })
