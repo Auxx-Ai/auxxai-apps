@@ -30,7 +30,9 @@ export const githubIssuesConnector = defineDataConnector({
   }),
   // Render `repo` as a searchable dropdown backed by the `github_list_repos` tool,
   // invoked through this connector's own GitHub connection. `fullName` is both the
-  // stored value and the label.
+  // stored value and the label. `allowCustom`: the listed repos are suggestions —
+  // you can also type any `<owner>/<repo>` the token can't list (e.g. a public
+  // repo like `facebook/react`); the server splits the typed full-name on `/`.
   configOptions: {
     repo: {
       kind: 'dynamic-select',
@@ -40,6 +42,7 @@ export const githubIssuesConnector = defineDataConnector({
         valuePath: 'fullName',
         labelTemplate: '{fullName}',
         emptyHint: 'No repositories found for the connected account',
+        allowCustom: true,
       },
     },
   },
