@@ -26,7 +26,12 @@ export const githubIssuesConnector = defineDataConnector({
   // `configOptions` below); the server splits on `/`. Optional — blank falls back
   // to a busy public repo (facebook/react) that pages many times.
   config: z.object({
-    repo: z.string().optional().describe('Repository, as `<owner>/<repo>` (e.g. "facebook/react")'),
+    repo: z
+      .string()
+      .optional()
+      .describe(
+        'Which repository to sync — full name as `<owner>/<repo>`, e.g. `facebook/react`. Pick one of your repos from the list or type any public repo.'
+      ),
   }),
   // Render `repo` as a searchable dropdown backed by the `github_list_repos` tool,
   // invoked through this connector's own GitHub connection. `fullName` is both the
