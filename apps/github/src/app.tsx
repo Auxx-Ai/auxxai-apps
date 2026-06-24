@@ -20,6 +20,7 @@ import { githubIssueCreateTool } from './tools/internal/issue-create.tool'
 import { githubIssueEditTool } from './tools/internal/issue-edit.tool'
 import { githubIssueGetTool } from './tools/internal/issue-get.tool'
 import { githubIssueLockTool } from './tools/internal/issue-lock.tool'
+import { githubListReposTool } from './tools/internal/list-repos.tool'
 import { githubReleaseCreateTool } from './tools/internal/release-create.tool'
 import { githubReleaseDeleteTool } from './tools/internal/release-delete.tool'
 import { githubReleaseGetManyTool } from './tools/internal/release-get-many.tool'
@@ -38,6 +39,7 @@ import { searchGithubPullRequestsTool } from './tools/search-github-pull-request
 import { searchGithubReposTool } from './tools/search-github-repos.tool'
 import { summarizeRecentPrsTool } from './tools/summarize-recent-prs.tool'
 import { githubToolsets } from './tools/toolsets'
+import { githubIssuesConnector } from './github-issues.connector'
 
 export const app = {
   record: {
@@ -54,6 +56,8 @@ export const app = {
     blocks: [githubBlock],
     triggers: [],
   },
+  // Data connectors — sync external records into the entity system.
+  dataConnectors: [githubIssuesConnector],
   tools: [
     // Agent-surface tools (exposed to LLM via toolsets).
     searchGithubReposTool,
@@ -76,6 +80,7 @@ export const app = {
     githubIssueEditTool,
     githubIssueGetTool,
     githubIssueLockTool,
+    githubListReposTool,
     githubFileCreateTool,
     githubFileDeleteTool,
     githubFileEditTool,
