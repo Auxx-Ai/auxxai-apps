@@ -79,7 +79,7 @@ import { searchShopifyProductsTool } from './tools/search-shopify-products.tool'
 import { summarizeRecentOrdersTool } from './tools/summarize-recent-orders.tool'
 import { shopifyToolsets } from './tools/toolsets'
 import { shopifyTrigger } from './triggers/shopify-trigger/shopify-trigger.workflow'
-import { shopifyCustomersConnector } from './shopify-customers.connector'
+import { shopifyConnector } from './shopify.connector'
 import { shopifyFields } from './fields'
 
 export const app = {
@@ -99,8 +99,9 @@ export const app = {
     blocks: [shopifyBlock],
     triggers: [shopifyTrigger],
   },
-  // Data connectors — sync external records into the entity system.
-  dataConnectors: [shopifyCustomersConnector],
+  // Data connectors — sync external records into the entity system. One connector
+  // per app, many streams (customer/order/product); see ./shopify.connector.ts.
+  dataConnectors: [shopifyConnector],
   tools: [
     // Agent-facing tools
     listShopifyStoresTool,
