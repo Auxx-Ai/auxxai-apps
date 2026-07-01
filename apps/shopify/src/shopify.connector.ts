@@ -114,10 +114,12 @@ export const shopifyConnector = defineDataConnector({
         note: { type: 'TEXT', name: 'Note', sourcePath: 'note' },
       },
       // Contributing into the SYSTEM contact def — merge on email, Shopify customer
-      // id stays the primary (external) key. `fieldBindings` pre-map the value fields
-      // (first/last/phone) onto the contact's matching attributes so the user doesn't
-      // hand-map them in the Map step. The Shopify customer id is never bound here —
-      // it rides ConnectorRecord.externalId.
+      // id stays the primary (external) key AND fills the identity: true `customerId`
+      // app field (fields.ts) via `targetAppField`, so the record hub mirrors it into
+      // RecordIdentity too. `connectionAppFields` fills the plain `storeDomain`
+      // attribute from the bound connection's metadata (not the payload).
+      // `fieldBindings` pre-map the remaining value fields (first/last/phone) onto
+      // the contact's matching attributes so the user doesn't hand-map them.
       defaultMappings: [
         {
           rootPath: '',
@@ -126,6 +128,7 @@ export const shopifyConnector = defineDataConnector({
             entityKind: 'contact',
             matchFieldKeys: ['email'],
             fieldBindings: [
+              { sourceFieldKey: 'id', targetAppField: 'customerId' },
               { sourceFieldKey: 'firstName', targetKey: 'first_name' },
               { sourceFieldKey: 'lastName', targetKey: 'last_name' },
               { sourceFieldKey: 'phone', targetKey: 'phone' },
@@ -134,11 +137,12 @@ export const shopifyConnector = defineDataConnector({
               { sourceFieldKey: 'addressCountry', targetKey: 'country' },
               { sourceFieldKey: 'note', targetKey: 'notes' },
             ],
+            connectionAppFields: [{ appFieldKey: 'storeDomain', from: 'shopDomain' }],
           },
         },
       ],
       exampleRecord: {
-        id: 'gid://shopify/Customer/207119551',
+        id: '207119551',
         email: 'jane@example.com',
         first_name: 'Jane',
         last_name: 'Doe',
@@ -317,6 +321,9 @@ export const shopifyConnector = defineDataConnector({
         // (inverse `Orders` on the contact), so each order links to its customer. The
         // contact item is keyed by the embedded `customer.id` (see the `customer.id`
         // field above), matching the `customer` stream's external id so the edge resolves.
+        // Also fills the same identity: true `customerId` app field + `storeDomain` the
+        // `customer` stream does, so an order-only sync (no separate customer fetch) still
+        // mirrors the contact's Shopify identity.
         {
           rootPath: 'customer',
           relationshipFieldKey: 'customer',
@@ -331,6 +338,8 @@ export const shopifyConnector = defineDataConnector({
             mode: 'contributing',
             entityKind: 'contact',
             matchFieldKeys: ['email'],
+            fieldBindings: [{ sourceFieldKey: 'customer.id', targetAppField: 'customerId' }],
+            connectionAppFields: [{ appFieldKey: 'storeDomain', from: 'shopDomain' }],
           },
         },
 

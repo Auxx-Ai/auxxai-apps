@@ -23,6 +23,7 @@ export const shopifyFields = defineFields([
     targetEntity: 'contact',
     scope: 'connection',
     name: 'Shopify customer ID',
+    identity: true,
     capabilities: {
       hidden: true,
       filterable: true,
