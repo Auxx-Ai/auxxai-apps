@@ -105,6 +105,52 @@ async function fetchShopifyPage<Raw extends { updated_at: string }>(
   }
 }
 
+// ── shared projection helpers ────────────────────────────────────────────────
+
+/** A Shopify REST address object (customer default_address / order ship/bill). */
+interface RawAddress {
+  address1?: string | null
+  address2?: string | null
+  city?: string | null
+  province?: string | null
+  zip?: string | null
+  country?: string | null
+}
+
+/**
+ * Shape a Shopify address into the platform's ADDRESS_STRUCT value
+ * (`{ street1, street2, city, state, zipCode, country }`). Returns null when the
+ * order/customer has no address so the field stays empty rather than all-blank.
+ */
+function toAddressStruct(addr: RawAddress | null | undefined) {
+  if (!addr) return null
+  return {
+    street1: addr.address1 ?? '',
+    street2: addr.address2 ?? '',
+    city: addr.city ?? '',
+    state: addr.province ?? '',
+    zipCode: addr.zip ?? '',
+    country: addr.country ?? '',
+  }
+}
+
+/** Split Shopify's comma-separated `tags` string into a TAGS array. */
+function splitTags(tags: string | null | undefined): string[] {
+  if (!tags) return []
+  return tags
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Shopify returns `null` fulfillment_status for an unfulfilled order/line; project
+ * it to the explicit `'unfulfilled'` enum value so the SINGLE_SELECT chip is set.
+ */
+function fulfillmentStatus(raw: string | null | undefined): string {
+  return raw ?? 'unfulfilled'
+}
+
 // ── customer stream ────────────────────────────────────────────────────────────
 
 interface RawCustomer {
@@ -115,8 +161,10 @@ interface RawCustomer {
   phone: string | null
   orders_count: number
   total_spent: string
+  note: string | null
   created_at: string
   updated_at: string
+  default_address: RawAddress | null
 }
 
 /** Project one REST customer into a SOURCE-shaped record (fields keyed by sourcePath). */
@@ -135,7 +183,16 @@ function toCustomerRecord(c: RawCustomer): ConnectorRecord {
       phone: c.phone,
       orders_count: c.orders_count,
       total_spent: c.total_spent,
+      note: c.note,
       created_at: c.created_at,
+      // Flattened default-address scalars — bound onto the contact's city/region/country.
+      default_address: c.default_address
+        ? {
+            city: c.default_address.city ?? null,
+            province: c.default_address.province ?? null,
+            country: c.default_address.country ?? null,
+          }
+        : null,
     },
   }
 }
@@ -143,10 +200,14 @@ function toCustomerRecord(c: RawCustomer): ConnectorRecord {
 // ── order stream ───────────────────────────────────────────────────────────────
 
 interface RawLineItem {
+  id: number | null
   title: string | null
+  variant_title: string | null
   sku: string | null
+  vendor: string | null
   quantity: number | null
   price: string | null
+  fulfillment_status: string | null
   product_id: number | null
 }
 
@@ -154,12 +215,25 @@ interface RawOrder {
   id: number
   name: string | null
   order_number?: number
+  email: string | null
+  currency: string | null
   total_price: string | null
+  subtotal_price: string | null
+  total_tax: string | null
+  total_discounts: string | null
   financial_status: string | null
   fulfillment_status: string | null
+  cancel_reason: string | null
+  tags: string | null
+  note: string | null
   created_at: string
   updated_at: string
+  processed_at: string | null
+  cancelled_at: string | null
+  shipping_address: RawAddress | null
+  billing_address: RawAddress | null
   customer: {
+    id: number | null
     email: string | null
     first_name: string | null
     last_name: string | null
@@ -176,12 +250,28 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
     fields: {
       id: String(o.id),
       name: o.name,
+      email: o.email,
+      currency: o.currency,
       total_price: o.total_price,
+      subtotal_price: o.subtotal_price,
+      total_tax: o.total_tax,
+      total_discounts: o.total_discounts,
       financial_status: o.financial_status,
-      fulfillment_status: o.fulfillment_status,
+      fulfillment_status: fulfillmentStatus(o.fulfillment_status),
+      // Only set on a cancelled order — leave null otherwise (no enum value to write).
+      cancel_reason: o.cancel_reason,
+      tags: splitTags(o.tags),
+      note: o.note,
       created_at: o.created_at,
+      processed_at: o.processed_at,
+      cancelled_at: o.cancelled_at,
+      shipping_address: toAddressStruct(o.shipping_address),
+      billing_address: toAddressStruct(o.billing_address),
       customer: o.customer
         ? {
+            // `id` keys the contributing contact item to the same external id the
+            // `customer` stream emits, so the order→contact `Customer` edge resolves.
+            id: o.customer.id != null ? String(o.customer.id) : null,
             email: o.customer.email,
             first_name: o.customer.first_name,
             last_name: o.customer.last_name,
@@ -191,10 +281,16 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
       // `product_id` is stringified to match the product stream's `externalId` so the
       // line→product reference links.
       line_items: (o.line_items ?? []).map((li) => ({
+        // The line item's own Shopify id — its declared External ID (`lineItems.shopifyId`),
+        // a stable per-line identity that replaces the positional `{orderId}:{index}` fallback.
+        id: li.id != null ? String(li.id) : null,
         title: li.title,
+        variant_title: li.variant_title,
         sku: li.sku,
+        vendor: li.vendor,
         quantity: typeof li.quantity === 'number' ? li.quantity : null,
         price: li.price,
+        fulfillment_status: fulfillmentStatus(li.fulfillment_status),
         product_id: li.product_id != null ? String(li.product_id) : null,
       })),
     },
@@ -206,6 +302,7 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
 interface RawProduct {
   id: number
   title: string | null
+  body_html: string | null
   vendor: string | null
   product_type: string | null
   handle: string | null
@@ -213,6 +310,7 @@ interface RawProduct {
   tags: string | null
   created_at: string
   updated_at: string
+  published_at: string | null
 }
 
 /**
@@ -228,12 +326,15 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
     fields: {
       id: String(p.id),
       title: p.title,
+      body_html: p.body_html,
       vendor: p.vendor,
       product_type: p.product_type,
       handle: p.handle,
       status: p.status,
-      tags: p.tags,
+      tags: splitTags(p.tags),
       created_at: p.created_at,
+      published_at: p.published_at,
+      updated_at: p.updated_at,
     },
   }
 }
