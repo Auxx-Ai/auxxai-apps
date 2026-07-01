@@ -1,8 +1,9 @@
 // src/tools/cancel-shopify-order.tool.server.ts
 
 import { shopifyApi } from '../blocks/shopify/shared/shopify-api'
+import { withOrderId } from '../blocks/shopify/shared/resolve-order'
 import { getShopifyConnection } from './shared/connection'
-import { gidToNumeric, orderGid } from './shared/map-customer'
+import { orderGid } from './shared/map-customer'
 
 interface CancelShopifyOrderInput {
   shopifyOrderId: string
@@ -22,7 +23,6 @@ export default async function cancelShopifyOrder(
   input: CancelShopifyOrderInput
 ): Promise<CancelShopifyOrderOutput> {
   const { token, shopDomain } = getShopifyConnection()
-  const numericId = gidToNumeric(input.shopifyOrderId)
 
   const body: Record<string, unknown> = {
     reason: input.reason ?? 'other',
@@ -31,16 +31,16 @@ export default async function cancelShopifyOrder(
   }
   if (input.staffNote) body.staff_note = input.staffNote
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await shopifyApi<{ order: any }>(
-    shopDomain,
-    token,
-    `/orders/${encodeURIComponent(numericId)}/cancel.json`,
-    { method: 'POST', body }
+  const result = await withOrderId(shopDomain, token, input.shopifyOrderId, (id) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    shopifyApi<{ order: any }>(shopDomain, token, `/orders/${id}/cancel.json`, {
+      method: 'POST',
+      body,
+    })
   )
 
   return {
-    shopifyOrderId: orderGid(result.order?.id ?? numericId),
+    shopifyOrderId: orderGid(result.order?.id ?? input.shopifyOrderId),
     cancelledAt: result.order?.cancelled_at ?? new Date().toISOString(),
     refunded: Boolean(input.refund),
   }

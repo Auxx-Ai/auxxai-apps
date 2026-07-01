@@ -1,8 +1,8 @@
 // src/tools/get-shopify-order.tool.server.ts
 
 import { shopifyApi } from '../blocks/shopify/shared/shopify-api'
+import { withOrderId } from '../blocks/shopify/shared/resolve-order'
 import { getShopifyConnection } from './shared/connection'
-import { gidToNumeric } from './shared/map-customer'
 import { mapOrderDetail, type OrderDetail } from './shared/map-order'
 import { resolveContactRef } from './shared/resolve-contact-ref'
 
@@ -12,13 +12,11 @@ interface GetShopifyOrderInput {
 
 export default async function getShopifyOrder(input: GetShopifyOrderInput): Promise<OrderDetail> {
   const { token, shopDomain } = getShopifyConnection()
-  const numericId = gidToNumeric(input.shopifyOrderId)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await shopifyApi<{ order: any }>(
-    shopDomain,
-    token,
-    `/orders/${encodeURIComponent(numericId)}.json`
+  const result = await withOrderId(shopDomain, token, input.shopifyOrderId, (id) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    shopifyApi<{ order: any }>(shopDomain, token, `/orders/${id}.json`)
   )
   if (!result.order) {
     const err = new Error(`Order ${input.shopifyOrderId} not found.`) as Error & { code: string }

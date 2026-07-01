@@ -2,6 +2,7 @@
 
 import { getOrganizationConnection } from '@auxx/sdk/server'
 import { shopifyApi, throwConnectionNotFound, getShopDomain } from '../../shared/shopify-api'
+import { withOrderId } from '../../shared/resolve-order'
 
 function getConnectionInfo() {
   const connection = getOrganizationConnection()
@@ -17,96 +18,99 @@ export async function executeFulfillment(
   input: any
 ): Promise<Record<string, any>> {
   const { token, shopDomain } = getConnectionInfo()
-  const orderId = input.orderId
 
-  switch (operation) {
-    case 'create': {
-      const fulfillment: any = {}
-      if (input.createLocationId) fulfillment.location_id = Number(input.createLocationId)
-      if (input.createTrackingNumber) fulfillment.tracking_number = input.createTrackingNumber
-      if (input.createTrackingCompany) fulfillment.tracking_company = input.createTrackingCompany
-      if (input.createTrackingUrl) fulfillment.tracking_urls = [input.createTrackingUrl]
-      fulfillment.notify_customer = !!input.createNotifyCustomer
+  // Resolve `input.orderId` (id, GID, or order number) to a real order id once,
+  // then run the requested fulfillment operation against it.
+  return withOrderId(shopDomain, token, input.orderId, async (orderId) => {
+    switch (operation) {
+      case 'create': {
+        const fulfillment: any = {}
+        if (input.createLocationId) fulfillment.location_id = Number(input.createLocationId)
+        if (input.createTrackingNumber) fulfillment.tracking_number = input.createTrackingNumber
+        if (input.createTrackingCompany) fulfillment.tracking_company = input.createTrackingCompany
+        if (input.createTrackingUrl) fulfillment.tracking_urls = [input.createTrackingUrl]
+        fulfillment.notify_customer = !!input.createNotifyCustomer
 
-      if (input.createLineItems?.length) {
-        fulfillment.line_items = input.createLineItems.map((li: any) => ({
-          id: Number(li.id),
-          quantity: li.quantity,
-        }))
+        if (input.createLineItems?.length) {
+          fulfillment.line_items = input.createLineItems.map((li: any) => ({
+            id: Number(li.id),
+            quantity: li.quantity,
+          }))
+        }
+
+        const result = await shopifyApi<{ fulfillment: any }>(
+          shopDomain,
+          token,
+          `/orders/${orderId}/fulfillments.json`,
+          { method: 'POST', body: { fulfillment } }
+        )
+        return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
       }
 
-      const result = await shopifyApi<{ fulfillment: any }>(
-        shopDomain,
-        token,
-        `/orders/${orderId}/fulfillments.json`,
-        { method: 'POST', body: { fulfillment } }
-      )
-      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
-    }
+      case 'update': {
+        const fulfillment: any = {}
+        if (input.updateTrackingNumber) fulfillment.tracking_number = input.updateTrackingNumber
+        if (input.updateTrackingCompany) fulfillment.tracking_company = input.updateTrackingCompany
+        if (input.updateTrackingUrl) fulfillment.tracking_urls = [input.updateTrackingUrl]
+        fulfillment.notify_customer = !!input.updateNotifyCustomer
 
-    case 'update': {
-      const fulfillment: any = {}
-      if (input.updateTrackingNumber) fulfillment.tracking_number = input.updateTrackingNumber
-      if (input.updateTrackingCompany) fulfillment.tracking_company = input.updateTrackingCompany
-      if (input.updateTrackingUrl) fulfillment.tracking_urls = [input.updateTrackingUrl]
-      fulfillment.notify_customer = !!input.updateNotifyCustomer
-
-      const result = await shopifyApi<{ fulfillment: any }>(
-        shopDomain,
-        token,
-        `/orders/${orderId}/fulfillments/${input.updateFulfillmentId}.json`,
-        { method: 'PUT', body: { fulfillment } }
-      )
-      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
-    }
-
-    case 'get': {
-      const qs: Record<string, string> = {}
-      if (input.getFields?.length) qs.fields = input.getFields.join(',')
-
-      const result = await shopifyApi<{ fulfillment: any }>(
-        shopDomain,
-        token,
-        `/orders/${orderId}/fulfillments/${input.getFulfillmentId}.json`,
-        { qs }
-      )
-      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
-    }
-
-    case 'getMany': {
-      const qs: Record<string, string> = {
-        limit: input.getManyLimit || '50',
+        const result = await shopifyApi<{ fulfillment: any }>(
+          shopDomain,
+          token,
+          `/orders/${orderId}/fulfillments/${input.updateFulfillmentId}.json`,
+          { method: 'PUT', body: { fulfillment } }
+        )
+        return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
       }
-      if (input.getManyCreatedAtMin) qs.created_at_min = input.getManyCreatedAtMin
-      if (input.getManyCreatedAtMax) qs.created_at_max = input.getManyCreatedAtMax
-      if (input.getManyFields?.length) qs.fields = input.getManyFields.join(',')
 
-      const result = await shopifyApi<{ fulfillments: any[] }>(
-        shopDomain,
-        token,
-        `/orders/${orderId}/fulfillments.json`,
-        { qs }
-      )
-      const fulfillments = (result.fulfillments || []).map(mapFulfillmentResponse)
-      return {
-        fulfillments,
-        count: fulfillments.length,
+      case 'get': {
+        const qs: Record<string, string> = {}
+        if (input.getFields?.length) qs.fields = input.getFields.join(',')
+
+        const result = await shopifyApi<{ fulfillment: any }>(
+          shopDomain,
+          token,
+          `/orders/${orderId}/fulfillments/${input.getFulfillmentId}.json`,
+          { qs }
+        )
+        return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
       }
-    }
 
-    case 'cancel': {
-      const result = await shopifyApi<{ fulfillment: any }>(
-        shopDomain,
-        token,
-        `/orders/${orderId}/fulfillments/${input.cancelFulfillmentId}/cancel.json`,
-        { method: 'POST' }
-      )
-      return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
-    }
+      case 'getMany': {
+        const qs: Record<string, string> = {
+          limit: input.getManyLimit || '50',
+        }
+        if (input.getManyCreatedAtMin) qs.created_at_min = input.getManyCreatedAtMin
+        if (input.getManyCreatedAtMax) qs.created_at_max = input.getManyCreatedAtMax
+        if (input.getManyFields?.length) qs.fields = input.getManyFields.join(',')
 
-    default:
-      throw new Error(`Unknown fulfillment operation: ${operation}`)
-  }
+        const result = await shopifyApi<{ fulfillments: any[] }>(
+          shopDomain,
+          token,
+          `/orders/${orderId}/fulfillments.json`,
+          { qs }
+        )
+        const fulfillments = (result.fulfillments || []).map(mapFulfillmentResponse)
+        return {
+          fulfillments,
+          count: fulfillments.length,
+        }
+      }
+
+      case 'cancel': {
+        const result = await shopifyApi<{ fulfillment: any }>(
+          shopDomain,
+          token,
+          `/orders/${orderId}/fulfillments/${input.cancelFulfillmentId}/cancel.json`,
+          { method: 'POST' }
+        )
+        return { fulfillment: mapFulfillmentResponse(result.fulfillment) }
+      }
+
+      default:
+        throw new Error(`Unknown fulfillment operation: ${operation}`)
+    }
+  })
 }
 
 function mapFulfillmentResponse(fulfillment: any) {

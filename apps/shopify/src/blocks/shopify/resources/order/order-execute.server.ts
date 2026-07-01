@@ -2,6 +2,7 @@
 
 import { getOrganizationConnection } from '@auxx/sdk/server'
 import { shopifyApi, throwConnectionNotFound, getShopDomain } from '../../shared/shopify-api'
+import { withOrderId } from '../../shared/resolve-order'
 
 function getConnectionInfo() {
   const connection = getOrganizationConnection()
@@ -70,9 +71,9 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
     }
 
     case 'delete': {
-      await shopifyApi(shopDomain, token, `/orders/${input.deleteOrderId}.json`, {
-        method: 'DELETE',
-      })
+      await withOrderId(shopDomain, token, input.deleteOrderId, (id) =>
+        shopifyApi(shopDomain, token, `/orders/${id}.json`, { method: 'DELETE' })
+      )
       return { success: true }
     }
 
@@ -80,11 +81,8 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
       const qs: Record<string, string> = {}
       if (input.getFields?.length) qs.fields = input.getFields.join(',')
 
-      const result = await shopifyApi<{ order: any }>(
-        shopDomain,
-        token,
-        `/orders/${input.getOrderId}.json`,
-        { qs }
+      const result = await withOrderId(shopDomain, token, input.getOrderId, (id) =>
+        shopifyApi<{ order: any }>(shopDomain, token, `/orders/${id}.json`, { qs })
       )
       return { order: mapOrderResponse(result.order) }
     }
@@ -134,11 +132,11 @@ export async function executeOrder(operation: string, input: any): Promise<Recor
       const shipping = buildAddress(input, 'updateShipping')
       if (Object.keys(shipping).length > 0) order.shipping_address = shipping
 
-      const result = await shopifyApi<{ order: any }>(
-        shopDomain,
-        token,
-        `/orders/${input.updateOrderId}.json`,
-        { method: 'PUT', body: { order } }
+      const result = await withOrderId(shopDomain, token, input.updateOrderId, (id) =>
+        shopifyApi<{ order: any }>(shopDomain, token, `/orders/${id}.json`, {
+          method: 'PUT',
+          body: { order },
+        })
       )
       return { order: mapOrderResponse(result.order) }
     }
