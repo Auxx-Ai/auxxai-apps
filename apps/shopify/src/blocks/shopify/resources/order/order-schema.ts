@@ -144,16 +144,16 @@ export const orderInputs = {
 
   // --- Order: Delete ---
   deleteOrderId: Workflow.string({
-    label: 'Order ID',
-    description: 'ID of the order to delete',
+    label: 'Order ID or number',
+    description: 'Order id, order GID, or order number (e.g. 7642175799433 or 1001)',
     required: true,
     acceptsVariables: true,
   }),
 
   // --- Order: Get ---
   getOrderId: Workflow.string({
-    label: 'Order ID',
-    description: 'ID of the order to retrieve',
+    label: 'Order ID or number',
+    description: 'Order id, order GID, or order number (e.g. 7642175799433 or 1001)',
     required: true,
     acceptsVariables: true,
   }),
@@ -253,8 +253,8 @@ export const orderInputs = {
 
   // --- Order: Update ---
   updateOrderId: Workflow.string({
-    label: 'Order ID',
-    description: 'ID of the order to update',
+    label: 'Order ID or number',
+    description: 'Order id, order GID, or order number (e.g. 7642175799433 or 1001)',
     required: true,
     acceptsVariables: true,
   }),
