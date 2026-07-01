@@ -79,6 +79,7 @@ export const githubIssuesConnector = defineDataConnector({
           target: {
             mode: 'owned',
             entity: {
+              key: 'issues',
               apiSlug: 'github_issues',
               singular: 'GitHub Issue',
               plural: 'GitHub Issues',
