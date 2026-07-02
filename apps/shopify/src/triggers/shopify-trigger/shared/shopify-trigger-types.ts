@@ -4,6 +4,22 @@ function decimalToCents(decimal: string | number): number {
   return Math.round(parseFloat(String(decimal)) * 100)
 }
 
+/**
+ * Stable per-delivery identity token for webhook dedup. Most Shopify topics carry a
+ * top-level `id`, but an `inventory_levels/*` payload has NONE
+ * (`{ inventory_item_id, location_id, available, updated_at }`) — so `payload.id`
+ * collapses every delivery to `…-undefined` and dedup breaks. Key those off the
+ * natural composite instead so repeat deliveries dedupe and distinct level changes
+ * stay distinct.
+ */
+export function payloadEventKey(topic: string, payload: Record<string, any>): string {
+  const [resourceType] = topic.split('/')
+  if (resourceType === 'inventory_levels') {
+    return `${payload.inventory_item_id ?? 'x'}-${payload.location_id ?? 'x'}-${payload.updated_at ?? ''}`
+  }
+  return String(payload.id ?? payload.admin_graphql_api_id ?? Date.now())
+}
+
 export function extractTriggerData(
   topic: string,
   shopDomain: string,
@@ -68,7 +84,7 @@ export function extractTriggerData(
   }
 
   return {
-    eventId: `${topic}-${payload.id ?? Date.now()}`,
+    eventId: `${topic}-${payloadEventKey(topic, payload)}`,
     topic,
     shopDomain,
     payload,

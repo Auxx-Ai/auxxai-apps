@@ -1,6 +1,9 @@
 // src/webhooks/shopify-events.webhook.ts
 
-import { extractTriggerData } from '../triggers/shopify-trigger/shared/shopify-trigger-types'
+import {
+  extractTriggerData,
+  payloadEventKey,
+} from '../triggers/shopify-trigger/shared/shopify-trigger-types'
 
 const okResponse = () =>
   new Response(JSON.stringify({ ok: true }), {
@@ -27,7 +30,10 @@ export default async function shopifyEventsWebhook(
 
     if (!triggerData) return okResponse()
 
-    const eventId = `shopify-${topic}-${payload.id ?? Date.now()}`
+    // `payloadEventKey` keys inventory_levels/* off inventory_item_id+location+time
+    // (no `payload.id` there — a bare `payload.id` would collapse every delivery to
+    // `…-undefined` and break dedup).
+    const eventId = `shopify-${topic}-${payloadEventKey(topic, payload)}`
 
     return {
       response: okResponse(),
