@@ -77,6 +77,11 @@ export const shopifyConnector = defineDataConnector({
     'Sync orders, products, and customers from your Shopify store into your CRM — kept up to date automatically.',
   requiresConnection: true,
   iconKey: 'shopping-bag',
+  // Connector-level webhook SIGNAL: deliveries from the app's single Shopify trigger
+  // drive webhook-sync for this connector (one signal per connector; the app
+  // multiplexes all topics through this one triggerId — per-stream
+  // `webhookTrigger.filter` discriminates on `triggerData.topic`).
+  webhookTrigger: { triggerId: 'shopify.shopify-trigger' },
   // No toggles for v1 — still required by defineDataConnector.
   config: z.object({}),
   streams: [
@@ -495,6 +500,16 @@ export const shopifyConnector = defineDataConnector({
     {
       key: 'product',
       displayFieldKey: 'title',
+      // Webhook STEERING: an `inventory_levels/update` delivery carries the changed
+      // inventory_item_id as `resourceId` (extractTriggerData) — the platform debounces
+      // same-item bursts, then re-invokes `execute` with `triggerContext.resourceId` for
+      // a targeted single-product partial fetch (the variants[] fan-out refreshes all
+      // sibling variants' quantities in the same page).
+      webhookTrigger: {
+        filter: { topic: 'inventory_levels/update' },
+        paths: ['resourceId'],
+        debounceMs: 10_000,
+      },
       fields: {
         // The declared External ID: a real "Shopify Product ID" column marked as the
         // record's dedupe/link key (equals ConnectorRecord.externalId, which the order
