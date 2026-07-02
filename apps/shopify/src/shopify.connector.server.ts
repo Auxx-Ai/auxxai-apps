@@ -379,9 +379,79 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
   }
 }
 
+// ── webhook-steered product fetch ────────────────────────────────────────────────
+
+/**
+ * Steered partial fetch for an `inventory_levels/update` delivery. The webhook
+ * payload carries the `inventory_item_id` (NOT a variant/product id), so resolve
+ * inventory item → variant → product via one GraphQL lookup, then re-fetch that ONE
+ * product through the same REST projection the crawl uses — the `variants[]` fan-out
+ * refreshes every sibling variant's quantity in the same page. Single page, no
+ * cursor: `backfillComplete` terminates the platform's pagination loop immediately.
+ */
+async function fetchSteeredProduct(
+  args: ConnectorExecuteArgs,
+  inventoryItemId: string
+): Promise<ConnectorFetchResult> {
+  const { connection } = args
+  if (!connection?.value) {
+    throw new Error('shopify: missing connection (requiresConnection)')
+  }
+  const shopDomain = getShopDomain(connection.metadata)
+  if (!shopDomain) {
+    throw new Error('shopify: connection metadata is missing the shop domain')
+  }
+  const headers = {
+    'X-Shopify-Access-Token': connection.value,
+    'Content-Type': 'application/json',
+  }
+
+  // inventory_item_id → owning product id. GraphQL is the only join Shopify offers
+  // (REST has no inventory-item → variant lookup without scanning).
+  const gqlRes = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      query:
+        'query($id: ID!) { inventoryItem(id: $id) { variant { product { legacyResourceId } } } }',
+      variables: { id: `gid://shopify/InventoryItem/${inventoryItemId}` },
+    }),
+  })
+  if (!gqlRes.ok) {
+    throw new Error(`shopify: GraphQL inventoryItem lookup responded ${gqlRes.status}`)
+  }
+  const gql = (await gqlRes.json()) as {
+    data?: { inventoryItem?: { variant?: { product?: { legacyResourceId?: string } } } | null }
+  }
+  const productId = gql.data?.inventoryItem?.variant?.product?.legacyResourceId
+  if (!productId) {
+    // Item deleted/detached between the delivery and this fetch — nothing to refresh.
+    return { records: [], nextState: { backfillComplete: true } }
+  }
+
+  const res = await fetch(
+    `https://${shopDomain}/admin/api/${API_VERSION}/products/${productId}.json`,
+    { headers }
+  )
+  if (res.status === 404) {
+    return { records: [], nextState: { backfillComplete: true } }
+  }
+  if (!res.ok) {
+    throw new Error(`shopify: Admin API responded ${res.status} for products/${productId}`)
+  }
+  const { product } = (await res.json()) as { product: RawProduct }
+  return { records: [toProductRecord(product)], nextState: { backfillComplete: true } }
+}
+
 export default async function shopifySync(
   args: ConnectorExecuteArgs
 ): Promise<ConnectorFetchResult> {
+  // Webhook-steered partial fetch (inventory_levels/update → product stream): the
+  // platform passes the delivery's declared paths as triggerContext — fetch ONLY the
+  // affected product instead of crawling the collection.
+  if (args.streamKey === 'product' && args.triggerContext?.resourceId) {
+    return fetchSteeredProduct(args, args.triggerContext.resourceId)
+  }
   switch (args.streamKey) {
     case 'customer':
       return fetchShopifyPage<RawCustomer>(args, {
