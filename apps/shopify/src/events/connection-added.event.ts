@@ -27,6 +27,13 @@ const WEBHOOK_TOPICS = [
   'inventory_items/create',
   'inventory_items/update',
   'inventory_items/delete',
+  // Inventory QUANTITY signal (inventory_items/* above is SKU/cost metadata only).
+  // `inventory_levels/update` is the old → new quantity delta v9's inventory→part
+  // bridge consumes; connect/disconnect cover a variant gaining/losing a location.
+  // Needs read_inventory (already required by the inventory tools).
+  'inventory_levels/connect',
+  'inventory_levels/update',
+  'inventory_levels/disconnect',
   'collections/create',
   'collections/update',
   'collections/delete',

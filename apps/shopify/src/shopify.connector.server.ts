@@ -203,6 +203,7 @@ interface RawLineItem {
   id: number | null
   title: string | null
   variant_title: string | null
+  variant_id: number | null
   sku: string | null
   vendor: string | null
   quantity: number | null
@@ -286,6 +287,9 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
         id: li.id != null ? String(li.id) : null,
         title: li.title,
         variant_title: li.variant_title,
+        // Stringified to match the product stream's variant External ID so the
+        // line→variant reference edge resolves (same discipline as product_id).
+        variant_id: li.variant_id != null ? String(li.variant_id) : null,
         sku: li.sku,
         vendor: li.vendor,
         quantity: typeof li.quantity === 'number' ? li.quantity : null,
@@ -299,6 +303,25 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
 
 // ── product stream ─────────────────────────────────────────────────────────────
 
+/**
+ * An embedded Shopify REST product variant (from /products.json `variants[]`).
+ * `id`/`inventory_item_id` arrive as numbers; both are stringified in projection so
+ * the External-ID and webhook join-key comparisons stay string-based (like line items).
+ */
+interface RawVariant {
+  id: number | null
+  sku: string | null
+  title: string | null
+  price: string | null
+  inventory_quantity: number | null
+  inventory_item_id: number | null
+  position: number | null
+  option1: string | null
+  option2: string | null
+  option3: string | null
+  updated_at: string
+}
+
 interface RawProduct {
   id: number
   title: string | null
@@ -311,6 +334,7 @@ interface RawProduct {
   created_at: string
   updated_at: string
   published_at: string | null
+  variants?: RawVariant[] | null
 }
 
 /**
@@ -335,6 +359,22 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
       created_at: p.created_at,
       published_at: p.published_at,
       updated_at: p.updated_at,
+      // Raw array — the platform fans each element out per the `variants[]` mapping
+      // into the owned shopify_variants def. `id` is the variant's External ID and
+      // `inventory_item_id` the webhook join key; both stringified (they arrive as
+      // numbers, comparisons are string-based) — same discipline as the line-item fan-out.
+      variants: (p.variants ?? []).map((v) => ({
+        id: v.id != null ? String(v.id) : null,
+        sku: v.sku,
+        title: v.title,
+        price: v.price,
+        inventory_quantity: typeof v.inventory_quantity === 'number' ? v.inventory_quantity : null,
+        inventory_item_id: v.inventory_item_id != null ? String(v.inventory_item_id) : null,
+        position: typeof v.position === 'number' ? v.position : null,
+        option1: v.option1,
+        option2: v.option2,
+        option3: v.option3,
+      })),
     },
   }
 }

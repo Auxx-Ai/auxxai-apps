@@ -73,6 +73,8 @@ const ADDRESS_COMPONENTS = ['street1', 'street2', 'city', 'state', 'zipCode', 'c
 export const shopifyConnector = defineDataConnector({
   id: 'shopify',
   label: 'Shopify',
+  description:
+    'Sync orders, products, and customers from your Shopify store into your CRM — kept up to date automatically.',
   requiresConnection: true,
   iconKey: 'shopping-bag',
   // No toggles for v1 — still required by defineDataConnector.
@@ -137,7 +139,7 @@ export const shopifyConnector = defineDataConnector({
               { sourceFieldKey: 'addressCountry', targetKey: 'country' },
               { sourceFieldKey: 'note', targetKey: 'notes' },
             ],
-            connectionAppFields: [{ appFieldKey: 'storeDomain', from: 'shopDomain' }],
+            connectionAppFields: [{ appFieldKey: 'storeDomain', from: 'label' }],
           },
         },
       ],
@@ -297,6 +299,14 @@ export const shopifyConnector = defineDataConnector({
           name: 'Line Product ID',
           sourcePath: 'line_items[].product_id',
         },
+        // id-only ref → the reference mapping stamps the variant edge (matches the
+        // `product` stream's variant External ID). Links a sold line to the exact
+        // variant, so v9's inventory→part deduction can attribute the sale precisely.
+        'lineItems.variantId': {
+          type: 'TEXT',
+          name: 'Line Variant ID',
+          sourcePath: 'line_items[].variant_id',
+        },
       },
       // Recommended fan-out. The user confirms/overrides at setup; the `relationship`
       // decls are what make the edges actually provision + form.
@@ -339,7 +349,7 @@ export const shopifyConnector = defineDataConnector({
             entityKind: 'contact',
             matchFieldKeys: ['email'],
             fieldBindings: [{ sourceFieldKey: 'customer.id', targetAppField: 'customerId' }],
-            connectionAppFields: [{ appFieldKey: 'storeDomain', from: 'shopDomain' }],
+            connectionAppFields: [{ appFieldKey: 'storeDomain', from: 'label' }],
           },
         },
 
@@ -388,6 +398,33 @@ export const shopifyConnector = defineDataConnector({
               apiSlug: 'shopify_products',
               singular: 'Shopify Product',
               plural: 'Shopify Products',
+            },
+          },
+        },
+
+        // line_items[].variant_id → reference to owned shopify_variants (populated by
+        // the `product` stream's variants[] fan-out). Mirrors the product_id reference:
+        // the id resolves against each variant's External ID and stamps a `Variant`
+        // belongs_to edge on the line item (+ `Line Items` inverse on the variant),
+        // writing no item itself.
+        {
+          rootPath: 'line_items[].variant_id',
+          linkMode: 'reference',
+          relationshipFieldKey: 'variant',
+          relationship: {
+            fieldKey: 'variant',
+            name: 'Variant',
+            cardinality: 'belongs_to',
+            inverseName: 'Line Items',
+            targetRef: { ownedKey: 'variants' },
+          },
+          target: {
+            mode: 'owned',
+            entity: {
+              key: 'variants',
+              apiSlug: 'shopify_variants',
+              singular: 'Shopify Variant',
+              plural: 'Shopify Variants',
             },
           },
         },
@@ -444,6 +481,7 @@ export const shopifyConnector = defineDataConnector({
             price: '19.99',
             fulfillment_status: 'fulfilled',
             product_id: '987654321',
+            variant_id: '44556677',
           },
         ],
       },
@@ -482,6 +520,46 @@ export const shopifyConnector = defineDataConnector({
         createdAt: { type: 'DATETIME', name: 'Shopify Created', sourcePath: 'created_at' },
         publishedAt: { type: 'DATETIME', name: 'Published At', sourcePath: 'published_at' },
         updatedAt: { type: 'DATETIME', name: 'Shopify Updated', sourcePath: 'updated_at' },
+        // Variants — fanned out per element into the owned shopify_variants def
+        // (has_many child of shopify_products). Read straight off the embedded
+        // `variants[]` /products.json already returns; no extra fetch. The variant's
+        // own Shopify id is its declared External ID (D4) — the stable row a `part`
+        // links to (v9 Piece B) and the reference each inventory movement records.
+        'variants.shopifyId': {
+          type: 'TEXT',
+          name: 'Shopify Variant ID',
+          sourcePath: 'variants[].id',
+          isExternalId: true,
+        },
+        // The delta driver — the auxx-side cell whose old → new change v9 Piece C
+        // deducts against.
+        'variants.inventoryQuantity': {
+          type: 'NUMBER',
+          name: 'Inventory Quantity',
+          sourcePath: 'variants[].inventory_quantity',
+        },
+        // Webhook join key (inventory_levels/update carries inventory_item_id, not the
+        // variant id) + phase-2 real-time push-back.
+        'variants.inventoryItemId': {
+          type: 'TEXT',
+          name: 'Inventory Item ID',
+          sourcePath: 'variants[].inventory_item_id',
+        },
+        'variants.sku': { type: 'TEXT', name: 'SKU', sourcePath: 'variants[].sku' },
+        'variants.title': { type: 'TEXT', name: 'Variant Title', sourcePath: 'variants[].title' },
+        'variants.price': {
+          type: 'CURRENCY',
+          name: 'Variant Price',
+          sourcePath: 'variants[].price',
+        },
+        'variants.position': {
+          type: 'NUMBER',
+          name: 'Position',
+          sourcePath: 'variants[].position',
+        },
+        'variants.option1': { type: 'TEXT', name: 'Option 1', sourcePath: 'variants[].option1' },
+        'variants.option2': { type: 'TEXT', name: 'Option 2', sourcePath: 'variants[].option2' },
+        'variants.option3': { type: 'TEXT', name: 'Option 3', sourcePath: 'variants[].option3' },
       },
       // Owned shopify_products — same apiSlug the order stream's reference targets, so
       // both resolve to one def (the connector owns it; no ownership conflict).
@@ -499,6 +577,36 @@ export const shopifyConnector = defineDataConnector({
             },
           },
         },
+
+        // variants[] → owned shopify_variants, has_many child of the product. The
+        // platform provisions the `Variants` edge on the product def + the `Product`
+        // belongs_to inverse on the variant def, exactly like order → line_items. No
+        // targetRef → owned child. Deliberately NO `→ part` edge here (D1): the
+        // part ↔ variant link is auxx-side (v9 Piece B), pointing at this owned def.
+        {
+          rootPath: 'variants[]',
+          relationshipFieldKey: 'variants',
+          relationship: {
+            fieldKey: 'variants',
+            name: 'Variants',
+            cardinality: 'has_many',
+            inverseName: 'Product',
+            // no targetRef → owned child (this mapping's own shopify_variants def)
+          },
+          target: {
+            mode: 'owned',
+            entity: {
+              key: 'variants',
+              apiSlug: 'shopify_variants',
+              singular: 'Shopify Variant',
+              plural: 'Shopify Variants',
+              // Fields under this fan-out are namespaced `variants.*` (to avoid colliding
+              // with the product's own `title`) — primaryDisplayField must match that key,
+              // not the bare source-path name.
+              primaryDisplayField: 'variants.title',
+            },
+          },
+        },
       ],
       syncMode: 'incremental',
       exampleRecord: {
@@ -513,6 +621,18 @@ export const shopifyConnector = defineDataConnector({
         created_at: '2024-01-05T08:00:00Z',
         published_at: '2024-01-06T08:00:00Z',
         updated_at: '2024-01-10T08:00:00Z',
+        variants: [
+          {
+            id: '44556677',
+            title: 'Medium',
+            sku: 'TSHIRT-RED-M',
+            price: '19.99',
+            position: 1,
+            option1: 'Medium',
+            inventory_quantity: 42,
+            inventory_item_id: '99887766',
+          },
+        ],
       },
     },
   ],
