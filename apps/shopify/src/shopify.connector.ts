@@ -561,6 +561,10 @@ export const shopifyConnector = defineDataConnector({
           sourcePath: 'variants[].inventory_item_id',
         },
         'variants.sku': { type: 'TEXT', name: 'SKU', sourcePath: 'variants[].sku' },
+        // NOT the raw Shopify variant title: projection rewrites it to the
+        // product-qualified display title ("Product - Grey / 42", product title alone
+        // for single-variant products' "Default Title") — see variantDisplayTitle().
+        // It's the primaryDisplayField below; raw options stay in option1–3.
         'variants.title': { type: 'TEXT', name: 'Variant Title', sourcePath: 'variants[].title' },
         'variants.price': {
           type: 'CURRENCY',

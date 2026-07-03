@@ -338,6 +338,28 @@ interface RawProduct {
 }
 
 /**
+ * Product-qualified variant title, projected INTO `variants[].title` (the
+ * shopify_variants primaryDisplayField) so variant records are tellable apart in
+ * pickers. Shopify's raw variant title is ALL present option values joined with
+ * " / " ("Grey / 42 / Wool") — and the literal "Default Title" for single-variant
+ * products, which would otherwise name every such record identically. Note this
+ * diverges from the raw Shopify value the order stream's `lineItems.variantTitle`
+ * carries; variant identity/joins use `variants.id` / `inventory_item_id`, never
+ * the title.
+ */
+function variantDisplayTitle(p: RawProduct, v: RawVariant): string {
+  const productTitle = p.title ?? String(p.id)
+  // Prefer Shopify's pre-joined title; re-join option1–3 ourselves if it's absent.
+  // "Default Title" is the placeholder option value on no-option products — never a
+  // real option — so it's dropped from the join and caught below when it IS the title.
+  const optionsTitle =
+    v.title ??
+    [v.option1, v.option2, v.option3].filter((o) => o && o !== 'Default Title').join(' / ')
+  if (!optionsTitle || optionsTitle === 'Default Title') return productTitle
+  return `${productTitle} - ${optionsTitle}`
+}
+
+/**
  * Project one REST product into a SOURCE-shaped record. `externalId` is the numeric
  * product id stringified — the SAME value the order stream emits for
  * `line_items[].product_id`, so the reference edge links a line item to its product.
@@ -366,7 +388,7 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
       variants: (p.variants ?? []).map((v) => ({
         id: v.id != null ? String(v.id) : null,
         sku: v.sku,
-        title: v.title,
+        title: variantDisplayTitle(p, v),
         price: v.price,
         inventory_quantity: typeof v.inventory_quantity === 'number' ? v.inventory_quantity : null,
         inventory_item_id: v.inventory_item_id != null ? String(v.inventory_item_id) : null,
