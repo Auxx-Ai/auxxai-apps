@@ -58,7 +58,12 @@ export async function sheetsApiRequest(
     const message = (error as any)?.error?.message || `Google Sheets API error: ${response.status}`
 
     if (response.status === 401) throw new ConnectionExpiredError('organization')
-    if (response.status === 403) throw new InsufficientPermissionsError('organization')
+    if (response.status === 403) {
+      // Surface Google's reason (e.g. "Drive API has not been enabled in project …")
+      // in the execution logs — InsufficientPermissionsError carries a fixed message.
+      console.error(`[google-sheets] Google API 403 on ${method} ${path}: ${message}`)
+      throw new InsufficientPermissionsError('organization')
+    }
     if (response.status === 429) {
       const ra = Number(response.headers.get('Retry-After'))
       throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
