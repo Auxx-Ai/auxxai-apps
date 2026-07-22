@@ -68,6 +68,7 @@ export const quickbooksToolsets: Toolset[] = [
       'send_quickbooks_estimate',
       'create_quickbooks_payment',
       'update_quickbooks_payment',
+      'create_quickbooks_item',
     ],
   },
 ]

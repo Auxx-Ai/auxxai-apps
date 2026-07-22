@@ -2,9 +2,11 @@
 
 import { TextBlock } from '@auxx/sdk/client'
 import { quickbooksBlock } from './blocks/quickbooks/quickbooks.workflow'
+import { quickbooksFields } from './fields'
 import { createQuickbooksCustomerTool } from './tools/create-quickbooks-customer.tool'
 import { createQuickbooksEstimateTool } from './tools/create-quickbooks-estimate.tool'
 import { createQuickbooksInvoiceTool } from './tools/create-quickbooks-invoice.tool'
+import { createQuickbooksItemTool } from './tools/create-quickbooks-item.tool'
 import { createQuickbooksPaymentTool } from './tools/create-quickbooks-payment.tool'
 import { createQuickbooksVendorTool } from './tools/create-quickbooks-vendor.tool'
 import { findQuickbooksCustomerTool } from './tools/find-quickbooks-customer.tool'
@@ -79,6 +81,8 @@ export const app = {
     bulkActions: [],
     widgets: [],
   },
+  // Identity fields the app owns, provisioned per connection. See ./fields.ts.
+  fields: quickbooksFields,
 
   callRecording: {
     insight: { textActions: [] },
@@ -115,6 +119,7 @@ export const app = {
     createQuickbooksInvoiceTool,
     updateQuickbooksInvoiceTool,
     sendQuickbooksInvoiceTool,
+    createQuickbooksItemTool,
     createQuickbooksEstimateTool,
     updateQuickbooksEstimateTool,
     sendQuickbooksEstimateTool,
