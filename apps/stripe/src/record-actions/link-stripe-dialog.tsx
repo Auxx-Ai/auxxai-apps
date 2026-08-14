@@ -14,6 +14,16 @@ import linkStripeCustomer from './link-stripe-customer.server'
 import searchStripeOptions from './search-stripe-options.server'
 
 /**
+ * Unwrap a record field value to its primary (first) element. Multi-value
+ * fields (`options.multi`) arrive from the host as `string[]` — the primary is
+ * index 0. Scalars pass through; anything else (missing/empty) → `null`.
+ */
+function primaryValue(v: unknown): string | null {
+  const first = Array.isArray(v) ? (v[0] ?? null) : v
+  return typeof first === 'string' && first.length > 0 ? first : null
+}
+
+/**
  * Inner body — reads the contact's email (`useRecord`, suspends) and renders a
  * searchable Stripe-customer picker (`Forms.picker` → host `AsyncOptionPicker`).
  * The picker resolves options on demand via `searchStripeOptions`: seeded with
@@ -22,8 +32,10 @@ import searchStripeOptions from './search-stripe-options.server'
 function LinkStripeBody({ recordId, hideDialog }: { recordId: string; hideDialog: () => void }) {
   const record = useRecord(recordId)
   // The contact email is exposed under its stable systemAttribute key
-  // (`primary_email`), not `email`.
-  const email = (record.data.primary_email as string | undefined) ?? null
+  // (`primary_email`), not `email`. Multi-value email fields come through as an
+  // array — seed the picker from the primary only; manual search covers the
+  // rest. No email at all → picker opens empty, user searches manually.
+  const email = primaryValue(record.data.primary_email)
 
   const schema = useMemo(
     () => ({
