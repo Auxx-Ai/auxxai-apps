@@ -87,6 +87,19 @@ const CHILD_ENV = {
   AUXX_API_URL: TARGET_API,
 };
 
+// Pinning AUXX_ENV protects a LOCAL run from a stale shell variable — but it
+// would also quietly downgrade a deliberately-configured production run (CI
+// exports AUXX_ENV=production) to development, and then fall back to
+// localhost:3007 if AUXX_API_URL happened to be empty. Neither guess is
+// acceptable, so a disagreement is an error, not a silent choice.
+if (!PROD && process.env.AUXX_ENV === 'production') {
+  process.stderr.write(
+    'AUXX_ENV=production is set, but --prod was not passed — refusing to guess.\n' +
+      'Use `pnpm push-prod` to publish to production, or unset AUXX_ENV for a local run.\n',
+  );
+  process.exit(1);
+}
+
 /**
  * Auth, once, before the loop. An unauthenticated CLI prints
  * "You need to log in with Auxx. Press Enter to continue..." and BLOCKS on

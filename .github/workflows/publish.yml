@@ -67,7 +67,7 @@ jobs:
             echo "Test mode — running check-all (no upload/publish)"
             pnpm check-all
           else
-            pnpm push-all
+            pnpm push-prod
           fi
         env:
           AUXX_ENV: production
