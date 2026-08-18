@@ -6,7 +6,10 @@
   },
   "scripts": {
     "check-all": "tsx scripts/push-all.ts --check",
-    "push-all": "tsx scripts/push-all.ts"
+    "push-all": "tsx scripts/push-all.ts",
+    "push-dev": "tsx scripts/push-all.ts",
+    "sync-dev": "tsx scripts/push-all.ts --dev-deploy demoorg",
+    "push-prod": "tsx scripts/push-all.ts --prod"
   },
   "devDependencies": {
     "tsx": "^4.19.2"
