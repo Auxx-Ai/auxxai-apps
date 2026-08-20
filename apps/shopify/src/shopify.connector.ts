@@ -17,6 +17,21 @@
 // relationship field (+ inverse) at materialization, so a line item actually attaches
 // to its order at sync time. Keep `relationshipFieldKey === relationship.fieldKey` so
 // the fan-out resolves the provisioned field by the same key.
+//
+// ── `derived.*` fields ────────────────────────────────────────────────────────────
+// Some order and line-item fields source paths that DO NOT EXIST in Shopify's payload
+// (`derived.first_fulfilled_at`, `line_items[].derived.shipment_count`, …). They are
+// synthesised by the server handler's `deriveFulfillments()` walk over
+// `order.fulfillments[]`, which is the only place a ship date lives — and the ship date
+// is the accrual revenue trigger. Synthetic source paths are first-class: the stream's
+// source schema is built from the DECLARED field paths, not from a live sample.
+// Everything computed is namespaced under `derived.` so it can never be mistaken for a
+// raw provider field, nor collide with one Shopify adds later.
+//
+// ⚠️ Any field whose projected value is an ARRAY or an OBJECT is silently dropped by
+// the fan-out before it reaches the field-value layer — no error, no null, no write.
+// `tags` and `payment_gateway_names` are therefore delivered as COMMA STRINGS, and every
+// `derived.*` binding addresses a scalar leaf rather than the `derived` object itself.
 
 import { defineDataConnector } from '@auxx/sdk/data-connectors'
 import { z } from '@auxx/sdk/tools'
@@ -213,10 +228,49 @@ export const shopifyConnector = defineDataConnector({
           options: CANCEL_REASON_OPTIONS,
         },
         tags: { type: 'TAGS', name: 'Tags', sourcePath: 'tags' },
+        // Routes the checkout debit to the right clearing account. Deliberately NO
+        // predefined `options`: the live gateway handle set is what has to be discovered
+        // empirically, and a predefined set would reject unknown values at sink and
+        // destroy exactly that evidence. The server joins Shopify's array to a comma
+        // string — a projected array is silently dropped by the fan-out.
+        paymentGateways: {
+          type: 'TAGS',
+          name: 'Payment Gateways',
+          sourcePath: 'payment_gateway_names',
+        },
         note: { type: 'TEXT', name: 'Note', sourcePath: 'note' },
         createdAt: { type: 'DATETIME', name: 'Shopify Created', sourcePath: 'created_at' },
         processedAt: { type: 'DATETIME', name: 'Processed At', sourcePath: 'processed_at' },
         cancelledAt: { type: 'DATETIME', name: 'Cancelled At', sourcePath: 'cancelled_at' },
+        // ── Derived fulfillment rollup (order level) ──────────────────────────────
+        // Shopify has no order-level ship date; these are synthesised by the server's
+        // deriveFulfillments() walk over `fulfillments[]`, under a `derived.` namespace
+        // so they never read as raw provider fields. Cancelled fulfillments are excluded.
+        //
+        // These are CONVENIENCE columns and they are only exact for an order that
+        // shipped once. `shipmentCount`/`isSplitShipment` exist so that limitation is
+        // visible in the data instead of silently wrong — filter on them at close time.
+        firstFulfilledAt: {
+          type: 'DATETIME',
+          name: 'First Fulfilled At',
+          sourcePath: 'derived.first_fulfilled_at',
+        },
+        lastFulfilledAt: {
+          type: 'DATETIME',
+          name: 'Last Fulfilled At',
+          sourcePath: 'derived.last_fulfilled_at',
+        },
+        shipmentCount: {
+          type: 'NUMBER',
+          name: 'Shipments',
+          sourcePath: 'derived.shipment_count',
+        },
+        // CHECKBOX is the platform's boolean type — there is no BOOLEAN in FieldType.
+        isSplitShipment: {
+          type: 'CHECKBOX',
+          name: 'Split Shipment',
+          sourcePath: 'derived.is_split_shipment',
+        },
         // Structured addresses → ADDRESS_STRUCT; the server shapes Shopify's address
         // object into { street1, street2, city, state, zipCode, country }.
         shippingAddress: {
@@ -297,6 +351,51 @@ export const shopifyConnector = defineDataConnector({
           name: 'Line Fulfillment',
           sourcePath: 'line_items[].fulfillment_status',
           options: FULFILLMENT_STATUS_OPTIONS,
+        },
+        // Real Shopify field — units still awaiting shipment. Makes the "paid but
+        // unfulfilled at the cutoff" deferred-revenue figure exact rather than inferred
+        // from the status enum.
+        'lineItems.fulfillableQuantity': {
+          type: 'NUMBER',
+          name: 'Line Fulfillable Qty',
+          sourcePath: 'line_items[].fulfillable_quantity',
+        },
+        // ── Derived fulfillment rollup (line level) ───────────────────────────────
+        // The grain that actually matters: accrual revenue is recognised per line at
+        // its ship date, not per order. `fulfilledAt` is the earliest non-cancelled
+        // fulfillment touching this line and is the recognition date whenever
+        // `shipmentCount === 1` — which is the overwhelming majority.
+        'lineItems.fulfilledAt': {
+          type: 'DATETIME',
+          name: 'Line Fulfilled At',
+          sourcePath: 'line_items[].derived.fulfilled_at',
+        },
+        'lineItems.lastFulfilledAt': {
+          type: 'DATETIME',
+          name: 'Line Last Fulfilled At',
+          sourcePath: 'line_items[].derived.last_fulfilled_at',
+        },
+        'lineItems.fulfilledQuantity': {
+          type: 'NUMBER',
+          name: 'Line Fulfilled Qty',
+          sourcePath: 'line_items[].derived.fulfilled_quantity',
+        },
+        // THE HONESTY COLUMN. >1 means this line shipped across several dates and the
+        // single `fulfilledAt` above cannot represent it. Phase 0b's per-shipment def
+        // removes the need to filter on this; until then, it is what keeps a wrong
+        // period cut findable rather than invisible.
+        'lineItems.shipmentCount': {
+          type: 'NUMBER',
+          name: 'Line Shipments',
+          sourcePath: 'line_items[].derived.shipment_count',
+        },
+        // Join key to the carrier invoice. Populated only when the line shipped exactly
+        // once — with two shipments there is no single tracking number and guessing
+        // would be worse than null.
+        'lineItems.trackingNumber': {
+          type: 'TEXT',
+          name: 'Line Tracking Number',
+          sourcePath: 'line_items[].derived.tracking_number',
         },
         // id-only ref → the reference mapping stamps the product edge; never a column.
         'lineItems.productId': {
@@ -448,11 +547,24 @@ export const shopifyConnector = defineDataConnector({
         financial_status: 'paid',
         fulfillment_status: 'fulfilled',
         cancel_reason: null,
-        tags: ['vip', 'gift'],
+        // Comma STRING, matching the projection — Shopify's own shape, and the shape
+        // `normalizeFieldValue` splits. An array here would be silently dropped.
+        tags: 'vip, gift',
+        payment_gateway_names: 'shopify_payments',
         note: 'Leave at front door',
         created_at: '2024-02-11T10:00:00Z',
         processed_at: '2024-02-11T10:01:00Z',
         cancelled_at: null,
+        // Deliberately a SPLIT SHIPMENT — 2 units then 1, four days apart — so the
+        // example itself documents the case these fields exist for. Note the two dates
+        // straddle nothing here, but at a period boundary they would fall in different
+        // months, which is why no single order-level `fulfilledAt` would be honest.
+        derived: {
+          first_fulfilled_at: '2024-02-12T09:00:00Z',
+          last_fulfilled_at: '2024-02-15T14:30:00Z',
+          shipment_count: 2,
+          is_split_shipment: true,
+        },
         shipping_address: {
           street1: '123 Main St',
           street2: 'Apt 4',
@@ -482,11 +594,23 @@ export const shopifyConnector = defineDataConnector({
             variant_title: 'Medium',
             sku: 'TSHIRT-RED-M',
             vendor: 'Acme',
-            quantity: 2,
+            quantity: 3,
+            fulfillable_quantity: 0,
             price: '19.99',
             fulfillment_status: 'fulfilled',
             product_id: '987654321',
             variant_id: '44556677',
+            // Same line, two shipments: 2 units on the 12th, 1 on the 15th.
+            // `tracking_number` is null BECAUSE `shipment_count` is 2 — there is no one
+            // tracking number for this line. `shipment_count > 1` is the flag the close
+            // job filters on to find the orders it must cut by hand.
+            derived: {
+              fulfilled_at: '2024-02-12T09:00:00Z',
+              last_fulfilled_at: '2024-02-15T14:30:00Z',
+              fulfilled_quantity: 3,
+              shipment_count: 2,
+              tracking_number: null,
+            },
           },
         ],
       },
@@ -636,7 +760,9 @@ export const shopifyConnector = defineDataConnector({
         product_type: 'Apparel',
         handle: 'red-t-shirt',
         status: 'active',
-        tags: ['summer', 'cotton'],
+        // Comma STRING, matching the projection (see the order example) — an array is
+        // silently dropped by the fan-out.
+        tags: 'summer, cotton',
         created_at: '2024-01-05T08:00:00Z',
         published_at: '2024-01-06T08:00:00Z',
         updated_at: '2024-01-10T08:00:00Z',

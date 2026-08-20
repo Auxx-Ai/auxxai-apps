@@ -18,6 +18,14 @@
 //
 // Connection contract: resolve from `args.connection` — `value` is the Admin API
 // access token, `metadata` carries the shop domain.
+//
+// The `order` projection also SYNTHESISES a `derived` object at the order root and on
+// each line item (`deriveFulfillments`), rolling `order.fulfillments[]` up into ship
+// dates, shipped quantities and per-line shipment counts. Nothing in Shopify's payload
+// carries a ship date at the order or line level — it exists only inside
+// `fulfillments[]` — and accrual revenue is recognised at fulfillment, so this walk is
+// what makes a period cut possible. `shipment_count` is the honesty column: where it is
+// 1 the derived dates are exact, and where it is >1 the close job knows to look closer.
 
 import type {
   ConnectorExecuteArgs,
@@ -32,6 +40,28 @@ const PAGE_SIZE = 250
 /** Extract the `page_info` token of the `rel="next"` link from a Link header. */
 function nextPageInfo(linkHeader: string | null): string | undefined {
   return linkHeader?.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)?.[1]
+}
+
+/**
+ * Latest `updated_at` across a page, compared by epoch and returned as the original
+ * ISO string. Falls back to `fallback` when the page is empty or holds no parseable
+ * timestamp — never returns a value older than the mark we came in with.
+ */
+function maxUpdatedAt<Raw extends { updated_at: string }>(
+  rows: Raw[],
+  fallback: unknown
+): string | undefined {
+  const base = typeof fallback === 'string' ? fallback : undefined
+  let best = base
+  let bestMs = base ? Date.parse(base) : Number.NEGATIVE_INFINITY
+  if (Number.isNaN(bestMs)) bestMs = Number.NEGATIVE_INFINITY
+  for (const row of rows) {
+    const ms = Date.parse(row.updated_at)
+    if (Number.isNaN(ms) || ms <= bestMs) continue
+    bestMs = ms
+    best = row.updated_at
+  }
+  return best
 }
 
 /**
@@ -93,7 +123,19 @@ async function fetchShopifyPage<Raw extends { updated_at: string }>(
   const rows = ((await res.json()) as Record<string, Raw[] | undefined>)[opts.rootKey] ?? []
   const next = nextPageInfo(res.headers.get('Link'))
   // High-water mark of `updated_at` so the next incremental run resumes from it.
-  const lastUpdated = rows[rows.length - 1]?.updated_at ?? state.updatedSince
+  //
+  // Take the MAX across the page, never `rows[rows.length - 1]`. Shopify's REST
+  // collections default to **`id` descending** — verified against a live store:
+  // `updated_at` is neither ascending nor descending within a page (an old order
+  // edited yesterday still sorts first by id). Reading the last row therefore yields
+  // an arbitrary `updated_at`, which fails two ways:
+  //   • it is usually the OLDEST value, so `updated_at_min` never advances and every
+  //     incremental run re-crawls the entire history; and
+  //   • if the lowest-id row happens to be a recently-edited order, the mark jumps
+  //     forward and silently SKIPS every row updated in between.
+  // Comparison is by epoch, not lexicographic: Shopify stamps shop-local offsets, so
+  // strings either side of a DST change do not sort correctly as text.
+  const lastUpdated = maxUpdatedAt(rows, state.updatedSince)
 
   return {
     records: rows.map(opts.toRecord),
@@ -134,13 +176,19 @@ function toAddressStruct(addr: RawAddress | null | undefined) {
   }
 }
 
-/** Split Shopify's comma-separated `tags` string into a TAGS array. */
-function splitTags(tags: string | null | undefined): string[] {
-  if (!tags) return []
-  return tags
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
+/**
+ * Normalise Shopify's `tags` for a TAGS column.
+ *
+ * Shopify already hands `tags` over as a comma-joined STRING (`'vip, gift'`), and a
+ * comma string is exactly what the platform's `normalizeFieldValue` splits into tag
+ * values. Do NOT split it into an array here: the fan-out drops any array-shaped
+ * source value before the field-value layer is reached (`hasArrayShapedSource` —
+ * "connectors cannot source arrays"), so an array write is silently discarded. That
+ * is why the `tags` column on both shopify_orders and shopify_products had never
+ * synced a single value.
+ */
+function toTagString(tags: string | null | undefined): string {
+  return tags ?? ''
 }
 
 /**
@@ -207,9 +255,138 @@ interface RawLineItem {
   sku: string | null
   vendor: string | null
   quantity: number | null
+  /** Units still awaiting shipment. Real Shopify field — makes the "paid but
+   *  unfulfilled at the cutoff" deferred-revenue report exact rather than inferred
+   *  from a status enum. */
+  fulfillable_quantity: number | null
   price: string | null
   fulfillment_status: string | null
   product_id: number | null
+}
+
+/**
+ * One line inside a fulfillment. Deliberately NOT `RawLineItem`: the shapes overlap,
+ * but `quantity` here means "units shipped IN THIS FULFILLMENT", not units ordered.
+ * Conflating the two is precisely the split-shipment bug these fields exist to avoid.
+ */
+interface RawFulfillmentLine {
+  id: number | null
+  variant_id: number | null
+  sku: string | null
+  quantity: number | null
+}
+
+/**
+ * One shipment against an order (`order.fulfillments[]`). This array is part of the
+ * Order REST resource and rides `read_orders` — the `read_*_fulfillment_orders` scopes
+ * govern the separate FulfillmentOrder endpoints, which this connector never calls.
+ *
+ * `created_at` is the SHIP DATE and the revenue-recognition trigger. Never `updated_at`:
+ * that moves on every carrier tracking update, which would drag the recognition date
+ * forward days after delivery.
+ */
+interface RawFulfillment {
+  id: number | null
+  name: string | null
+  /** Lifecycle: pending | open | success | cancelled | error | failure. */
+  status: string | null
+  /** Carrier tracking state; frequently null. Informational only. */
+  shipment_status: string | null
+  created_at: string | null
+  updated_at: string | null
+  tracking_number: string | null
+  tracking_company: string | null
+  tracking_url: string | null
+  location_id: number | null
+  line_items: RawFulfillmentLine[] | null
+}
+
+/** Per-line rollup of every non-cancelled fulfillment touching that line. */
+interface LineFulfillmentDerivation {
+  fulfilled_at: string | null
+  last_fulfilled_at: string | null
+  fulfilled_quantity: number
+  shipment_count: number
+  tracking_number: string | null
+}
+
+interface OrderFulfillmentDerivation {
+  order: {
+    first_fulfilled_at: string | null
+    last_fulfilled_at: string | null
+    shipment_count: number
+    is_split_shipment: boolean
+  }
+  byLineId: Map<string, LineFulfillmentDerivation>
+}
+
+/**
+ * Walk `order.fulfillments[]` once and roll it up to the order and to each line.
+ *
+ * Cancelled fulfillments are EXCLUDED from every date, count and quantity — a shipment
+ * that was undone must not set a recognition date.
+ *
+ * Dates are compared by epoch and stored as the original ISO string. Shopify stamps
+ * shop-local offsets, so `-05:00` and `-04:00` values coexist across a DST change and
+ * text comparison would order them wrongly — which would land a shipment in the wrong
+ * period at exactly the fiscal boundary this feature exists to get right.
+ *
+ * `tracking_number` is only carried onto a line when that line shipped exactly once.
+ * With two shipments there is no single tracking number for the line, and guessing one
+ * would be worse than leaving it null; `shipment_count` is the column that says so.
+ */
+function deriveFulfillments(o: RawOrder): OrderFulfillmentDerivation {
+  const live = (o.fulfillments ?? []).filter((f) => f.status !== 'cancelled')
+
+  let firstMs = Number.POSITIVE_INFINITY
+  let lastMs = Number.NEGATIVE_INFINITY
+  let firstAt: string | null = null
+  let lastAt: string | null = null
+  const byLineId = new Map<string, LineFulfillmentDerivation>()
+
+  for (const f of live) {
+    const at = f.created_at ?? null
+    const ms = at ? Date.parse(at) : Number.NaN
+    if (at && !Number.isNaN(ms)) {
+      if (ms < firstMs) [firstMs, firstAt] = [ms, at]
+      if (ms > lastMs) [lastMs, lastAt] = [ms, at]
+    }
+
+    for (const li of f.line_items ?? []) {
+      if (li.id == null) continue
+      const key = String(li.id)
+      const cur: LineFulfillmentDerivation = byLineId.get(key) ?? {
+        fulfilled_at: null,
+        last_fulfilled_at: null,
+        fulfilled_quantity: 0,
+        shipment_count: 0,
+        tracking_number: null,
+      }
+      cur.shipment_count += 1
+      cur.fulfilled_quantity += typeof li.quantity === 'number' ? li.quantity : 0
+      if (at && !Number.isNaN(ms)) {
+        const curFirst = cur.fulfilled_at ? Date.parse(cur.fulfilled_at) : Number.POSITIVE_INFINITY
+        const curLast = cur.last_fulfilled_at
+          ? Date.parse(cur.last_fulfilled_at)
+          : Number.NEGATIVE_INFINITY
+        if (ms < curFirst) cur.fulfilled_at = at
+        if (ms > curLast) cur.last_fulfilled_at = at
+      }
+      // Meaningful only for a single-shipment line — see the docblock.
+      cur.tracking_number = cur.shipment_count === 1 ? (f.tracking_number ?? null) : null
+      byLineId.set(key, cur)
+    }
+  }
+
+  return {
+    order: {
+      first_fulfilled_at: firstAt,
+      last_fulfilled_at: lastAt,
+      shipment_count: live.length,
+      is_split_shipment: live.length > 1,
+    },
+    byLineId,
+  }
 }
 
 interface RawOrder {
@@ -225,12 +402,24 @@ interface RawOrder {
   financial_status: string | null
   fulfillment_status: string | null
   cancel_reason: string | null
+  /**
+   * Gateways across ALL of the order's transactions — the routing key for the
+   * checkout debit. `order.gateway` and `order.processing_method` are both deprecated;
+   * this is the current field. ⚠️ It includes gateways from FAILED transactions, so a
+   * declined-Affirm-then-paid-by-card order reads `['affirm','shopify_payments']` and a
+   * naive `includes('affirm')` mis-routes. Resolve a multi-value order against
+   * `/orders/{id}/transactions.json` before trusting it.
+   */
+  payment_gateway_names: string[] | null
   tags: string | null
   note: string | null
   created_at: string
   updated_at: string
   processed_at: string | null
   cancelled_at: string | null
+  /** Shipments. Present on the Order resource by default — the connector sends no
+   *  `fields=` param, and Shopify's `fields` filter is top-level-only. */
+  fulfillments: RawFulfillment[] | null
   shipping_address: RawAddress | null
   billing_address: RawAddress | null
   customer: {
@@ -244,6 +433,7 @@ interface RawOrder {
 
 /** Project one REST order into a SOURCE-shaped record (fields keyed by sourcePath). */
 function toOrderRecord(o: RawOrder): ConnectorRecord {
+  const fulfilled = deriveFulfillments(o)
   return {
     streamKey: 'order',
     externalId: String(o.id),
@@ -261,11 +451,19 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
       fulfillment_status: fulfillmentStatus(o.fulfillment_status),
       // Only set on a cancelled order — leave null otherwise (no enum value to write).
       cancel_reason: o.cancel_reason,
-      tags: splitTags(o.tags),
+      // Joined to a COMMA STRING, never emitted as an array: the fan-out drops
+      // array-shaped source values outright. `''` (not null) for an order with no
+      // gateway — a $0 / fully-discounted order is legitimately empty, not unknown.
+      payment_gateway_names: (o.payment_gateway_names ?? []).join(','),
+      tags: toTagString(o.tags),
       note: o.note,
       created_at: o.created_at,
       processed_at: o.processed_at,
       cancelled_at: o.cancelled_at,
+      // Synthesised rollup of fulfillments[] — no such object exists in Shopify's
+      // payload. Namespaced under `derived` so it reads as computed rather than raw,
+      // and so it can never collide with a future real Shopify field.
+      derived: fulfilled.order,
       shipping_address: toAddressStruct(o.shipping_address),
       billing_address: toAddressStruct(o.billing_address),
       customer: o.customer
@@ -293,9 +491,21 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
         sku: li.sku,
         vendor: li.vendor,
         quantity: typeof li.quantity === 'number' ? li.quantity : null,
+        fulfillable_quantity:
+          typeof li.fulfillable_quantity === 'number' ? li.fulfillable_quantity : null,
         price: li.price,
         fulfillment_status: fulfillmentStatus(li.fulfillment_status),
         product_id: li.product_id != null ? String(li.product_id) : null,
+        // Per-line shipment rollup. A line never touched by a live fulfillment gets an
+        // explicit zeroed shape rather than a missing key, so the columns read as
+        // "nothing shipped" instead of "not synced".
+        derived: (li.id != null ? fulfilled.byLineId.get(String(li.id)) : null) ?? {
+          fulfilled_at: null,
+          last_fulfilled_at: null,
+          fulfilled_quantity: 0,
+          shipment_count: 0,
+          tracking_number: null,
+        },
       })),
     },
   }
@@ -377,7 +587,7 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
       product_type: p.product_type,
       handle: p.handle,
       status: p.status,
-      tags: splitTags(p.tags),
+      tags: toTagString(p.tags),
       created_at: p.created_at,
       published_at: p.published_at,
       updated_at: p.updated_at,
