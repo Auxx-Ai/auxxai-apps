@@ -346,6 +346,14 @@ export const shopifyConnector = defineDataConnector({
           name: 'Line Price',
           sourcePath: 'line_items[].price',
         },
+        // The order's currency, synthesised onto every line by the projection —
+        // Shopify's line payload carries none, and a line item is its own record,
+        // so without this the money lands somewhere that cannot say what it is.
+        'lineItems.currency': {
+          type: 'TEXT',
+          name: 'Line Currency',
+          sourcePath: 'line_items[].currency',
+        },
         'lineItems.fulfillmentStatus': {
           type: 'SINGLE_SELECT',
           name: 'Line Fulfillment',

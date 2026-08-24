@@ -12,6 +12,11 @@ api_version = "2026-04"
   uri = "https://coyote-alert-wildly.ngrok-free.app/api/shopify/compliance"
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
 
+  # NOTE: billing webhooks (app_subscriptions/update, app/uninstalled) cannot be declared
+  # here — app-specific webhook subscriptions are rejected while use_legacy_install_flow
+  # is enabled. They are registered per shop via the Admin API instead
+  # (auxxai repo: packages/billing/src/providers/shopify/ensure-webhooks.ts).
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_orders,write_orders,read_products,write_products,read_locations,read_customers,read_draft_orders,read_inventory,read_merchant_managed_fulfillment_orders,read_assigned_fulfillment_orders"
