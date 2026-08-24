@@ -12,8 +12,14 @@ export default async function listAccounts(): Promise<{ value: string; label: st
     { returnAll: true }
   )
 
-  return accounts.map((a: any) => ({
-    value: a.Id,
-    label: a.FullyQualifiedName || a.Name || `Account ${a.Id}`,
-  }))
+  // Number first, because that is how a bookkeeper reads a chart of accounts:
+  // "1200 Shopify Clearing", not "Shopify Clearing". Falls back to the name
+  // alone when the company does not use account numbers.
+  return accounts.map((a: any) => {
+    const name = a.FullyQualifiedName || a.Name || `Account ${a.Id}`
+    return {
+      value: a.Id,
+      label: a.AcctNum ? `${a.AcctNum} ${name}` : name,
+    }
+  })
 }
