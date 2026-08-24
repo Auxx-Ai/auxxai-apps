@@ -431,6 +431,25 @@ interface RawOrder {
   line_items: RawLineItem[] | null
 }
 
+/**
+ * Shopify reports money as a DECIMAL MAJOR-UNIT STRING (`"49.99"`). The platform
+ * stores `FieldType.CURRENCY` as INTEGER MINOR UNITS (`4999`), so every money
+ * field has to be scaled on the way out of this projection.
+ *
+ * This is the app's job, not the platform's: `ConnectorFieldDecl.sourcePath` is a
+ * JSON path with no transform channel, and the platform cannot tell `49.99`-as-
+ * dollars from `49.99`-as-cents once the unit is dropped. Passing these through
+ * raw is what stored 139 Shopify money rows 100x low.
+ *
+ * Returns null (not 0) for an absent value: a missing price is "no value", and
+ * writing 0 would render a real $0.00.
+ */
+function decimalToMinorUnits(decimal: string | null | undefined): number | null {
+  if (decimal === null || decimal === undefined || decimal === '') return null
+  const parsed = Number.parseFloat(String(decimal))
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null
+}
+
 /** Project one REST order into a SOURCE-shaped record (fields keyed by sourcePath). */
 function toOrderRecord(o: RawOrder): ConnectorRecord {
   const fulfilled = deriveFulfillments(o)
@@ -443,10 +462,10 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
       name: o.name,
       email: o.email,
       currency: o.currency,
-      total_price: o.total_price,
-      subtotal_price: o.subtotal_price,
-      total_tax: o.total_tax,
-      total_discounts: o.total_discounts,
+      total_price: decimalToMinorUnits(o.total_price),
+      subtotal_price: decimalToMinorUnits(o.subtotal_price),
+      total_tax: decimalToMinorUnits(o.total_tax),
+      total_discounts: decimalToMinorUnits(o.total_discounts),
       financial_status: o.financial_status,
       fulfillment_status: fulfillmentStatus(o.fulfillment_status),
       // Only set on a cancelled order — leave null otherwise (no enum value to write).
@@ -493,7 +512,12 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
         quantity: typeof li.quantity === 'number' ? li.quantity : null,
         fulfillable_quantity:
           typeof li.fulfillable_quantity === 'number' ? li.fulfillable_quantity : null,
-        price: li.price,
+        price: decimalToMinorUnits(li.price),
+        // The order's currency, carried onto every line. Line items fan out into
+        // their own def, and Shopify's line payload has no currency of its own —
+        // so without this the money lands on a record that cannot say what it is.
+        // Same synthesis discipline as `derived`.
+        currency: o.currency,
         fulfillment_status: fulfillmentStatus(li.fulfillment_status),
         product_id: li.product_id != null ? String(li.product_id) : null,
         // Per-line shipment rollup. A line never touched by a live fulfillment gets an
@@ -599,7 +623,7 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
         id: v.id != null ? String(v.id) : null,
         sku: v.sku,
         title: variantDisplayTitle(p, v),
-        price: v.price,
+        price: decimalToMinorUnits(v.price),
         inventory_quantity: typeof v.inventory_quantity === 'number' ? v.inventory_quantity : null,
         inventory_item_id: v.inventory_item_id != null ? String(v.inventory_item_id) : null,
         position: typeof v.position === 'number' ? v.position : null,
