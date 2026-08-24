@@ -9,7 +9,7 @@ import { defineFields } from '@auxx/sdk/fields'
  * reads/writes via `RecordIdentity` to keep pushes idempotent (find-or-create
  * instead of duplicate customers/items/invoices on re-sync).
  *
- * All three are hidden, `identity: true` text fields — the platform mirrors
+ * All four are hidden, `identity: true` text fields — the platform mirrors
  * writes into `RecordIdentity` (`source:'quickbooks'`) and the orchestrator
  * resolves them via `findByIntegrationId`. Never shown, filtered, or edited
  * by end users.
@@ -40,6 +40,28 @@ export const quickbooksFields = defineFields([
     scope: 'connection',
     name: 'QuickBooks customer ID',
     description: 'The QuickBooks Online Customer.Id this contact is mapped to.',
+    identity: true,
+    capabilities: {
+      hidden: true,
+      filterable: true,
+      sortable: false,
+      creatable: false,
+      updatable: false,
+    },
+  },
+  {
+    // Unlike the three above, this one hangs on a record that exists ONLY to
+    // carry it. A summary journal entry has no natural home — `qboCustomerId`
+    // hangs on a contact, `qboInvoiceId` on an invoice, but "the 2026-08-18
+    // daily fulfillment summary" is neither. `gl_posting` is that home, and
+    // together with its `(postingType, periodKey)` pair it makes a double-post
+    // unrepresentable at the source rather than merely detectable in QuickBooks.
+    appFieldKey: 'qboJournalEntryId',
+    type: 'TEXT',
+    targetEntity: 'gl_posting',
+    scope: 'connection',
+    name: 'QuickBooks journal entry ID',
+    description: 'The QuickBooks Online JournalEntry.Id this GL posting was pushed to.',
     identity: true,
     capabilities: {
       hidden: true,
