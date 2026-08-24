@@ -60,6 +60,9 @@ import { quickbooksVendorGetTool } from './tools/internal/vendor-get.tool'
 import { quickbooksVendorGetManyTool } from './tools/internal/vendor-get-many.tool'
 import { quickbooksVendorUpdateTool } from './tools/internal/vendor-update.tool'
 import { listQuickbooksAccountsTool } from './tools/list-quickbooks-accounts.tool'
+import { createQuickbooksJournalEntryTool } from './tools/create-quickbooks-journal-entry.tool'
+import { findQuickbooksJournalEntryTool } from './tools/find-quickbooks-journal-entry.tool'
+import { resolveQuickbooksAccountTool } from './tools/resolve-quickbooks-account.tool'
 import { listQuickbooksItemsTool } from './tools/list-quickbooks-items.tool'
 import { searchQuickbooksCustomersTool } from './tools/search-quickbooks-customers.tool'
 import { searchQuickbooksEstimatesTool } from './tools/search-quickbooks-estimates.tool'
@@ -98,6 +101,9 @@ export const app = {
   tools: [
     // Agent-surface tools (exposed to LLM via toolsets).
     listQuickbooksAccountsTool,
+    resolveQuickbooksAccountTool,
+    createQuickbooksJournalEntryTool,
+    findQuickbooksJournalEntryTool,
     listQuickbooksItemsTool,
     findQuickbooksCustomerTool,
     getQuickbooksCustomerTool,

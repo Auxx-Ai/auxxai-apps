@@ -8,9 +8,15 @@ import type { Toolset } from '@auxx/sdk/tools'
  * the `.write` toolsets because they have non-reversible side effects
  * (emailing the customer).
  *
- * `list_quickbooks_accounts` and `list_quickbooks_items` are
- * intentionally toolset-less — the platform bridge auto-attaches them
- * when any `quickbooks.*` toolset is enabled.
+ * `list_quickbooks_accounts`, `resolve_quickbooks_account` and
+ * `list_quickbooks_items` are intentionally toolset-less — a tool with no
+ * `toolsetSlug` is always-on (`filter-tools.ts`: `if (!tool.toolsetSlug) return
+ * true`), so reference lookups stay reachable without being listed. Do not also
+ * add them to a toolset; pick one.
+ *
+ * `quickbooks.ledger.*` is deliberately separate from `quickbooks.sales.*` —
+ * posting to the general ledger is a categorically different blast radius from
+ * raising an invoice.
  */
 export const quickbooksToolsets: Toolset[] = [
   {
@@ -70,5 +76,19 @@ export const quickbooksToolsets: Toolset[] = [
       'update_quickbooks_payment',
       'create_quickbooks_item',
     ],
+  },
+  {
+    id: 'quickbooks.ledger.read',
+    name: 'QuickBooks general ledger (read)',
+    description:
+      'Read journal entries from the general ledger. Use to check whether a summary entry was already posted before posting it again.',
+    tools: ['find_quickbooks_journal_entry'],
+  },
+  {
+    id: 'quickbooks.ledger.write',
+    name: 'QuickBooks general ledger (write)',
+    description:
+      'Post summary journal entries to the general ledger. High blast radius — entries hit the financial statements directly, with no invoice or payment to review them against.',
+    tools: ['create_quickbooks_journal_entry'],
   },
 ]

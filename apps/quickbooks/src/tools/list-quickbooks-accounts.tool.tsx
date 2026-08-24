@@ -19,6 +19,12 @@ export const listQuickbooksAccountsTool = defineTool({
         fullyQualifiedName: z
           .string()
           .describe('e.g. "Income:Sales:Consulting" — disambiguates duplicate leaf names.'),
+        acctNum: z
+          .string()
+          .nullable()
+          .describe(
+            'The account NUMBER ("1200"), not the id. Null when the company does not use account numbers.'
+          ),
         accountType: z.string().describe('Income, Expense, Bank, Accounts Receivable, etc.'),
         classification: z.enum(['Asset', 'Liability', 'Equity', 'Revenue', 'Expense']),
         active: z.boolean(),
@@ -31,6 +37,7 @@ export const listQuickbooksAccountsTool = defineTool({
         id: '82',
         name: 'Consulting',
         fullyQualifiedName: 'Income:Sales:Consulting',
+        acctNum: '4010',
         accountType: 'Income',
         classification: 'Revenue',
         active: true,
@@ -39,6 +46,7 @@ export const listQuickbooksAccountsTool = defineTool({
         id: '35',
         name: 'Accounts Receivable',
         fullyQualifiedName: 'Accounts Receivable',
+        acctNum: null,
         accountType: 'Accounts Receivable',
         classification: 'Asset',
         active: true,
