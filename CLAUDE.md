@@ -77,6 +77,6 @@ Enforced by [Biome](https://biomejs.dev/) (config at repo root `biome.json`):
 ## CI/CD
 
 - **PRs to main**: CI detects which apps changed and runs `pnpm lint` + `pnpm build` per app
-- **Merge to main**: Changed apps are auto-published via `pnpm exec auxx version create` — a PRODUCTION deployment (see *Deploying and syncing*)
+- **Merge to main deploys NOTHING.** `ci.yml` runs on `pull_request` only (type-check + bundle). Publishing is `workflow_dispatch` only — Actions tab → *Publish Apps* → Run workflow — because apps may land features ahead of the production SDK/API supporting them. That run is a PRODUCTION deployment and publishes **every** app, auto-rolling every org with the app installed (see *Deploying and syncing*)
 - Authentication is `AUXX_API_KEY`, not the keychain
 - Node 20, pnpm
