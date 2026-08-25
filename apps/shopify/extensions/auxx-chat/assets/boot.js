@@ -37,7 +37,13 @@
   // Identified path — mint a JWT via the Shopify App Proxy, same-origin to
   // the merchant storefront. Shopify HMAC-signs the request so the Auxx
   // route can prove which shop the customer belongs to.
-  fetch('/apps/auxx-chat/jwt', { credentials: 'include' })
+  //
+  // `channel_id` is REQUIRED by the proxy route — it is how the route resolves
+  // the owning org before it will mint anything. Omitting it returns 400
+  // `missing_params`, which on `audience: 'users'` means no widget renders at all.
+  fetch('/apps/auxx-chat/jwt?channel_id=' + encodeURIComponent(channelId), {
+    credentials: 'include',
+  })
     .then(function (res) {
       if (!res.ok) return null
       if (res.status === 204) return null
