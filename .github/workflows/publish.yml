@@ -65,7 +65,13 @@ jobs:
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             echo "Test mode — running check-all (no upload/publish)"
-            pnpm check-all
+            # The step-level `env:` below applies to BOTH branches, and push-all
+            # refuses to run with AUXX_ENV=production set but --prod not passed
+            # ("refusing to guess", scripts/push-all.ts:95) — deliberately, so a
+            # stale variable can never silently downgrade a production publish.
+            # check-all builds locally and never reaches the network, so the target
+            # is irrelevant to it: clear the variable rather than weaken the guard.
+            env -u AUXX_ENV pnpm check-all
           else
             pnpm push-prod
           fi
