@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { WorkflowPanel, useWorkflow } from '@auxx/sdk/client'
 import { shopifySchema } from './shopify-schema'
-import { OPERATIONS } from './resources/constants'
+import { OPERATIONS, RESOURCES } from './resources/constants'
 import { OrderPanel } from './resources/order/order-panel'
 import { ProductPanel } from './resources/product/product-panel'
 import { CustomerPanel } from './resources/customer/customer-panel'
@@ -16,6 +16,7 @@ import { FulfillmentPanel } from './resources/fulfillment/fulfillment-panel'
 import { DraftOrderPanel } from './resources/draft-order/draft-order-panel'
 import { CollectionPanel } from './resources/collection/collection-panel'
 import { DiscountPanel } from './resources/discount/discount-panel'
+import { useCapabilities } from './shared/use-capabilities'
 import { useShopifyData } from './shared/use-shopify-data'
 import listLocations from './shared/list-locations.server'
 
@@ -36,14 +37,29 @@ export function ShopifyPanel() {
   const resource = (data?.resource ?? 'order') as keyof typeof OPERATIONS
   const operation = data?.operation ?? 'getMany'
 
-  // Auto-reset operation when resource changes
+  // What this connection's token was actually granted. Narrows the pickers to operations
+  // the merchant can perform, instead of a build-time list identical for every org.
+  // See auxxai repo: plans/connections/scope-derived-capabilities.md
+  const { capabilities } = useCapabilities()
+
+  /** Operation options for a resource, minus anything the granted scopes cannot perform. */
+  const allowedOperations = (res: string) => {
+    const allowed = capabilities.operations[res]
+    const all = OPERATIONS[res] ?? []
+    return allowed ? all.filter((op) => allowed.includes(op.value)) : all
+  }
+
+  const resourceOptions = RESOURCES.filter((r) => capabilities.resources.includes(r.value))
+
+  // Auto-reset operation when the resource changes, or when narrowing capabilities makes the
+  // current selection unavailable (e.g. a workflow built before a scope was revoked).
   useEffect(() => {
     if (!data) return
-    const validOps = OPERATIONS[resource]
-    if (validOps && !validOps.some((op) => op.value === operation)) {
+    const validOps = allowedOperations(resource as string)
+    if (validOps.length > 0 && !validOps.some((op) => op.value === operation)) {
       updateData({ operation: validOps[0].value })
     }
-  }, [resource])
+  }, [resource, capabilities])
 
   // Lazy data loading — locations needed for order, fulfillment, inventory level
   const needsLocations =
@@ -68,13 +84,14 @@ export function ShopifyPanel() {
           {Object.keys(OPERATIONS).map((res) => (
             <ConditionalRender key={res} when={(d) => d.resource === res}>
               <FieldRow>
-                <OptionsInput name="resource" acceptsVariables={false} variant="outline" />
-                <FieldDivider />
                 <OptionsInput
-                  name="operation"
-                  options={OPERATIONS[res as keyof typeof OPERATIONS]}
-                  expand
+                  name="resource"
+                  options={resourceOptions}
+                  acceptsVariables={false}
+                  variant="outline"
                 />
+                <FieldDivider />
+                <OptionsInput name="operation" options={allowedOperations(res)} expand />
               </FieldRow>
             </ConditionalRender>
           ))}
