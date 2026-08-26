@@ -1,20 +1,21 @@
 // src/blocks/shopify/shared/list-variants.server.ts
 
 import { getOrganizationConnection } from '@auxx/sdk/server'
-import { shopifyApi, throwConnectionNotFound, getShopDomain } from './shopify-api'
+import { shopifyApi, throwConnectionNotFound, getShopDomain, getShopifyToken } from './shopify-api'
 
 export default async function listVariants(
   productId: string
 ): Promise<{ value: string; label: string }[]> {
   const connection = getOrganizationConnection()
-  if (!connection?.value) throwConnectionNotFound()
+  const token = getShopifyToken(connection)
+  if (!token) throwConnectionNotFound()
 
-  const shopDomain = getShopDomain(connection.metadata)
+  const shopDomain = getShopDomain(connection?.metadata)
   if (!shopDomain || !productId) return []
 
   const result = await shopifyApi<{ variants: any[] }>(
     shopDomain,
-    connection.value,
+    token,
     `/products/${productId}/variants.json`,
     { qs: { fields: 'id,title,sku', limit: '250' } }
   )

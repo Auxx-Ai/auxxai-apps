@@ -9,7 +9,11 @@
  * knowledge required.
  */
 import { getConnection } from '@auxx/sdk/server'
-import { getShopDomain, throwConnectionNotFound } from '../../blocks/shopify/shared/shopify-api'
+import {
+  getShopDomain,
+  getShopifyToken,
+  throwConnectionNotFound,
+} from '../../blocks/shopify/shared/shopify-api'
 
 export interface ShopifyConnectionInfo {
   token: string
@@ -18,8 +22,9 @@ export interface ShopifyConnectionInfo {
 
 export function getShopifyConnection(): ShopifyConnectionInfo {
   const connection = getConnection()
-  if (!connection?.value) throwConnectionNotFound()
-  const shopDomain = getShopDomain(connection.metadata)
+  const token = getShopifyToken(connection)
+  if (!token) throwConnectionNotFound()
+  const shopDomain = getShopDomain(connection?.metadata)
   if (!shopDomain) {
     const err = new Error(
       'Shopify connection is missing the shop subdomain. Reconnect the store under Settings → Apps → Shopify.'
@@ -27,5 +32,5 @@ export function getShopifyConnection(): ShopifyConnectionInfo {
     err.code = 'CONNECTION_INVALID'
     throw err
   }
-  return { token: connection.value, shopDomain }
+  return { token, shopDomain }
 }

@@ -1,14 +1,20 @@
 // src/blocks/shopify/resources/customer-address/customer-address-execute.server.ts
 
 import { getOrganizationConnection } from '@auxx/sdk/server'
-import { shopifyApi, throwConnectionNotFound, getShopDomain } from '../../shared/shopify-api'
+import {
+  shopifyApi,
+  throwConnectionNotFound,
+  getShopDomain,
+  getShopifyToken,
+} from '../../shared/shopify-api'
 
 function getConnectionInfo() {
   const connection = getOrganizationConnection()
-  if (!connection?.value) throwConnectionNotFound()
+  const token = getShopifyToken(connection)
+  if (!token) throwConnectionNotFound()
   return {
-    token: connection.value,
-    shopDomain: getShopDomain(connection.metadata),
+    token,
+    shopDomain: getShopDomain(connection?.metadata),
   }
 }
 

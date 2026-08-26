@@ -2,10 +2,10 @@
 
 import type { Connection } from '@auxx/sdk/server'
 import { deleteWebhookHandler, listWebhookHandlers } from '@auxx/sdk/server'
-import { shopifyApi, getShopDomain } from '../blocks/shopify/shared/shopify-api'
+import { shopifyApi, getShopDomain, getShopifyToken } from '../blocks/shopify/shared/shopify-api'
 
 export default async function connectionRemoved({ connection }: { connection: Connection }) {
-  const token = connection.value
+  const token = getShopifyToken(connection)
   const shopDomain = getShopDomain(connection.metadata)
 
   // Unregister webhooks from Shopify (best-effort)
