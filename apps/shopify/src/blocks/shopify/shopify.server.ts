@@ -7,7 +7,10 @@
 // tools accept the same prefixed field names the block panel writes
 // (e.g. `getOrderId`, `createEmail`), so no per-op projection is needed.
 
+import { InsufficientPermissionsError } from '@auxx/sdk/server'
+import { isOperationAllowed, requiredCapabilities } from './resources/capabilities'
 import { VALID_OPERATIONS } from './resources/constants'
+import { getConnectionCapabilities } from './shared/capabilities.server'
 import { shopifyToolMap } from './shopify-tool-map'
 
 export default async function shopifyExecute(
@@ -20,6 +23,17 @@ export default async function shopifyExecute(
   if (!valid) throw new Error(`Unknown resource: ${resource}`)
   if (!valid.includes(operation)) {
     throw new Error(`Invalid operation "${operation}" for resource "${resource}"`)
+  }
+
+  // Structural validity above; PERMISSION here. Both are required: `shopifyToolMap` carries
+  // every resource.operation pair and Kopilot reaches those tools without the panel ever
+  // rendering, so gating only the picker would leave everything callable by an agent.
+  const { capabilities } = getConnectionCapabilities()
+  if (!isOperationAllowed(capabilities, resource, operation)) {
+    throw new InsufficientPermissionsError(
+      'organization',
+      requiredCapabilities(resource, operation) as string[]
+    )
   }
 
   const key = `${resource}.${operation}`
