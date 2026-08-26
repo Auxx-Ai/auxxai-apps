@@ -32,7 +32,7 @@ import type {
   ConnectorFetchResult,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
-import { getShopDomain } from './blocks/shopify/shared/shopify-api'
+import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
 
 const API_VERSION = '2024-10'
 const PAGE_SIZE = 250
@@ -81,11 +81,11 @@ async function fetchShopifyPage<Raw extends { updated_at: string }>(
   }
 ): Promise<ConnectorFetchResult> {
   const { mode, state, connection } = args
-  if (!connection?.value) {
+  const token = getShopifyToken(connection)
+  if (!token) {
     throw new Error('shopify: missing connection (requiresConnection)')
   }
-  const token = connection.value
-  const shopDomain = getShopDomain(connection.metadata)
+  const shopDomain = getShopDomain(connection?.metadata)
   if (!shopDomain) {
     throw new Error('shopify: connection metadata is missing the shop domain')
   }
@@ -650,15 +650,16 @@ async function fetchSteeredProduct(
   inventoryItemId: string
 ): Promise<ConnectorFetchResult> {
   const { connection } = args
-  if (!connection?.value) {
+  const token = getShopifyToken(connection)
+  if (!token) {
     throw new Error('shopify: missing connection (requiresConnection)')
   }
-  const shopDomain = getShopDomain(connection.metadata)
+  const shopDomain = getShopDomain(connection?.metadata)
   if (!shopDomain) {
     throw new Error('shopify: connection metadata is missing the shop domain')
   }
   const headers = {
-    'X-Shopify-Access-Token': connection.value,
+    'X-Shopify-Access-Token': token,
     'Content-Type': 'application/json',
   }
 

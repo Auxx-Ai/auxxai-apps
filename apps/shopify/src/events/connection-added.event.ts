@@ -2,7 +2,7 @@
 
 import type { Connection, ConnectionAddedResult } from '@auxx/sdk/server'
 import { createWebhookHandler, updateWebhookHandler } from '@auxx/sdk/server'
-import { shopifyApi, getShopDomain } from '../blocks/shopify/shared/shopify-api'
+import { shopifyApi, getShopDomain, getShopifyToken } from '../blocks/shopify/shared/shopify-api'
 
 // Topics we attempt to register. Note Shopify gates orders/*, customers/* and
 // fulfillments/* behind Protected Customer Data approval (Partner Dashboard) and
@@ -46,7 +46,7 @@ export default async function connectionAdded({
 }: {
   connection: Connection
 }): Promise<ConnectionAddedResult> {
-  const token = connection.value
+  const token = getShopifyToken(connection)
   if (!token) return {}
 
   const shopDomain = getShopDomain(connection.metadata)

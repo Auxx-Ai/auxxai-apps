@@ -44,6 +44,32 @@ export function getShopDomain(metadata: Record<string, any> | undefined): string
   return `${shop}.myshopify.com`
 }
 
+/**
+ * Resolve the Shopify Admin access token from a connection, whichever way the store was connected.
+ *
+ * The platform stores the token in a different place per connection method, and the
+ * SDK's `value` resolver (`secrets.accessToken || secrets.secret || ''`) never reads `fields`:
+ *
+ * | Method                                  | Platform stores token at | `connection.value` |
+ * | --------------------------------------- | ------------------------ | ------------------ |
+ * | OAuth (`oauth2-code`)                   | `secrets.accessToken`    | the token          |
+ * | API Key (`secret`, `shop` + `api_key`)  | `secrets.fields.api_key` | `''` (empty)       |
+ *
+ * So an API-Key connection reads back with an empty `value` and must be read from `fields`.
+ *
+ * `value` is checked FIRST so OAuth connections are completely unaffected — only the
+ * empty-`value` case falls through to the field.
+ *
+ * `api_key` is a fixed contract with the Shopify connection definition, not a guess:
+ * renaming that variable in the developer portal silently breaks every API-Key connection,
+ * because the token would land under a key nothing here reads.
+ */
+export function getShopifyToken(
+  connection: { value?: string; fields?: Record<string, string> } | undefined | null
+): string {
+  return connection?.value || connection?.fields?.api_key || ''
+}
+
 export async function shopifyApi<T = unknown>(
   shopDomain: string,
   accessToken: string,
