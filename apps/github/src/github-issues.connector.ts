@@ -1,16 +1,15 @@
 // src/github-issues.connector.ts
 //
-// GitHub Issues data connector — syncs a repository's issues into an app-OWNED
-// `github_issues` entity def (the platform creates the def + fields from the
-// declarations below at setup; step-11 owned-mode materialization). One `issue`
-// stream whose `execute` pages the REST /issues endpoint, returning ONE page + a
-// `page=N` cursor per call. The platform loops `execute` (Step 11), validates each
-// record against the stream schema, and writes it into the owned def.
+// GitHub Issues data connector — syncs a repository's issues into the app-OWNED
+// `issues` entity (declared in `entities.ts`). One `issue` stream whose `execute`
+// pages the REST /issues endpoint, returning ONE page + a `page=N` cursor per
+// call. The platform loops `execute`, validates each record against the stream
+// schema, and writes it into the owned entity.
 //
 // Owned (not contributing): GitHub issues are their own entity type, not an
-// enrichment of an existing Contact. External id = the GitHub issue id (primary
-// key); idempotent re-sync binds on it. `incremental` so the backfill runs once
-// then steady `since`-floored delta runs.
+// enrichment of an existing Contact. External id = the GitHub issue id
+// (`githubId`, `identity: true` on the entity); idempotent re-sync binds on it.
+// `incremental` so the backfill runs once then steady `since`-floored delta runs.
 
 import { defineDataConnector } from '@auxx/sdk/data-connectors'
 import { z } from '@auxx/sdk/tools'
@@ -56,36 +55,27 @@ export const githubIssuesConnector = defineDataConnector({
       key: 'issue',
       // `incremental`: backfill once, then steady `updated_at`-floored delta runs.
       syncMode: 'incremental',
-      displayFieldKey: 'title',
-      // SOURCE schema (Layer A) — one fetched issue. Keys are `fieldKey`; the
-      // server returns `ConnectorRecord.fields` keyed by `sourcePath`.
-      fields: {
-        id: { type: 'TEXT', name: 'GitHub Issue ID', sourcePath: 'id' },
-        number: { type: 'NUMBER', name: 'Number', sourcePath: 'number' },
-        title: { type: 'TEXT', name: 'Title', sourcePath: 'title' },
-        state: { type: 'TEXT', name: 'State', sourcePath: 'state' },
-        body: { type: 'RICH_TEXT', name: 'Body', sourcePath: 'body' },
-        author: { type: 'TEXT', name: 'Author', sourcePath: 'author' },
-        comments: { type: 'NUMBER', name: 'Comments', sourcePath: 'comments' },
-        url: { type: 'URL', name: 'URL', sourcePath: 'url' },
-        createdAt: { type: 'DATETIME', name: 'Created', sourcePath: 'created_at' },
-        updatedAt: { type: 'DATETIME', name: 'Updated', sourcePath: 'updated_at' },
-      },
-      // OWNED — the platform provisions the `github_issues` def + these fields and
-      // binds concrete refs at setup (no manual mapping needed).
-      defaultMappings: [
+      mappings: [
         {
+          // Root record — owned `issues`. Each field's `key` names a field
+          // already declared on the entity (`entities.ts`); type/name/identity
+          // are inherited from there. `sourcePath` matches what
+          // `github-issues.connector.server.ts` projects onto
+          // `ConnectorRecord.fields`.
           rootPath: '',
-          target: {
-            mode: 'owned',
-            entity: {
-              key: 'issues',
-              apiSlug: 'github_issues',
-              singular: 'GitHub Issue',
-              plural: 'GitHub Issues',
-              primaryDisplayField: 'title',
-            },
-          },
+          target: { entityKey: 'issues' },
+          fields: [
+            { key: 'githubId', sourcePath: 'id' },
+            { key: 'number', sourcePath: 'number' },
+            { key: 'title', sourcePath: 'title' },
+            { key: 'state', sourcePath: 'state' },
+            { key: 'body', sourcePath: 'body' },
+            { key: 'author', sourcePath: 'author' },
+            { key: 'comments', sourcePath: 'comments' },
+            { key: 'url', sourcePath: 'url' },
+            { key: 'createdAt', sourcePath: 'created_at' },
+            { key: 'updatedAt', sourcePath: 'updated_at' },
+          ],
         },
       ],
       exampleRecord: {

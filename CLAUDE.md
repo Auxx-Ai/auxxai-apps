@@ -12,6 +12,10 @@ The root `package.json` exists only for the **batch scripts** (`scripts/push-all
 
 The main Auxx.ai application (including the `@auxx/sdk` source) lives at `/Users/mklooth/Sites/auxxai`. Reference that repo when you need to understand SDK internals, platform APIs, or how apps integrate with the platform.
 
+## Fields, entities and data connectors
+
+Before declaring fields (`defineFields`), a whole entity (`defineEntity`), or a data connector (`defineDataConnector`), read `docs/app-fields-and-entities-guide.md` in the main platform repo (`/Users/mklooth/Sites/auxxai`). It is the one doc that ties the three author surfaces together: the shared field shape, capability defaults per surface, identity fields, connector mapping fields (owned vs contributing, `appField`, `match`, `mergeStrategy`), and what each surface stamps in the database. `apps/__template/src/fields.ts`, `entities.ts`, and `template.connector.ts` / `template.connector.server.ts` are worked examples in the current shape.
+
 ## Common Commands
 
 All commands run from within an app directory (`apps/<app-slug>/`):

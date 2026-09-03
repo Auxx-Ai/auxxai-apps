@@ -39,6 +39,7 @@ import { searchGithubPullRequestsTool } from './tools/search-github-pull-request
 import { searchGithubReposTool } from './tools/search-github-repos.tool'
 import { summarizeRecentPrsTool } from './tools/summarize-recent-prs.tool'
 import { githubToolsets } from './tools/toolsets'
+import { issues } from './entities'
 import { githubIssuesConnector } from './github-issues.connector'
 
 export const app = {
@@ -56,6 +57,8 @@ export const app = {
     blocks: [githubBlock],
     triggers: [],
   },
+  // Definitions this app owns end to end.
+  entities: [issues],
   // Data connectors — sync external records into the entity system.
   dataConnectors: [githubIssuesConnector],
   tools: [
