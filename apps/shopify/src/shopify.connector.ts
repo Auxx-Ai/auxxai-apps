@@ -3,7 +3,7 @@
 // The single Shopify data connector. One connector per app, MANY streams — the
 // platform supports multiple streams per connector but resolves one connector per
 // app slug, so everything Shopify syncs hangs off this one declaration:
-//   • `customer` → contributing system `contact` (merge on email).
+//   • `customer` → contributing system `contact` (merge on email, then phone).
 //   • `order`    → contributing native `order`, embedded customer → contributing
 //                  `contact`, `line_items[]` → contributing native `line_item`,
 //                  `line_items[].variant_id` → reference to native `part`.
@@ -64,9 +64,10 @@ export const shopifyConnector = defineDataConnector({
   config: z.object({}),
   streams: [
     // ── customer ────────────────────────────────────────────────────────────────
-    // Storefront customers → system `contact` (contributing, merge on email).
-    // External id = Shopify customer id; `email` is the secondary identity-match key
-    // so an imported customer merges into an existing contact on first link.
+    // Storefront customers → system `contact` (contributing, merge on email/phone).
+    // External id = Shopify customer id; `email` and `phone` are the secondary
+    // identity-match keys, so an imported customer merges into an existing contact on
+    // first link — phone included, because a phone-signup customer has no email.
     // Incremental, like the other two streams: the customers endpoint honours
     // `updated_at_min`, and a snapshot stream can never finish a large customer list
     // because a snapshot backfill restarts from page one on every resume while the
@@ -87,7 +88,15 @@ export const shopifyConnector = defineDataConnector({
             // copy. Shopify fills what is empty and leaves the rest alone.
             { sourcePath: 'first_name', target: 'first_name', mergeStrategy: 'fill_blank' },
             { sourcePath: 'last_name', target: 'last_name', mergeStrategy: 'fill_blank' },
-            { sourcePath: 'phone', target: 'phone', mergeStrategy: 'fill_blank' },
+            // Phone is a SECOND identity key, not just data. A Shopify account created
+            // by SMS / phone-only signup carries no email at all, so `primary_email`
+            // cannot re-identify it: once the item bindings are dropped (any
+            // `identity-match` edit is a `rebind`, and a contributing mapping keeps its
+            // instances), every one of those customers re-creates as a duplicate.
+            // Plain `true` rather than `'exclusive'` for the same reason `primary_email`
+            // is: skipping a collision would leave that order's contact edge pending
+            // forever. `fill_blank` still applies — a match key is not a write policy.
+            { sourcePath: 'phone', target: 'phone', match: true, mergeStrategy: 'fill_blank' },
             // Default-address scalars — bound onto the contact's existing city/
             // region/country TEXT fields (contact has no ADDRESS_STRUCT). The
             // server flattens `default_address.*` onto these source paths.
