@@ -10,10 +10,13 @@
 
 import { TextBlock } from '@auxx/sdk/client'
 import { templateBlock } from './blocks/template/template.workflow'
+import { templateItems } from './entities'
+import { templateFields } from './fields'
 import { echoTool } from './tools/echo.tool'
 import { pingTool } from './tools/ping.tool'
 import { reverseTool } from './tools/reverse.tool'
 import { templateToolsets } from './tools/toolsets'
+import { templateConnector } from './template.connector'
 import { exampleTrigger } from './triggers/example/example.workflow'
 
 export const app = {
@@ -43,6 +46,13 @@ export const app = {
    */
   tools: [pingTool, echoTool, reverseTool],
   toolsets: templateToolsets,
+  // Custom fields on an EXISTING entity (`fields.ts`), a whole entity this
+  // app owns (`entities.ts`), and the connector that syncs records into
+  // both (`template.connector.ts`). See docs/app-fields-and-entities-guide.md
+  // in the main platform repo. EXAMPLE only, replace or delete for a real app.
+  fields: templateFields,
+  entities: [templateItems],
+  dataConnectors: [templateConnector],
 }
 
 export function App() {

@@ -3,10 +3,12 @@
 // Server handler for the single Shopify data connector. Runs inside the
 // app-runtime sandbox and serves THREE streams off the one connector:
 //   • `customer` → REST /customers.json, contributes into the system `contact` def.
-//   • `order`    → REST /orders.json (line items embedded), fans out into
-//                  shopify_orders + shopify_line_items + the contact/product edges.
-//   • `product`  → REST /products.json, populates the owned shopify_products def the
-//                  order stream's `line_items[].product_id` reference links to.
+//   • `order`    → REST /orders.json (line items embedded), contributes into the
+//                  native `order` / `line_item` / `contact` / `part` entities
+//                  (money plan 37 §6/§7.2 — the retarget off the old owned
+//                  `shopify_orders` / `shopify_line_items` defs).
+//   • `product`  → REST /products.json, contributes into the native `product` /
+//                  `part` / `catalog_item` entities (money plan 37 §7.1).
 //
 // All three share the same "one page + page_info cursor" contract
 // (`fetchShopifyPage`): return ONE page of records plus a flat cursor, and the
@@ -19,13 +21,29 @@
 // Connection contract: resolve from `args.connection` — `value` is the Admin API
 // access token, `metadata` carries the shop domain.
 //
-// The `order` projection also SYNTHESISES a `derived` object at the order root and on
-// each line item (`deriveFulfillments`), rolling `order.fulfillments[]` up into ship
-// dates, shipped quantities and per-line shipment counts. Nothing in Shopify's payload
-// carries a ship date at the order or line level — it exists only inside
-// `fulfillments[]` — and accrual revenue is recognised at fulfillment, so this walk is
-// what makes a period cut possible. `shipment_count` is the honesty column: where it is
-// 1 the derived dates are exact, and where it is >1 the close job knows to look closer.
+// The `order` projection also SYNTHESISES a `derived` walk over
+// `order.fulfillments[]` (`deriveFulfillments`), rolling it up into ship dates,
+// shipped quantities and per-line shipment counts — flattened directly onto the
+// order/line fields rather than nested (a contributing mapping's `sourcePath` is
+// relative to its `rootPath`, so there is no more separate "declared field key"
+// to hide the nesting behind). Nothing in Shopify's payload carries a ship date
+// at the order or line level — it exists only inside `fulfillments[]` — and
+// accrual revenue is recognised at fulfillment, so this walk is what makes a
+// period cut possible. `shipmentCount` is the honesty column: where it is 1 the
+// derived dates are exact, and where it is >1 the close job knows to look closer.
+//
+// ── Field naming ─────────────────────────────────────────────────────────────
+// Every projected key here is exactly the `sourcePath` (relative to its
+// mapping's `rootPath`) a `shopify.connector.ts` mapping field reads — there is
+// no more separate Layer-A "declared field key" distinct from the raw payload
+// path, so the projection and the manifest must agree on literal key names.
+// Money fields are already scaled to integer minor units by `decimalToMinorUnits`
+// before landing in `fields` — see its docblock for why that has to happen here.
+//
+// ⚠️ Any field whose projected value is an ARRAY or an OBJECT is silently dropped
+// by the fan-out before it reaches the field-value layer — no error, no null, no
+// write — UNLESS it is bound to a JSON field (`raw`), which passes objects/arrays
+// through. `tags` and `paymentGateways` are therefore delivered as COMMA STRINGS.
 
 import type {
   ConnectorExecuteArgs,
@@ -183,9 +201,7 @@ function toAddressStruct(addr: RawAddress | null | undefined) {
  * comma string is exactly what the platform's `normalizeFieldValue` splits into tag
  * values. Do NOT split it into an array here: the fan-out drops any array-shaped
  * source value before the field-value layer is reached (`hasArrayShapedSource` —
- * "connectors cannot source arrays"), so an array write is silently discarded. That
- * is why the `tags` column on both shopify_orders and shopify_products had never
- * synced a single value.
+ * "connectors cannot source arrays"), so an array write is silently discarded.
  */
 function toTagString(tags: string | null | undefined): string {
   return tags ?? ''
@@ -193,13 +209,34 @@ function toTagString(tags: string | null | undefined): string {
 
 /**
  * Shopify returns `null` fulfillment_status for an unfulfilled order/line; project
- * it to the explicit `'unfulfilled'` enum value so the SINGLE_SELECT chip is set.
+ * it to the explicit `'unfulfilled'` value so the native SINGLE_SELECT chip is set.
  */
 function fulfillmentStatus(raw: string | null | undefined): string {
   return raw ?? 'unfulfilled'
 }
 
+/**
+ * Shopify reports money as a DECIMAL MAJOR-UNIT STRING (`"49.99"`). The platform
+ * stores `FieldType.CURRENCY` as INTEGER MINOR UNITS (`4999`), so every money
+ * field has to be scaled on the way out of this projection.
+ *
+ * This is the app's job, not the platform's: a mapping field's `sourcePath` is a
+ * JSON path with no transform channel, and the platform cannot tell `49.99`-as-
+ * dollars from `49.99`-as-cents once the unit is dropped. Passing these through
+ * raw is what stored 139 Shopify money rows 100x low (money plan 37 §2.4).
+ *
+ * Returns null (not 0) for an absent value: a missing price is "no value", and
+ * writing 0 would render a real $0.00.
+ */
+function decimalToMinorUnits(decimal: string | null | undefined): number | null {
+  if (decimal === null || decimal === undefined || decimal === '') return null
+  const parsed = Number.parseFloat(String(decimal))
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null
+}
+
 // ── customer stream ────────────────────────────────────────────────────────────
+// Unchanged — the `customer` stream keeps its projection as-is; only the
+// manifest that binds it moves to the new mapping shape (money plan 37 §8).
 
 interface RawCustomer {
   id: number
@@ -262,6 +299,11 @@ interface RawLineItem {
   price: string | null
   fulfillment_status: string | null
   product_id: number | null
+  /** Per-line discount allocation — how much of which order-level discount
+   *  landed on THIS line. Feeds `lineTotal` (price × qty − Σ amounts) and is
+   *  also folded into the order's `raw.discount_allocations` (money plan 37
+   *  §6/§8) since `line_item` gets no `raw` field of its own. */
+  discount_allocations: Array<{ amount: string | null }> | null
 }
 
 /**
@@ -399,6 +441,10 @@ interface RawOrder {
   subtotal_price: string | null
   total_tax: string | null
   total_discounts: string | null
+  /** Present on the Order resource by default. §6/§8: transcribed onto the
+   *  new `order_shipping_total` system field — sell-side documents had no
+   *  shipping term before this. */
+  total_shipping_price_set: { shop_money: { amount: string | null } } | null
   financial_status: string | null
   fulfillment_status: string | null
   cancel_reason: string | null
@@ -429,28 +475,16 @@ interface RawOrder {
     last_name: string | null
   } | null
   line_items: RawLineItem[] | null
+  // ── Not modelled anywhere in the native order/line_item — folded verbatim
+  // into `raw` (money plan 37 §6/§8) instead of a resync-to-answer round trip.
+  refunds: unknown[] | null
+  tax_lines: unknown[] | null
+  shipping_lines: unknown[] | null
+  discount_applications: unknown[] | null
 }
 
-/**
- * Shopify reports money as a DECIMAL MAJOR-UNIT STRING (`"49.99"`). The platform
- * stores `FieldType.CURRENCY` as INTEGER MINOR UNITS (`4999`), so every money
- * field has to be scaled on the way out of this projection.
- *
- * This is the app's job, not the platform's: `ConnectorFieldDecl.sourcePath` is a
- * JSON path with no transform channel, and the platform cannot tell `49.99`-as-
- * dollars from `49.99`-as-cents once the unit is dropped. Passing these through
- * raw is what stored 139 Shopify money rows 100x low.
- *
- * Returns null (not 0) for an absent value: a missing price is "no value", and
- * writing 0 would render a real $0.00.
- */
-function decimalToMinorUnits(decimal: string | null | undefined): number | null {
-  if (decimal === null || decimal === undefined || decimal === '') return null
-  const parsed = Number.parseFloat(String(decimal))
-  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null
-}
-
-/** Project one REST order into a SOURCE-shaped record (fields keyed by sourcePath). */
+/** Project one REST order into a SOURCE-shaped record (fields keyed by sourcePath,
+ *  relative to the mapping's rootPath — see the file header). */
 function toOrderRecord(o: RawOrder): ConnectorRecord {
   const fulfilled = deriveFulfillments(o)
   return {
@@ -458,79 +492,126 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
     externalId: String(o.id),
     displayName: o.name ?? `#${o.order_number ?? o.id}`,
     fields: {
-      id: String(o.id),
+      shopify_id: String(o.id),
       name: o.name,
       email: o.email,
       currency: o.currency,
-      total_price: decimalToMinorUnits(o.total_price),
-      subtotal_price: decimalToMinorUnits(o.subtotal_price),
-      total_tax: decimalToMinorUnits(o.total_tax),
-      total_discounts: decimalToMinorUnits(o.total_discounts),
-      financial_status: o.financial_status,
-      fulfillment_status: fulfillmentStatus(o.fulfillment_status),
+      totalPrice: decimalToMinorUnits(o.total_price),
+      subtotalPrice: decimalToMinorUnits(o.subtotal_price),
+      totalTax: decimalToMinorUnits(o.total_tax),
+      totalDiscounts: decimalToMinorUnits(o.total_discounts),
+      totalShipping: decimalToMinorUnits(o.total_shipping_price_set?.shop_money?.amount ?? null),
+      // Shopify's total_discounts is always an absolute amount at the order
+      // aggregate level (never a percent) — the projection states it as a
+      // constant so `order_discount_type` has something to transcribe (§6).
+      discountType: 'amount' as const,
+      financialStatus: o.financial_status,
+      fulfillmentStatus: fulfillmentStatus(o.fulfillment_status),
       // Only set on a cancelled order — leave null otherwise (no enum value to write).
-      cancel_reason: o.cancel_reason,
+      cancelReason: o.cancel_reason,
       // Joined to a COMMA STRING, never emitted as an array: the fan-out drops
       // array-shaped source values outright. `''` (not null) for an order with no
       // gateway — a $0 / fully-discounted order is legitimately empty, not unknown.
-      payment_gateway_names: (o.payment_gateway_names ?? []).join(','),
+      paymentGateways: (o.payment_gateway_names ?? []).join(','),
       tags: toTagString(o.tags),
       note: o.note,
-      created_at: o.created_at,
-      processed_at: o.processed_at,
-      cancelled_at: o.cancelled_at,
-      // Synthesised rollup of fulfillments[] — no such object exists in Shopify's
-      // payload. Namespaced under `derived` so it reads as computed rather than raw,
-      // and so it can never collide with a future real Shopify field.
-      derived: fulfilled.order,
-      shipping_address: toAddressStruct(o.shipping_address),
-      billing_address: toAddressStruct(o.billing_address),
+      createdAt: o.created_at,
+      processedAt: o.processed_at,
+      cancelledAt: o.cancelled_at,
+      // Fulfillment rollup — FLATTENED directly onto the order's fields, not
+      // nested under a `derived` object: a contributing mapping's `sourcePath`
+      // is relative to its rootPath, so there is no schema-key indirection left
+      // to hide the nesting behind (see the file header).
+      firstFulfilledAt: fulfilled.order.first_fulfilled_at,
+      lastFulfilledAt: fulfilled.order.last_fulfilled_at,
+      shipmentCount: fulfilled.order.shipment_count,
+      isSplitShipment: fulfilled.order.is_split_shipment,
+      shippingAddress: toAddressStruct(o.shipping_address),
+      billingAddress: toAddressStruct(o.billing_address),
       customer: o.customer
         ? {
             // `id` keys the contributing contact item to the same external id the
-            // `customer` stream emits, so the order→contact `Customer` edge resolves.
+            // `customer` stream emits, so the order→contact edge resolves.
             id: o.customer.id != null ? String(o.customer.id) : null,
             email: o.customer.email,
-            first_name: o.customer.first_name,
-            last_name: o.customer.last_name,
+            firstName: o.customer.first_name,
+            lastName: o.customer.last_name,
           }
         : null,
       // Raw array — the platform fans each element out per the `line_items[]` mapping.
-      // `product_id` is stringified to match the product stream's `externalId` so the
-      // line→product reference links.
-      line_items: (o.line_items ?? []).map((li) => ({
-        // The line item's own Shopify id — its declared External ID (`lineItems.shopifyId`),
-        // a stable per-line identity that replaces the positional `{orderId}:{index}` fallback.
-        id: li.id != null ? String(li.id) : null,
-        title: li.title,
-        variant_title: li.variant_title,
-        // Stringified to match the product stream's variant External ID so the
-        // line→variant reference edge resolves (same discipline as product_id).
-        variant_id: li.variant_id != null ? String(li.variant_id) : null,
-        sku: li.sku,
-        vendor: li.vendor,
-        quantity: typeof li.quantity === 'number' ? li.quantity : null,
-        fulfillable_quantity:
-          typeof li.fulfillable_quantity === 'number' ? li.fulfillable_quantity : null,
-        price: decimalToMinorUnits(li.price),
-        // The order's currency, carried onto every line. Line items fan out into
-        // their own def, and Shopify's line payload has no currency of its own —
-        // so without this the money lands on a record that cannot say what it is.
-        // Same synthesis discipline as `derived`.
-        currency: o.currency,
-        fulfillment_status: fulfillmentStatus(li.fulfillment_status),
-        product_id: li.product_id != null ? String(li.product_id) : null,
-        // Per-line shipment rollup. A line never touched by a live fulfillment gets an
-        // explicit zeroed shape rather than a missing key, so the columns read as
-        // "nothing shipped" instead of "not synced".
-        derived: (li.id != null ? fulfilled.byLineId.get(String(li.id)) : null) ?? {
+      line_items: (o.line_items ?? []).map((li, index) => {
+        const unitPriceMinor = decimalToMinorUnits(li.price) ?? 0
+        const quantity = typeof li.quantity === 'number' ? li.quantity : 0
+        const discountMinor = (li.discount_allocations ?? []).reduce(
+          (sum, allocation) => sum + (decimalToMinorUnits(allocation.amount) ?? 0),
+          0
+        )
+        // Per-line fulfillment rollup. A line never touched by a live
+        // fulfillment gets an explicit zeroed shape rather than a missing
+        // key, so the columns read as "nothing shipped" instead of "not
+        // synced".
+        const derivation: LineFulfillmentDerivation = (li.id != null
+          ? fulfilled.byLineId.get(String(li.id))
+          : undefined) ?? {
           fulfilled_at: null,
           last_fulfilled_at: null,
           fulfilled_quantity: 0,
           shipment_count: 0,
           tracking_number: null,
-        },
-      })),
+        }
+        return {
+          // The line item's own Shopify id — its declared identity, a stable
+          // per-line id that replaces the positional `{orderId}:{index}` fallback.
+          shopifyId: li.id != null ? String(li.id) : null,
+          title: li.title,
+          variantTitle: li.variant_title,
+          sku: li.sku,
+          vendor: li.vendor,
+          quantity: typeof li.quantity === 'number' ? li.quantity : null,
+          fulfillableQuantity:
+            typeof li.fulfillable_quantity === 'number' ? li.fulfillable_quantity : null,
+          price: decimalToMinorUnits(li.price),
+          // Transcribed line total (§6.2): price × qty − Σ this line's discount
+          // allocations, all in integer minor units to avoid float drift.
+          lineTotal: unitPriceMinor * quantity - discountMinor,
+          // Position within the order — line_item_sort_order.
+          index,
+          fulfillmentStatus: fulfillmentStatus(li.fulfillment_status),
+          // Stringified to match the product stream's variant identity so the
+          // line→part reference resolves (money plan 37 §7.2/§10.5). NOT
+          // renamed to camelCase: this exact literal path is also the
+          // reference mapping's `rootPath` in shopify.connector.ts.
+          variant_id: li.variant_id != null ? String(li.variant_id) : null,
+          // Per-line fulfillment rollup, flattened (see the order-level comment
+          // above) — these are `@app:shopify:*` app fields (§7.3), not native.
+          fulfilledAt: derivation.fulfilled_at,
+          lastFulfilledAt: derivation.last_fulfilled_at,
+          fulfilledQuantity: derivation.fulfilled_quantity,
+          shipmentCount: derivation.shipment_count,
+          trackingNumber: derivation.tracking_number,
+        }
+      }),
+      // Everything the native order/line_item does not model (§6/§8) — stored
+      // verbatim (no unit scaling: this is a query-later dump, not a bound
+      // field) so an accrual question never needs a resync to answer.
+      // Key names deliberately mirror Shopify's own field names (not camelCased
+      // like the rest of this projection) — this is a query-later dump of the
+      // provider's own shapes, not a bound field.
+      raw: {
+        refunds: o.refunds ?? [],
+        tax_lines: o.tax_lines ?? [],
+        shipping_lines: o.shipping_lines ?? [],
+        discount_applications: o.discount_applications ?? [],
+        // Shopify carries this PER LINE ITEM, not at the order level; line_item
+        // gets no `raw` field of its own (§6/§8), so every line's allocations
+        // are gathered here, tagged with the line they came from.
+        discount_allocations: (o.line_items ?? []).flatMap((li) =>
+          (li.discount_allocations ?? []).map((allocation) => ({
+            line_item_id: li.id != null ? String(li.id) : null,
+            amount: allocation.amount,
+          }))
+        ),
+      },
     },
   }
 }
@@ -540,7 +621,7 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
 /**
  * An embedded Shopify REST product variant (from /products.json `variants[]`).
  * `id`/`inventory_item_id` arrive as numbers; both are stringified in projection so
- * the External-ID and webhook join-key comparisons stay string-based (like line items).
+ * the identity and webhook join-key comparisons stay string-based (like line items).
  */
 interface RawVariant {
   id: number | null
@@ -572,14 +653,12 @@ interface RawProduct {
 }
 
 /**
- * Product-qualified variant title, projected INTO `variants[].title` (the
- * shopify_variants primaryDisplayField) so variant records are tellable apart in
- * pickers. Shopify's raw variant title is ALL present option values joined with
- * " / " ("Grey / 42 / Wool") — and the literal "Default Title" for single-variant
- * products, which would otherwise name every such record identically. Note this
- * diverges from the raw Shopify value the order stream's `lineItems.variantTitle`
- * carries; variant identity/joins use `variants.id` / `inventory_item_id`, never
- * the title.
+ * Product-qualified variant title, projected onto `variants[].title` (the
+ * part's `part_title`) so parts synced from a multi-variant product are
+ * tellable apart in pickers. Shopify's raw variant title is ALL present option
+ * values joined with " / " ("Grey / 42 / Wool") — and the literal "Default
+ * Title" for single-variant products, which would otherwise name every such
+ * part identically.
  */
 function variantDisplayTitle(p: RawProduct, v: RawVariant): string {
   const productTitle = p.title ?? String(p.id)
@@ -595,8 +674,7 @@ function variantDisplayTitle(p: RawProduct, v: RawVariant): string {
 
 /**
  * Project one REST product into a SOURCE-shaped record. `externalId` is the numeric
- * product id stringified — the SAME value the order stream emits for
- * `line_items[].product_id`, so the reference edge links a line item to its product.
+ * product id stringified.
  */
 function toProductRecord(p: RawProduct): ConnectorRecord {
   return {
@@ -604,28 +682,28 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
     externalId: String(p.id),
     displayName: p.title ?? String(p.id),
     fields: {
-      id: String(p.id),
+      shopify_id: String(p.id),
       title: p.title,
-      body_html: p.body_html,
+      bodyHtml: p.body_html,
       vendor: p.vendor,
-      product_type: p.product_type,
+      productType: p.product_type,
       handle: p.handle,
       status: p.status,
       tags: toTagString(p.tags),
-      created_at: p.created_at,
-      published_at: p.published_at,
-      updated_at: p.updated_at,
-      // Raw array — the platform fans each element out per the `variants[]` mapping
-      // into the owned shopify_variants def. `id` is the variant's External ID and
-      // `inventory_item_id` the webhook join key; both stringified (they arrive as
-      // numbers, comparisons are string-based) — same discipline as the line-item fan-out.
+      createdAt: p.created_at,
+      publishedAt: p.published_at,
+      updatedAt: p.updated_at,
+      // Raw array — the platform fans each element out per the `variants[]`
+      // mapping into the native `part` (+ `catalog_item`). `shopifyId` is the
+      // variant's identity and `inventoryItemId` the webhook join key; both
+      // stringified — same discipline as the line-item fan-out.
       variants: (p.variants ?? []).map((v) => ({
-        id: v.id != null ? String(v.id) : null,
+        shopifyId: v.id != null ? String(v.id) : null,
         sku: v.sku,
         title: variantDisplayTitle(p, v),
         price: decimalToMinorUnits(v.price),
-        inventory_quantity: typeof v.inventory_quantity === 'number' ? v.inventory_quantity : null,
-        inventory_item_id: v.inventory_item_id != null ? String(v.inventory_item_id) : null,
+        inventoryQuantity: typeof v.inventory_quantity === 'number' ? v.inventory_quantity : null,
+        inventoryItemId: v.inventory_item_id != null ? String(v.inventory_item_id) : null,
         position: typeof v.position === 'number' ? v.position : null,
         option1: v.option1,
         option2: v.option2,

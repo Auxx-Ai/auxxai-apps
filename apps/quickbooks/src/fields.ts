@@ -9,7 +9,7 @@ import { defineFields } from '@auxx/sdk/fields'
  * reads/writes via `RecordIdentity` to keep pushes idempotent (find-or-create
  * instead of duplicate customers/items/invoices on re-sync).
  *
- * All four are hidden, `identity: true` text fields — the platform mirrors
+ * All three are hidden, `identity: true` text fields — the platform mirrors
  * writes into `RecordIdentity` (`source:'quickbooks'`) and the orchestrator
  * resolves them via `findByIntegrationId`. Never shown, filtered, or edited
  * by end users.
@@ -18,7 +18,7 @@ import { defineFields } from '@auxx/sdk/fields'
  */
 export const quickbooksFields = defineFields([
   {
-    appFieldKey: 'qboInvoiceId',
+    key: 'qboInvoiceId',
     type: 'TEXT',
     targetEntity: 'invoice',
     scope: 'connection',
@@ -34,7 +34,7 @@ export const quickbooksFields = defineFields([
     },
   },
   {
-    appFieldKey: 'qboCustomerId',
+    key: 'qboCustomerId',
     type: 'TEXT',
     targetEntity: 'contact',
     scope: 'connection',
@@ -50,29 +50,7 @@ export const quickbooksFields = defineFields([
     },
   },
   {
-    // Unlike the three above, this one hangs on a record that exists ONLY to
-    // carry it. A summary journal entry has no natural home — `qboCustomerId`
-    // hangs on a contact, `qboInvoiceId` on an invoice, but "the 2026-08-18
-    // daily fulfillment summary" is neither. `gl_posting` is that home, and
-    // together with its `(postingType, periodKey)` pair it makes a double-post
-    // unrepresentable at the source rather than merely detectable in QuickBooks.
-    appFieldKey: 'qboJournalEntryId',
-    type: 'TEXT',
-    targetEntity: 'gl_posting',
-    scope: 'connection',
-    name: 'QuickBooks journal entry ID',
-    description: 'The QuickBooks Online JournalEntry.Id this GL posting was pushed to.',
-    identity: true,
-    capabilities: {
-      hidden: true,
-      filterable: true,
-      sortable: false,
-      creatable: false,
-      updatable: false,
-    },
-  },
-  {
-    appFieldKey: 'qboItemId',
+    key: 'qboItemId',
     type: 'TEXT',
     targetEntity: 'catalog_item',
     scope: 'connection',
@@ -88,7 +66,7 @@ export const quickbooksFields = defineFields([
     },
   },
   {
-    // Decision `G19`: the account map. This is the only one of the five that a
+    // Decision `G19`: the account map. This is the only one of the four that a
     // PERSON fills in rather than the sync writing as a side effect of a push —
     // `qboCustomerId` and friends are recorded when Auxx creates the record in
     // QuickBooks, but nothing creates an account, so this cell is written by the
@@ -102,7 +80,7 @@ export const quickbooksFields = defineFields([
     // `scope: 'connection'` matters more here than anywhere else in this file:
     // an account id is meaningless against a different QuickBooks company, so
     // reconnecting to another realm must not inherit the old company's map.
-    appFieldKey: 'qboAccountId',
+    key: 'qboAccountId',
     type: 'TEXT',
     targetEntity: 'gl_account',
     scope: 'connection',

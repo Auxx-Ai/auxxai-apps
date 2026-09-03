@@ -20,8 +20,11 @@ pnpm run format
 ```
 template/
 ├── src/
-│   ├── app.tsx                                  # registry: lists tools, blocks, triggers
+│   ├── app.tsx                                  # registry: lists tools, blocks, triggers, fields, entities, connectors
 │   ├── app.settings.ts                          # admin-facing settings schema
+│   ├── fields.ts                                # EXAMPLE: `defineFields` field on `contact`
+│   ├── entities.ts                              # EXAMPLE: `defineEntity` owned entity
+│   ├── template.connector.ts + .server.ts       # EXAMPLE: `defineDataConnector` (owned + contributing mappings)
 │   ├── tools/
 │   │   ├── ping.tool.tsx + .server.ts           # agent-exposed tool (has `agent` key)
 │   │   ├── echo.tool.tsx + .server.ts           # internal-only tool (no surface keys)
@@ -149,6 +152,28 @@ const connection = getConnection()
 const token = connection.value                                   // single secret / OAuth token
 const { client_id, client_secret } = connection.fields ?? {}     // multi-field secret
 ```
+
+## Fields, entities and data connectors
+
+`fields.ts`, `entities.ts`, and `template.connector.ts` + `template.connector.server.ts`
+are worked examples of the app-side entity system surface, registered on
+`app.fields`, `app.entities`, and `app.dataConnectors` in `app.tsx`:
+
+- `fields.ts`: `defineFields`, for adding a field to an EXISTING platform
+  entity (here, `contact`).
+- `entities.ts`: `defineEntity`, for a whole entity this app owns end to
+  end, with an identity field and a relationship.
+- `template.connector.ts` / `.connector.server.ts`: `defineDataConnector`,
+  syncing external records with one OWNED mapping (writes the entity from
+  `entities.ts`) and one CONTRIBUTING mapping (enriches `contact`, with a
+  `match` field for adopting an existing record).
+
+These are examples only, replace or delete them for a real app. **Before
+declaring your own fields, entities, or a connector, read
+`docs/app-fields-and-entities-guide.md` in the main platform repo**
+(`/Users/mklooth/Sites/auxxai`): it is the one doc that ties together the
+field shape, capability defaults, identity fields, connector mappings, and
+what lands in the database.
 
 ## Toolsets
 
