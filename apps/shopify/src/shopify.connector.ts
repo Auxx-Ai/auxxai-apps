@@ -216,6 +216,19 @@ export const shopifyConnector = defineDataConnector({
             // overwrite because Shopify is the main price.
             { sourcePath: 'title', target: 'catalog_item_name', mergeStrategy: 'fill_blank' },
             { sourcePath: 'price', target: 'catalog_item_default_unit_price' },
+            // A CONSTANT, not a source path: Shopify has no field that answers
+            // "what kind of sellable thing is this", and `catalog_item_category`
+            // is a closed enum (service | material | labor) that free text like
+            // `productType` ("Apparel", "Snowboard") cannot fill. A Shopify
+            // product variant is a physical good, so the connector says so.
+            //
+            // Without this the platform's `applyDefaults` fills the registry
+            // default `service` on every synced item, because this mapping never
+            // mentions the field. That mislabelled 276 of 276 connector-managed
+            // items in production, 275 of them carrying a part link and therefore
+            // demonstrably goods. `overwrite` (the default) is what repairs them:
+            // the next sync rewrites the category on rows already landed.
+            { constant: 'material', target: 'catalog_item_category' },
           ],
         },
       ],
