@@ -14,10 +14,9 @@ import {
   ConnectionExpiredError,
   RateLimitError,
   UpstreamServiceError,
-  getOrganizationSetting,
   storage,
 } from '@auxx/sdk/server'
-import { getFedexCredentials } from './connection'
+import { getFedexCredentials, isFedexTestEnvironment } from './connection'
 
 const TOKEN_KEY = 'bearer-token'
 /** Re-mint while the token is still valid so a call never expires mid-flight. */
@@ -27,12 +26,12 @@ const PROD_BASE = 'https://apis.fedex.com'
 const SANDBOX_BASE = 'https://apis-sandbox.fedex.com'
 
 /**
- * Base URL for all FedEx API + token calls. Sandbox when the org enables the
- * `useTestEnvironment` setting (requires the org to connect with sandbox keys).
+ * Base URL for all FedEx API + token calls. Sandbox when the connection was made
+ * with the test-environment box ticked, which is also the connection carrying the
+ * sandbox API keys — host and credential can no longer disagree.
  */
-export async function getFedexBaseUrl(): Promise<string> {
-  const useTest = await getOrganizationSetting<boolean>('useTestEnvironment')
-  return useTest ? SANDBOX_BASE : PROD_BASE
+export function getFedexBaseUrl(): string {
+  return isFedexTestEnvironment() ? SANDBOX_BASE : PROD_BASE
 }
 
 /** True when a FedEx error envelope reports an authorization failure. */
@@ -98,7 +97,7 @@ export async function requestToken(
  */
 export async function mintToken(): Promise<{ token: string; expiresIn: number }> {
   const { clientId, clientSecret } = getFedexCredentials()
-  const base = await getFedexBaseUrl()
+  const base = getFedexBaseUrl()
   return requestToken(clientId, clientSecret, base)
 }
 

@@ -50,7 +50,7 @@ export default async function deleteSupabaseRows(
     }
   }
 
-  const { serviceRoleKey, projectUrl } = await getSupabaseAuth()
+  const { serviceRoleKey, projectUrl } = getSupabaseAuth()
   const schema = (input.schema ?? 'public').trim() || 'public'
   const dryRun = input.dryRun === true
 

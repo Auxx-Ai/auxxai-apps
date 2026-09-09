@@ -53,13 +53,6 @@ export function throwConnectionNotFound(): never {
   throw err
 }
 
-/** Throw when the projectUrl org setting is missing. */
-export function throwProjectUrlNotSet(): never {
-  throw new Error(
-    'Supabase Project URL not configured. Go to Settings → Apps → Supabase to set your project URL.'
-  )
-}
-
 /**
  * Call the Supabase PostgREST API. Sends BOTH apikey and Authorization
  * headers with the same Service Role key value — Supabase's API gateway

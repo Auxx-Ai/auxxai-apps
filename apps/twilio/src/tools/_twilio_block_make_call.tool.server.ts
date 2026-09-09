@@ -1,7 +1,7 @@
 // src/tools/_twilio_block_make_call.tool.server.ts
 
-import { getOrganizationConnection, getOrganizationSettings } from '@auxx/sdk/server'
-import { throwConnectionNotFound, twilioApi } from '../blocks/twilio/shared/twilio-api'
+import { twilioApi } from '../blocks/twilio/shared/twilio-api'
+import { getTwilioCreds } from './shared/connection'
 
 interface Input {
   from: string
@@ -33,15 +33,7 @@ function wrapInTwiml(text: string): string {
 }
 
 export default async function twilioBlockMakeCall(input: Input): Promise<Output> {
-  const connection = getOrganizationConnection()
-  if (!connection?.value) throwConnectionNotFound()
-  const authToken = connection.value
-
-  const settings = await getOrganizationSettings<{ accountSid?: string }>()
-  const accountSid = settings.accountSid as string | undefined
-  if (!accountSid) {
-    throw new Error('Twilio Account SID not configured. Go to Settings → Apps → Twilio.')
-  }
+  const { accountSid, authToken } = getTwilioCreds()
 
   const twiml = input.useTwiml ? input.message : wrapInTwiml(input.message)
 

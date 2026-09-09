@@ -1,7 +1,7 @@
 // src/tools/_twilio_block_send_sms.tool.server.ts
 
-import { getOrganizationConnection, getOrganizationSettings } from '@auxx/sdk/server'
-import { throwConnectionNotFound, twilioApi } from '../blocks/twilio/shared/twilio-api'
+import { twilioApi } from '../blocks/twilio/shared/twilio-api'
+import { getTwilioCreds } from './shared/connection'
 
 interface Input {
   from: string
@@ -24,15 +24,7 @@ interface Output {
 }
 
 export default async function twilioBlockSendSms(input: Input): Promise<Output> {
-  const connection = getOrganizationConnection()
-  if (!connection?.value) throwConnectionNotFound()
-  const authToken = connection.value
-
-  const settings = await getOrganizationSettings<{ accountSid?: string }>()
-  const accountSid = settings.accountSid as string | undefined
-  if (!accountSid) {
-    throw new Error('Twilio Account SID not configured. Go to Settings → Apps → Twilio.')
-  }
+  const { accountSid, authToken } = getTwilioCreds()
 
   const from = input.asWhatsApp ? `whatsapp:${input.from}` : input.from
   const to = input.asWhatsApp ? `whatsapp:${input.to}` : input.to

@@ -7,10 +7,12 @@
 //   • `order`    → contributing native `order`, embedded customer → contributing
 //                  `contact`, `line_items[]` → contributing native `line_item`,
 //                  `line_items[].variant_id` → reference to native `part`,
-//                  `refunds[]` → contributing native `refund`,
+//                  `refunds[]` → contributing native `credit_memo` (a
+//                  channel-sourced credit memo, accounting plan 10 §1),
+//                  `refunds[].customerId` → reference to the order's `contact`,
 //                  `refunds[].refund_line_items[]` → contributing native
-//                  `refund_line`, `refunds[].refund_line_items[].line_item_id`
-//                  → reference to the native `line_item` it refunds, and
+//                  `credit_memo_line`, `refunds[].refund_line_items[].line_item_id`
+//                  → reference to the native `line_item` it credits, and
 //                  `tax_lines[]` → contributing native `tax_line`.
 //   • `product`  → contributing native `product`, `variants[]` → contributing
 //                  native `part` (+ a flat drilled child onto `catalog_item`).
@@ -35,11 +37,13 @@
 // why the catalog-item edge is `system:part_catalog_items`, not
 // `system:catalog_item_part`.
 //
-// The refund and tax-line edges added by money plans 47 and 48 follow the same
-// rule and were verified against `resources/registry/resources/{order,refund,
-// refund-line}-fields.ts` on 2026-09-08, after entity migration 136 landed:
-// `order_refunds` / `order_tax_lines` (on `order`), `refund_lines` (on
-// `refund`), `refund_line_line_item` (on `refund_line`).
+// The credit-memo and tax-line edges added by money plans 47 and 48 and renamed
+// by accounting plan 10 (`plans/accounting/tasks/10-credit-memos.md` §10) follow
+// the same rule, against `resources/registry/resources/{order,credit-memo,
+// credit-memo-line}-fields.ts` in entity migration 136 (edited in place, 10 §4):
+// `order_credit_memos` / `order_tax_lines` (on `order`), `credit_memo_lines` /
+// `credit_memo_contact` (on `credit_memo`), `credit_memo_line_line_item` (on
+// `credit_memo_line`).
 //
 // ── `derived.*` fields ────────────────────────────────────────────────────────
 // Some order and line-item fields source paths that DO NOT EXIST in Shopify's
@@ -413,6 +417,22 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'lastFulfilledAt', appField: 'lastFulfilledAt' },
             { sourcePath: 'fulfilledQuantity', appField: 'fulfilledQuantity' },
             { sourcePath: 'shipmentCount', appField: 'shipmentCount' },
+            // ...and NATIVELY, the same three, into entity migration 137's
+            // fields (money plan 49 §8.4 decision 4). The app fields stay:
+            // `lastFulfilledAt`, `fulfillableQuantity` and `trackingNumber`
+            // have no native home, and dropping the app copies of these three
+            // would break every mapping already bound to them.
+            //
+            // The native trio is what lets auxx post an imported order at all.
+            // 530 of 545 orders arrive already `fulfilled`, which hides the one
+            // door into the ledger, and nothing NATIVE said they had shipped —
+            // so the sixth finalize pass reads these three, groups the lines
+            // that share a fulfilled day into shipments and writes
+            // `order_fulfillments`. Keeping it native is what keeps Shopify
+            // field paths out of lib (gap-f `G14`).
+            { sourcePath: 'fulfilledAt', target: 'line_item_fulfilled_at' },
+            { sourcePath: 'fulfilledQuantity', target: 'line_item_fulfilled_qty' },
+            { sourcePath: 'shipmentCount', target: 'line_item_shipment_count' },
             { sourcePath: 'fulfillableQuantity', appField: 'fulfillableQuantity' },
             { sourcePath: 'trackingNumber', appField: 'trackingNumber' },
           ],
@@ -430,52 +450,102 @@ export const shopifyConnector = defineDataConnector({
           target: { entityKind: 'part' },
         },
 
-        // refunds[] -> native refund, child of the order above (money plan 47
-        // §2, `plans/money/tasks/47-shopify-refunds.md`). A fan-out out of the
-        // order payload the connector already fetches, NOT a dedicated
-        // `refunds/create` stream: it needs no new fetch, watermark or
-        // pagination, it rides orders' Protected Customer Data approval instead
-        // of waiting on its own, and idempotency is free because `refunds[]` is
-        // a snapshot re-delivered on every order sync keyed on Shopify's stable
-        // `refund.id`. The dedicated stream wins only on latency and can be
-        // added later without rework (47 §2).
+        // refunds[] -> native credit_memo, child of the order above. A Shopify
+        // refund is a CHANNEL-SOURCED CREDIT MEMO (accounting plan 10 §1,
+        // `plans/accounting/tasks/10-credit-memos.md`): a credit memo that was
+        // created and refunded in the same instant, so it lands as a `draft`
+        // with `source: channel`, is reviewed (or auto-issued when unambiguous,
+        // 10 §5.4) and settles the moment it is issued. The fan-out is out of
+        // the order payload the connector already fetches, NOT a dedicated
+        // `refunds/create` stream (money plan 47 §2): it needs no new fetch,
+        // watermark or pagination, it rides orders' Protected Customer Data
+        // approval instead of waiting on its own, and idempotency is free
+        // because `refunds[]` is a snapshot re-delivered on every order sync
+        // keyed on Shopify's stable `refund.id`. The dedicated stream wins only
+        // on latency and can be added later without rework.
         //
-        // ⚠️ There is NO total on a Shopify refund (47 §2.1). The measured
+        // There is NO total on a Shopify refund (47 §2.1). The measured
         // top-level keys are `created_at, duties, id, note, order_adjustments,
         // processed_at, refund_duties, refund_line_items,
         // refund_shipping_lines, restock, transactions, user_id` and none of
         // them is an amount. `amountRefunded` is therefore a DERIVATION the
-        // projection computes - the sum of the successful refund transactions,
-        // the money that actually moved - and it is named for that rather than
-        // called a total. A field called `refund_total` would have been null on
-        // every row, silently.
+        // projection computes, the sum of the successful refund transactions,
+        // the money that actually moved, and it is named for that rather than
+        // called a total. The memo's own total is made to agree with it by the
+        // remainder line (see the lines mapping below), which is what lets
+        // `credit_memo_total == credit_memo_amount_refunded` hold by
+        // construction.
+        //
+        // `status`, `source` and `reason` are `fill_blank`: written once on
+        // create, never re-asserted. The sink's drift guard re-asserts an
+        // `overwrite` cell a person has hand-edited, so an `overwrite` binding
+        // here would flip an `issued` memo back to `draft` on the next sync and
+        // undo a reviewer's reason. `note` follows `order_note` for the same
+        // reason (a note edited in auxx survives a resync).
+        //
+        // PLATFORM SIDE, not this connector: a memo the platform has VOIDED
+        // must not be resurrected or rewritten. This connector is stateless and
+        // re-delivers every refund on every sync; the sink's content hash skips
+        // a byte-identical refund, but a refund that CHANGES at Shopify (a
+        // transaction settles, an adjustment appears, 47 §5.3.2) hashes
+        // differently and would be written again. The sink must skip writes to
+        // a `credit_memo` whose `credit_memo_status` is `void` (10 §2.4), and
+        // treat a changed refund behind an `issued` memo as the reversal-and-
+        // re-issue repair 47 §5.3.2 describes, never as an edit.
         {
           rootPath: 'refunds[]',
-          relationshipFieldKey: 'system:order_refunds',
-          target: { entityKind: 'refund' },
+          relationshipFieldKey: 'system:order_credit_memos',
+          target: { entityKind: 'credit_memo' },
           fields: [
             { sourcePath: 'shopifyRefundId', appField: 'shopifyRefundId' }, // identity -> externalId
-            // The refund's OWN date, never ingest time. The connector is
-            // manual-only today, so the gap between a refund happening and auxx
-            // seeing it is unbounded and can cross a period close (47 §5.3).
-            { sourcePath: 'createdAt', target: 'refund_created_at' },
-            { sourcePath: 'note', target: 'refund_note' },
-            { sourcePath: 'amountRefunded', target: 'refund_amount_refunded' },
+            { sourcePath: 'status', target: 'credit_memo_status', mergeStrategy: 'fill_blank' },
+            { sourcePath: 'source', target: 'credit_memo_source', mergeStrategy: 'fill_blank' },
+            // `cancellation` when every line was cancelled, else `allowance`
+            // (10 §2.1). A reviewer can change it while draft.
+            { sourcePath: 'reason', target: 'credit_memo_reason', mergeStrategy: 'fill_blank' },
+            // The refund's OWN date, when the credit takes effect, never ingest
+            // time. The connector is manual-only today, so the gap between a
+            // refund happening and auxx seeing it is unbounded and can cross a
+            // period close (47 §5.3). The ledger dates the issue entry from it.
+            { sourcePath: 'issuedAt', target: 'credit_memo_issued_at' },
+            { sourcePath: 'note', target: 'credit_memo_note', mergeStrategy: 'fill_blank' },
+            { sourcePath: 'amountRefunded', target: 'credit_memo_amount_refunded' },
           ],
         },
 
-        // refunds[].refund_line_items[] -> native refund_line, the GOODS leg of
-        // a refund (47 §2.2, §3). Parent derives from the longest boundary
-        // prefix, which is the `refunds[]` mapping above, so no
-        // `parentRootPath` is needed.
+        // credit memo -> the order's contact, `reference` mode. `customerId` is
+        // the order's Shopify customer id, the same external id the embedded
+        // `customer` branch above binds as the contact's identity
+        // (`customerId`, `identity: true` in fields.ts), so this resolves by
+        // (connector, contact def, customer id) to the very contact
+        // `order_contact` points at rather than contributing a second copy of
+        // the customer per refund. `credit_memo_contact` is required on the
+        // platform side (10 §2.1); a guest order carries no customer id, in
+        // which case the reference clears and the reviewer picks the contact.
+        {
+          rootPath: 'refunds[].customerId',
+          linkMode: 'reference',
+          relationshipFieldKey: 'system:credit_memo_contact',
+          target: { entityKind: 'contact' },
+        },
+
+        // refunds[].refund_line_items[] -> native credit_memo_line, the GOODS
+        // leg of a refund (47 §2.2, §3) plus the REMAINDER LINE (10 §2.1).
+        // Parent derives from the longest boundary prefix, which is the
+        // `refunds[]` mapping above, so no `parentRootPath` is needed.
         //
-        // ⚠️ Most refunds have NO lines. Measured over the readable window, 8
-        // of 11 refunds moved money with zero `refund_line_items[]` - a
-        // concession or a discrepancy adjustment, not a physical return - so
-        // this mapping is the minority case and the refund record above is
-        // where the money actually lives (47 §3).
+        // Most refunds have NO lines. Measured over the readable window, 8 of
+        // 11 refunds moved money with zero `refund_line_items[]`, a concession
+        // or a discrepancy adjustment, not a physical return (47 §3). That
+        // money still has to reach the memo, so the projection appends ONE
+        // synthetic line per refund, "Refund adjustment", with no line item,
+        // qty 1, subtotal = amountRefunded - sum(line subtotals) - sum(line
+        // tax), tax 0 and no disposition, emitted only when that remainder is
+        // non-zero. Its identity is `${refund.id}:adjustment`, stable across
+        // syncs, so re-ingest rewrites the same record. It is the same thing a
+        // native concession line is, so there is one rule for both.
         //
-        // ⚠️ `restock` is deliberately NOT bound. It is deprecated in favour of
+        // `restock` is deliberately NOT bound. It is deprecated in favour of
         // `restock_type`, and it sits at the refund level where the fact is per
         // line. It is in the payload, so it will look bindable. `location_id`
         // is left out for a different reason: nothing consumes it until the
@@ -488,23 +558,32 @@ export const shopifyConnector = defineDataConnector({
         // skipped (47 §3, §9 rule 1).
         {
           rootPath: 'refunds[].refund_line_items[]',
-          relationshipFieldKey: 'system:refund_lines',
-          target: { entityKind: 'refund_line' },
+          relationshipFieldKey: 'system:credit_memo_lines',
+          target: { entityKind: 'credit_memo_line' },
           fields: [
             { sourcePath: 'shopifyRefundLineId', appField: 'shopifyRefundLineId' }, // identity -> externalId
-            { sourcePath: 'quantity', target: 'refund_line_qty' },
+            // The order line's title, or "Refund adjustment" on the remainder.
+            { sourcePath: 'description', target: 'credit_memo_line_description' },
+            { sourcePath: 'quantity', target: 'credit_memo_line_qty' },
+            // `subtotal / qty`, or the whole subtotal on the remainder line
+            // (10 §2.2). The subtotal is the transcribed fact.
+            { sourcePath: 'unitPrice', target: 'credit_memo_line_unit_price' },
             // Both money paths are the `_set.shop_money.amount` STRING, never
             // the bare `subtotal` / `total_tax` scalars (47 §4.1).
-            { sourcePath: 'subtotal', target: 'refund_line_subtotal' },
-            { sourcePath: 'taxTotal', target: 'refund_line_tax_total' },
-            { sourcePath: 'disposition', target: 'refund_line_disposition' },
+            { sourcePath: 'subtotal', target: 'credit_memo_line_subtotal' },
+            { sourcePath: 'taxTotal', target: 'credit_memo_line_tax_total' },
+            { sourcePath: 'disposition', target: 'credit_memo_line_disposition' },
+            // Provider lines in payload order, the remainder line last.
+            { sourcePath: 'sortOrder', target: 'credit_memo_line_sort_order' },
           ],
         },
 
-        // refund line -> the order line it refunds, `reference` mode, the same
-        // shape as `line_items[].variant_id` -> part above (47 §2.2). Resolves
-        // by (connector, line_item def, Shopify line id) because the
+        // credit memo line -> the order line it credits, `reference` mode, the
+        // same shape as `line_items[].variant_id` -> part above (47 §2.2).
+        // Resolves by (connector, line_item def, Shopify line id) because the
         // `line_items[]` mapping designates `shopifyLineId` as its external id.
+        // The remainder line carries a null `line_item_id`, which is the
+        // clear-on-empty case: the edge is left empty, as a concession line's is.
         //
         // Unlike the part reference, the target here is in the SAME order
         // payload rather than in another stream, so it is not exposed to the
@@ -512,7 +591,7 @@ export const shopifyConnector = defineDataConnector({
         {
           rootPath: 'refunds[].refund_line_items[].line_item_id',
           linkMode: 'reference',
-          relationshipFieldKey: 'system:refund_line_line_item',
+          relationshipFieldKey: 'system:credit_memo_line_line_item',
           target: { entityKind: 'line_item' },
         },
 
@@ -636,26 +715,50 @@ export const shopifyConnector = defineDataConnector({
             trackingNumber: null,
           },
         ],
-        // A partial refund with one returned line (money plans 47 §2 / 48 §4.1).
+        // A partial refund with one returned line, arriving as a channel
+        // credit memo (money plan 47 §2 / 48 §4.1, accounting plan 10 §2.1).
         // Money is already in MINOR UNITS here, like every other amount in this
         // example: the projection scales the provider's decimal strings before
         // the mapping ever sees them.
         refunds: [
           {
             shopifyRefundId: '55667788',
-            createdAt: '2024-02-20T11:00:00Z',
+            status: 'draft',
+            source: 'channel',
+            // One returned line, not a cancellation, so an allowance.
+            reason: 'allowance',
+            issuedAt: '2024-02-20T11:00:00Z',
             note: 'Customer returned one shirt',
-            // Σ successful refund transactions, NOT a Shopify field (47 §2.1).
-            amountRefunded: 2132,
+            // Sum of successful refund transactions, NOT a Shopify field (47
+            // §2.1). 2132 credited on the line + 500 shipping refunded back.
+            amountRefunded: 2632,
+            // The order's customer id: the contact reference above.
+            customerId: '207119551',
             refund_line_items: [
               {
                 shopifyRefundLineId: '99001122',
                 line_item_id: '11223344',
+                description: 'Red T-Shirt',
                 quantity: 1,
+                unitPrice: 1999,
                 subtotal: 1999,
                 taxTotal: 133,
                 // auxx's vocabulary, mapped from Shopify's `restock_type`.
                 disposition: 'returned',
+                sortOrder: 0,
+              },
+              // The remainder line: 2632 - 1999 - 133. No line item, no
+              // disposition, synthetic identity, sorts last.
+              {
+                shopifyRefundLineId: '55667788:adjustment',
+                line_item_id: null,
+                description: 'Refund adjustment',
+                quantity: 1,
+                unitPrice: 500,
+                subtotal: 500,
+                taxTotal: 0,
+                disposition: null,
+                sortOrder: 1,
               },
             ],
           },

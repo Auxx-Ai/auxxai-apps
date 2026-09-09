@@ -1,25 +1,19 @@
 // src/app.settings.ts
 
-import { type SettingsSchema, Settings } from '@auxx/sdk'
+import { type SettingsSchema } from '@auxx/sdk'
 
 /**
- * Supabase requires two pieces of info: the Service Role key (stored on
- * the connection) and the Project URL (stored here, one per org).
+ * Supabase declares no app settings.
  *
- * For orgs with multiple Supabase projects, the AppAccountPicker on
- * agents/workflows binds a credId — but projectUrl is shared across all
- * connections in the org for now. See plans/kopilot/apps/supabase-overhaul.md
- * §8 Q1 for the followup that moves projectUrl onto the connection.
+ * `projectUrl` used to live here, shared across every Supabase connection in the
+ * org. It is now a connection variable beside the Service Role key it belongs
+ * with: a service_role key is only meaningful against the project that issued it,
+ * and one org-wide URL made a second project point the first project's key at the
+ * wrong host. This is the followup recorded in
+ * plans/kopilot/apps/supabase-overhaul.md §8 Q1.
  */
 export const appSettingsSchema = {
-  organization: {
-    projectUrl: Settings.string({
-      label: 'Supabase Project URL',
-      description:
-        'Your Supabase project URL. Find it in your Supabase dashboard under Settings → API → Project URL.',
-      placeholder: 'https://your-project.supabase.co',
-    }),
-  },
+  organization: {},
   user: {},
 } satisfies SettingsSchema
 

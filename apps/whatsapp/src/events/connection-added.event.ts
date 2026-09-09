@@ -1,11 +1,7 @@
 // src/events/connection-added.event.ts
 
 import type { Connection, ConnectionAddedResult } from '@auxx/sdk/server'
-import {
-  createWebhookHandler,
-  updateWebhookHandler,
-  getOrganizationSettings,
-} from '@auxx/sdk/server'
+import { createWebhookHandler, updateWebhookHandler } from '@auxx/sdk/server'
 import { WHATSAPP_API, whatsappApi } from '../blocks/whatsapp/shared/whatsapp-api'
 
 export default async function connectionAdded({
@@ -13,20 +9,17 @@ export default async function connectionAdded({
 }: {
   connection: Connection
 }): Promise<ConnectionAddedResult> {
-  const accessToken = connection.value
-  const settings = await getOrganizationSettings<{
-    appId?: string
-    appSecret?: string
-    businessAccountId?: string
-  }>()
-  const appId = settings?.appId
-  const appSecret = settings?.appSecret
+  const fields = connection.fields ?? {}
+  const accessToken = fields.access_token ?? ''
+  const appId = fields.app_id
+  const appSecret = fields.app_secret
+  const businessAccountId = fields.business_account_id
 
   if (!appId || !appSecret) {
     console.error(
-      '[whatsapp] Missing appId or appSecret in settings. Skipping webhook registration.'
+      '[whatsapp] Missing app_id or app_secret on the connection. Skipping webhook registration.'
     )
-    return await whatsappLabel(settings?.businessAccountId, accessToken)
+    return await whatsappLabel(businessAccountId, accessToken)
   }
 
   // 1. Create webhook handler with trigger + connection binding
@@ -74,7 +67,7 @@ export default async function connectionAdded({
 
   console.log('[whatsapp] Webhook registered:', handler.url)
 
-  return await whatsappLabel(settings?.businessAccountId, accessToken)
+  return await whatsappLabel(businessAccountId, accessToken)
 }
 
 /**

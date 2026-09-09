@@ -1,6 +1,6 @@
 // src/webhooks/whatsapp-events.webhook.ts
 
-import { getOrganizationSetting } from '@auxx/sdk/server'
+import { getConnection } from '@auxx/sdk/server'
 import { extractTriggerData } from '../blocks/whatsapp/triggers/message-received/shared/message-received-types'
 
 /**
@@ -48,7 +48,7 @@ export default async function whatsappEventsWebhook(
   // Fetch Request body can only be consumed once.
   const rawBody = await req.text()
 
-  const appSecret = await getOrganizationSetting('appSecret')
+  const appSecret = getConnection()?.fields?.app_secret
   if (!appSecret) {
     console.error('[whatsapp-events] Meta App Secret not configured')
     return new Response('App secret not configured', { status: 500 })

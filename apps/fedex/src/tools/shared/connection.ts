@@ -27,6 +27,16 @@ export function throwConnectionNotFound(): never {
  * invocation. FedEx is a multi-field secret connection, so everything lives on
  * `connection.fields` — `connection.value` is empty.
  */
+/**
+ * True when this connection was made against the FedEx sandbox. It is a property of
+ * the connection, not of the installation: the sandbox keys, the token minted from
+ * them and the host they are valid for all belong together, so one boolean per
+ * connection is the only shape that cannot drift.
+ */
+export function isFedexTestEnvironment(): boolean {
+  return getConnection()?.fields?.test_environment === 'true'
+}
+
 export function getFedexCredentials(): FedexCredentials {
   const connection = getConnection()
   const f = connection.fields

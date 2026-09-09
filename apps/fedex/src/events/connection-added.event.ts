@@ -1,10 +1,6 @@
 // src/events/connection-added.event.ts
 
-import {
-  type Connection,
-  type ConnectionAddedResult,
-  getOrganizationSetting,
-} from '@auxx/sdk/server'
+import { type Connection, type ConnectionAddedResult } from '@auxx/sdk/server'
 import { requestToken } from '../tools/shared/fedex-auth'
 
 /**
@@ -25,8 +21,10 @@ export default async function connectionAdded({
   const accountNumber = fields.account_number
 
   if (clientId && clientSecret) {
-    const useTest = await getOrganizationSetting<boolean>('useTestEnvironment')
-    const base = useTest ? 'https://apis-sandbox.fedex.com' : 'https://apis.fedex.com'
+    const base =
+      fields.test_environment === 'true'
+        ? 'https://apis-sandbox.fedex.com'
+        : 'https://apis.fedex.com'
     // Throws ConnectionExpiredError on bad credentials, which surfaces to the admin.
     await requestToken(clientId, clientSecret, base)
   }

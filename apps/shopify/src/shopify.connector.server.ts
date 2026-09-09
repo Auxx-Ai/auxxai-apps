@@ -33,13 +33,17 @@
 // derived dates are exact, and where it is >1 the close job knows to look closer.
 //
 // The `order` projection also fans out `refunds[]` (each with its own nested
-// `refund_line_items[]`) and `tax_lines[]` (money plan 47/48) — the same
-// `rootPath` pattern `line_items[]` uses. Two things about those are load-bearing
-// and documented at their helpers rather than here: a Shopify refund carries NO
-// total, so `amountRefunded` is DERIVED from the successful refund transactions
-// (`refundAmountRefunded`); and a Shopify tax line carries NO id, so its identity
-// is SYNTHESISED as `${orderId}:${title}` (`projectTaxLine`). Both are still
-// dumped verbatim into `raw` as well.
+// `refund_line_items[]`) and `tax_lines[]` (money plan 47/48, accounting plan
+// 10) with the same `rootPath` pattern `line_items[]` uses. A Shopify refund
+// lands as a CHANNEL-SOURCED CREDIT MEMO (`credit_memo` / `credit_memo_line`,
+// accounting plan 10 §1): a credit memo that was created and refunded in the
+// same instant. Three things about that are load-bearing and documented at
+// their helpers rather than here: a Shopify refund carries NO total, so
+// `amountRefunded` is DERIVED from the successful refund transactions
+// (`refundAmountRefunded`); the memo's total is made to EQUAL that amount by a
+// synthetic remainder line (`adjustmentLine`, 10 §2.1); and a Shopify tax line
+// carries NO id, so its identity is SYNTHESISED as `${orderId}:${title}`
+// (`projectTaxLine`).
 //
 // ── Field naming ─────────────────────────────────────────────────────────────
 // Every projected key here is exactly the `sourcePath` (relative to its
@@ -569,13 +573,16 @@ interface RawRefundTransaction {
  * subtotal_set, total_tax, total_tax_set]`.
  *
  * `subtotal` and `total_tax` (the bare scalars) are typed for completeness and
- * deliberately never read — the same number/string split as `RawTaxLine`.
- * `location_id` is omitted from the projection: nothing consumes it until the
- * inventory leg exists.
+ * deliberately never read: the same number/string split as `RawTaxLine`.
+ * `line_item` is Shopify's embedded copy of the order line, read only for its
+ * `title` (the credit memo line's printed description). `location_id` is
+ * omitted from the projection: nothing consumes it until the inventory leg
+ * exists.
  */
 interface RawRefundLineItem {
   id?: number | null
   line_item_id?: number | null
+  line_item?: { title?: string | null } | null
   quantity?: number | null
   subtotal?: number | string | null
   subtotal_set?: RawMoneySet | null
@@ -587,10 +594,10 @@ interface RawRefundLineItem {
 /**
  * One refund on an order (`order.refunds[]`). Its twelve top-level properties are
  * `created_at, duties, id, note, order_adjustments, processed_at, refund_duties,
- * refund_line_items, refund_shipping_lines, restock, transactions, user_id` —
- * note that **none of them is a total** (see `refundAmountRefunded`).
+ * refund_line_items, refund_shipping_lines, restock, transactions, user_id`.
+ * Note that **none of them is a total** (see `refundAmountRefunded`).
  *
- * 🛑 `restock` is deliberately NOT typed or projected. Shopify deprecates it
+ * `restock` is deliberately NOT typed or projected. Shopify deprecates it
  * ("use `restock_type` for refund line items instead") and it sits at the refund
  * level while the fact it describes is per line. It is in the payload, so it will
  * look bindable; `refund_line_items[].restock_type` is the field that carries it.
@@ -603,14 +610,17 @@ interface RawRefund {
   transactions?: RawRefundTransaction[] | null
 }
 
-/** Provider-neutral disposition of a refunded line — what happened to the goods. */
-type RefundDisposition = 'returned' | 'not_returned' | 'cancelled'
+/** Provider-neutral disposition of a credited line: what happened to the goods. */
+type CreditMemoLineDisposition = 'returned' | 'not_returned' | 'cancelled'
+
+/** Why a channel credit memo exists (accounting plan 10 §2.1). */
+type ChannelCreditMemoReason = 'cancellation' | 'allowance'
 
 /**
  * Shopify's `restock_type` vocabulary, mapped onto auxx's own. Kept as a table so
  * an unrecognised token falls through to null rather than leaking into the field.
  */
-const RESTOCK_TYPE_TO_DISPOSITION: Record<string, RefundDisposition> = {
+const RESTOCK_TYPE_TO_DISPOSITION: Record<string, CreditMemoLineDisposition> = {
   return: 'returned',
   legacy_restock: 'returned',
   no_restock: 'not_returned',
@@ -620,15 +630,15 @@ const RESTOCK_TYPE_TO_DISPOSITION: Record<string, RefundDisposition> = {
 /**
  * Translate `restock_type` into the provider-neutral disposition.
  *
- * ⚠️ The stored value must never be Shopify's token. Other providers will send a
+ * The stored value must never be Shopify's token. Other providers will send a
  * different vocabulary for the same three facts, and the cost of baking a
  * provider's words into stored data is already on the record: `1200 Shopify
  * Clearing` had to be renamed to `1200 Card Clearing` by a migration.
  *
- * An unknown token maps to null rather than to a guess — an unrecognised
+ * An unknown token maps to null rather than to a guess: an unrecognised
  * disposition is "not supplied", not "not returned".
  */
-function refundDisposition(restockType: string | null | undefined): RefundDisposition | null {
+function lineDisposition(restockType: string | null | undefined): CreditMemoLineDisposition | null {
   if (!restockType) return null
   return RESTOCK_TYPE_TO_DISPOSITION[restockType] ?? null
 }
@@ -637,12 +647,15 @@ function refundDisposition(restockType: string | null | undefined): RefundDispos
  * The money that actually moved back on a refund, in integer minor units: the sum
  * of `transactions[]` where `kind === 'refund'` and `status === 'success'`.
  *
- * 🛑 This is a DERIVATION over provider facts, NOT a transcription, and the name
- * has to keep saying so. A Shopify refund object has **no total field at all** —
+ * This is a DERIVATION over provider facts, NOT a transcription, and the name
+ * has to keep saying so. A Shopify refund object has **no total field at all**;
  * a `refund_total` bound against one would have been null on every row, silently.
  * The value is defensible because it aggregates facts that each stand on their own
  * record (every transaction remains individually inspectable) and it invents no
- * rate and allocates nothing. **Do not rename it to a "total".**
+ * rate and allocates nothing. **Do not rename it to a "total".** The credit
+ * memo's own `credit_memo_total` is made to equal this figure by the remainder
+ * line (`adjustmentLine`), which is what lets a channel memo land `settled` the
+ * moment it is issued (accounting plan 10 §2.1).
  *
  * Failed and pending legs are excluded: money that did not move is not refunded.
  *
@@ -660,37 +673,158 @@ function refundAmountRefunded(
 }
 
 /**
- * Project one refund for the `refunds[]` fan-out, with its `refund_line_items[]`
- * nested for the child fan-out beneath it.
+ * The reason a channel credit memo carries (accounting plan 10 §2.1):
+ * `cancellation` when every refunded line was cancelled (goods that never
+ * shipped), else `allowance`. A refund with no lines at all is a concession, a
+ * "$100 off for an angry customer", which is an allowance (47 §3.1). A reviewer
+ * can change it while the memo is a draft; the mapping binds it `fill_blank` so
+ * a resync does not put it back.
+ */
+function creditMemoReason(
+  dispositions: ReadonlyArray<CreditMemoLineDisposition | null>
+): ChannelCreditMemoReason {
+  return dispositions.length > 0 && dispositions.every((d) => d === 'cancelled')
+    ? 'cancellation'
+    : 'allowance'
+}
+
+/** Printed description of the remainder line (accounting plan 10 §2.1). */
+const ADJUSTMENT_LINE_DESCRIPTION = 'Refund adjustment'
+
+/**
+ * One `credit_memo_line` as the `refunds[].refund_line_items[]` fan-out sees it.
+ * Money is integer minor units. `line_item_id` stays snake_case ON PURPOSE: that
+ * exact literal is also a reference mapping's `rootPath` in `shopify.connector.ts`.
+ */
+interface ProjectedCreditMemoLine {
+  shopifyRefundLineId: string | null
+  description: string | null
+  quantity: number | null
+  unitPrice: number | null
+  subtotal: number | null
+  taxTotal: number | null
+  disposition: CreditMemoLineDisposition | null
+  sortOrder: number
+  line_item_id: string | null
+}
+
+/**
+ * Project one refunded line. `subtotal` and `taxTotal` are TRANSCRIBED from the
+ * `_set` strings; `unitPrice` is `subtotal / qty` (10 §2.2) and is the one
+ * derived number here, rounded to a minor unit. The subtotal stays the fact:
+ * the totals hook sums line subtotals, never `unitPrice * qty`, so the rounding
+ * can never leak into the memo total.
+ */
+function projectRefundLine(rl: RawRefundLineItem, sortOrder: number): ProjectedCreditMemoLine {
+  const quantity = typeof rl.quantity === 'number' ? rl.quantity : null
+  // Both take the `_set` STRING form, never the bare `subtotal` / `total_tax`
+  // numbers sitting beside them (47 §4.1); see `RawTaxLine`.
+  const subtotal = decimalToMinorUnits(rl.subtotal_set?.shop_money?.amount ?? null)
+  const taxTotal = decimalToMinorUnits(rl.total_tax_set?.shop_money?.amount ?? null)
+  return {
+    shopifyRefundLineId: rl.id != null ? String(rl.id) : null,
+    // Defaults to the order line's title, the way a native memo line defaults to
+    // its line item's name (10 §2.2).
+    description: rl.line_item?.title ?? null,
+    quantity,
+    unitPrice:
+      subtotal != null && quantity != null && quantity > 0 ? Math.round(subtotal / quantity) : null,
+    subtotal,
+    taxTotal,
+    disposition: lineDisposition(rl.restock_type),
+    sortOrder,
+    // Reference back to the order line this credited. NOT camelCased: this
+    // literal path is also a reference mapping's `rootPath`.
+    line_item_id: rl.line_item_id != null ? String(rl.line_item_id) : null,
+  }
+}
+
+/**
+ * The REMAINDER LINE (accounting plan 10 §2.1): one extra `credit_memo_line`
+ * with no line item, so that `credit_memo_total == credit_memo_amount_refunded`
+ * by construction and a channel memo is `settled` the moment it is issued.
+ *
+ * Shopify sends no total, and 8 of 11 observed refunds moved money with NO line
+ * items at all (47 §3): a concession or a discrepancy adjustment. This line is
+ * what carries that money onto the memo. It is the same thing a native
+ * concession is, a line with no line item, so there is one rule for both.
+ *
+ *   subtotal = amountRefunded - sum(line subtotals) - sum(line tax)
+ *
+ * Tax is 0 (the lines already carry the tax the provider supplied), the
+ * disposition is null (nothing came back), and the sign is whatever the
+ * arithmetic says: a negative remainder (lines exceed the money moved, e.g.
+ * goods credited but part of the money kept) is still what makes the total
+ * agree, so it is emitted too. Nothing is emitted when the remainder is zero or
+ * when `amountRefunded` is not supplied at all (no `transactions[]`), because
+ * then there is nothing to reconcile against.
+ *
+ * Identity is SYNTHETIC, `${refund.id}:adjustment`, because Shopify has no row
+ * for this line. It is stable across syncs, so re-ingest is idempotent: the sink
+ * rewrites the same record rather than adding a second one. It sorts last.
+ */
+function adjustmentLine(
+  refundId: string,
+  amountRefunded: number | null,
+  lines: ReadonlyArray<ProjectedCreditMemoLine>
+): ProjectedCreditMemoLine | null {
+  if (amountRefunded == null) return null
+  const credited = lines.reduce((sum, l) => sum + (l.subtotal ?? 0) + (l.taxTotal ?? 0), 0)
+  const remainder = amountRefunded - credited
+  if (remainder === 0) return null
+  return {
+    shopifyRefundLineId: `${refundId}:adjustment`,
+    description: ADJUSTMENT_LINE_DESCRIPTION,
+    quantity: 1,
+    unitPrice: remainder,
+    subtotal: remainder,
+    taxTotal: 0,
+    disposition: null,
+    sortOrder: lines.length,
+    line_item_id: null,
+  }
+}
+
+/**
+ * Project one refund as a channel-sourced `credit_memo` for the `refunds[]`
+ * fan-out, with its lines nested for the child fan-out beneath it.
  *
  * `refund_line_items` and `line_item_id` stay snake_case ON PURPOSE: those exact
  * literals are also mapping `rootPath`s in `shopify.connector.ts`, exactly like
  * `line_items[].variant_id`. Every other key is camelCase like the rest of this
  * projection.
+ *
+ * `contactExternalId` is the order's Shopify customer id, the same external id
+ * the order's embedded `customer` branch binds as the contact's identity
+ * (`customerId`), so the memo's `credit_memo_contact` reference resolves to the
+ * very contact `order_contact` points at. Null for a guest order: the reference
+ * then clears rather than guesses.
  */
-function projectRefund(r: RawRefund) {
+function projectRefund(r: RawRefund, contactExternalId: string | null) {
+  const refundId = r.id != null ? String(r.id) : null
+  const amountRefunded = refundAmountRefunded(r.transactions)
+  const lines = (r.refund_line_items ?? []).map(projectRefundLine)
+  const adjustment = refundId != null ? adjustmentLine(refundId, amountRefunded, lines) : null
   return {
-    // The refund's own Shopify id — its identity. A refund is append-only at the
+    // The refund's own Shopify id: its identity. A refund is append-only at the
     // source (there is no delete/void/reverse operation), so this id is stable.
-    shopifyRefundId: r.id != null ? String(r.id) : null,
-    // The date the refund HAPPENED. The posting builder dates the entry from this
-    // and never from ingest time: this connector is manual-only, so the gap
-    // between a refund occurring and auxx seeing it can cross a period close.
-    createdAt: r.created_at ?? null,
+    shopifyRefundId: refundId,
+    // Every ingested memo arrives as a channel DRAFT (10 §1, §5.4): reviewed and
+    // issued in auxx, or auto-issued by the ingest job when unambiguous. These
+    // three are bound `fill_blank` so a resync never overwrites the platform's
+    // status transitions or a reviewer's reason.
+    status: 'draft' as const,
+    source: 'channel' as const,
+    reason: creditMemoReason(lines.map((l) => l.disposition)),
+    // The date the refund HAPPENED, which is when the credit takes effect and
+    // what the ledger dates from. Never ingest time: this connector is
+    // manual-only, so the gap between a refund occurring and auxx seeing it can
+    // cross a period close (47 §5.3).
+    issuedAt: r.created_at ?? null,
     note: r.note ?? null,
-    amountRefunded: refundAmountRefunded(r.transactions),
-    refund_line_items: (r.refund_line_items ?? []).map((rl) => ({
-      shopifyRefundLineId: rl.id != null ? String(rl.id) : null,
-      quantity: typeof rl.quantity === 'number' ? rl.quantity : null,
-      // Both take the `_set` STRING form, never the bare `subtotal` / `total_tax`
-      // numbers sitting beside them — see `RawTaxLine`.
-      subtotal: decimalToMinorUnits(rl.subtotal_set?.shop_money?.amount ?? null),
-      taxTotal: decimalToMinorUnits(rl.total_tax_set?.shop_money?.amount ?? null),
-      disposition: refundDisposition(rl.restock_type),
-      // Reference back to the order line this refunded. NOT camelCased: this
-      // literal path is also a reference mapping's `rootPath`.
-      line_item_id: rl.line_item_id != null ? String(rl.line_item_id) : null,
-    })),
+    amountRefunded,
+    customerId: contactExternalId,
+    refund_line_items: adjustment ? [...lines, adjustment] : lines,
   }
 }
 
@@ -742,9 +876,10 @@ interface RawOrder {
     tax_exempt: boolean | null
   } | null
   line_items: RawLineItem[] | null
-  // Modelled natively as of money plan 47/48 — fanned out into `refund` /
-  // `refund_line` / `tax_line` records, scaled through `decimalToMinorUnits`.
-  // Deliberately NOT also dumped into `raw`: see the note there.
+  // Modelled natively as of money plan 47/48 and accounting plan 10: fanned out
+  // into `credit_memo` / `credit_memo_line` / `tax_line` records, scaled through
+  // `decimalToMinorUnits`. Deliberately NOT also dumped into `raw`: see the
+  // note there.
   refunds: RawRefund[] | null
   tax_lines: RawTaxLine[] | null
   // ── Not modelled anywhere in the native order/line_item — folded verbatim
@@ -757,6 +892,9 @@ interface RawOrder {
  *  relative to the mapping's rootPath — see the file header). */
 function toOrderRecord(o: RawOrder): ConnectorRecord {
   const fulfilled = deriveFulfillments(o)
+  // The contact's external id, shared by the embedded `customer` branch and the
+  // credit memos' contact reference so both edges land on the same contact.
+  const customerId = o.customer?.id != null ? String(o.customer.id) : null
   return {
     streamKey: 'order',
     externalId: String(o.id),
@@ -802,7 +940,7 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
         ? {
             // `id` keys the contributing contact item to the same external id the
             // `customer` stream emits, so the order→contact edge resolves.
-            id: o.customer.id != null ? String(o.customer.id) : null,
+            id: customerId,
             email: o.customer.email,
             firstName: o.customer.first_name,
             lastName: o.customer.last_name,
@@ -874,14 +1012,15 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
           trackingNumber: derivation.tracking_number,
         }
       }),
-      // Raw array — the platform fans each element out per the `refunds[]`
-      // mapping into the native `refund`, and each element's nested
-      // `refund_line_items[]` out again into `refund_line` beneath it. A refund
-      // is a SNAPSHOT re-delivered on every order sync and keyed on a stable
+      // Raw array: the platform fans each element out per the `refunds[]`
+      // mapping into a native channel `credit_memo`, and each element's nested
+      // `refund_line_items[]` (the provider's lines plus the synthetic remainder
+      // line) out again into `credit_memo_line` beneath it. A refund is a
+      // SNAPSHOT re-delivered on every order sync and keyed on a stable
       // `refund.id`, so re-ingest is idempotent for free; a second refund on an
       // already-refunded order still lands, because it is a new external id even
       // when the order root itself hashes identically.
-      refunds: (o.refunds ?? []).map(projectRefund),
+      refunds: (o.refunds ?? []).map((r) => projectRefund(r, customerId)),
       // Raw array — fanned out per the `tax_lines[]` mapping into `tax_line`
       // records. Records, not a JSON blob, because the question these exist to
       // answer is "tax by jurisdiction over a period", which is an aggregation,
@@ -901,8 +1040,8 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
         // UNSCALED by design ("a query-later dump, not a bound field"), so a
         // second copy of the same money in decimal strings beside the native
         // records in minor units is exactly the ambiguity §4.1 is about. The
-        // native `refund` / `refund_line` / `tax_line` records are the answer
-        // now, and they carry more than the dump did.
+        // native `credit_memo` / `credit_memo_line` / `tax_line` records are
+        // the answer now, and they carry more than the dump did.
         shipping_lines: o.shipping_lines ?? [],
         discount_applications: o.discount_applications ?? [],
         // Shopify carries this PER LINE ITEM, not at the order level; line_item

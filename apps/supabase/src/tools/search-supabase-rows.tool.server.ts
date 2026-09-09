@@ -48,7 +48,7 @@ export default async function searchSupabaseRows(
     }
   }
 
-  const { serviceRoleKey, projectUrl } = await getSupabaseAuth()
+  const { serviceRoleKey, projectUrl } = getSupabaseAuth()
   const schema = (input.schema ?? 'public').trim() || 'public'
   const headers = getSchemaHeaders('GET', schema !== 'public', schema)
   const limit = Math.min(input.limit ?? 50, 200)

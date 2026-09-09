@@ -39,7 +39,7 @@ export default async function sendTwilioSms(
     throw new BlockRuntimeError('body must be 1-1600 characters after trimming.', 'INVALID_INPUT')
   }
 
-  const { accountSid, authToken } = await getTwilioCreds()
+  const { accountSid, authToken } = getTwilioCreds()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await twilioApi<any>('/Messages.json', accountSid, authToken, {

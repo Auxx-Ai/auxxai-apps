@@ -15,7 +15,7 @@ interface GetTwilioMessageOutput {
 export default async function getTwilioMessage(
   input: GetTwilioMessageInput
 ): Promise<GetTwilioMessageOutput> {
-  const { accountSid, authToken } = await getTwilioCreds()
+  const { accountSid, authToken } = getTwilioCreds()
 
   const raw = await twilioApi<unknown>(
     `/Messages/${encodeURIComponent(input.sid)}.json`,

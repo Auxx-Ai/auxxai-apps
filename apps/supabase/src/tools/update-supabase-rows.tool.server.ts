@@ -63,7 +63,7 @@ export default async function updateSupabaseRows(
     }
   }
 
-  const { serviceRoleKey, projectUrl } = await getSupabaseAuth()
+  const { serviceRoleKey, projectUrl } = getSupabaseAuth()
   const schema = (input.schema ?? 'public').trim() || 'public'
   const dryRun = input.dryRun === true
 
