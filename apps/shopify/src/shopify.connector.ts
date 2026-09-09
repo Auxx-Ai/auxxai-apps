@@ -6,7 +6,12 @@
 //   • `customer` → contributing system `contact` (merge on email, then phone).
 //   • `order`    → contributing native `order`, embedded customer → contributing
 //                  `contact`, `line_items[]` → contributing native `line_item`,
-//                  `line_items[].variant_id` → reference to native `part`.
+//                  `line_items[].variant_id` → reference to native `part`,
+//                  `refunds[]` → contributing native `refund`,
+//                  `refunds[].refund_line_items[]` → contributing native
+//                  `refund_line`, `refunds[].refund_line_items[].line_item_id`
+//                  → reference to the native `line_item` it refunds, and
+//                  `tax_lines[]` → contributing native `tax_line`.
 //   • `product`  → contributing native `product`, `variants[]` → contributing
 //                  native `part` (+ a flat drilled child onto `catalog_item`).
 //
@@ -29,6 +34,12 @@
 // `line_item`). The resolver resolves the key against the PARENT def, which is
 // why the catalog-item edge is `system:part_catalog_items`, not
 // `system:catalog_item_part`.
+//
+// The refund and tax-line edges added by money plans 47 and 48 follow the same
+// rule and were verified against `resources/registry/resources/{order,refund,
+// refund-line}-fields.ts` on 2026-09-08, after entity migration 136 landed:
+// `order_refunds` / `order_tax_lines` (on `order`), `refund_lines` (on
+// `refund`), `refund_line_line_item` (on `refund_line`).
 //
 // ── `derived.*` fields ────────────────────────────────────────────────────────
 // Some order and line-item fields source paths that DO NOT EXIST in Shopify's
@@ -112,6 +123,20 @@ export const shopifyConnector = defineDataConnector({
               mergeStrategy: 'fill_blank',
             },
             { sourcePath: 'note', target: 'notes', mergeStrategy: 'fill_blank' },
+            // Resale/dealer exemption (48 §4.4). Bound on THIS stream as well as
+            // on the order's embedded customer, so a contact who has not ordered
+            // yet still carries the flag - for a dealer business it is what
+            // separates "exempt for resale" from "simply never taxed".
+            // `fill_blank` like every non-identity binding above: an exemption a
+            // human asserted in auxx (they hold the certificate; Shopify does
+            // not supply one) must not be cleared by the storefront's copy.
+            // 🔀 The cost is that a LATER change at Shopify never propagates,
+            // because a written `false` is no longer blank.
+            {
+              sourcePath: 'tax_exempt',
+              target: 'contact_tax_exempt',
+              mergeStrategy: 'fill_blank',
+            },
             // Source-only — no target/appField, kept for Layer A schema
             // visibility so a merchant can hand-map them at setup if they want.
             { sourcePath: 'orders_count', type: 'NUMBER', name: 'Orders' },
@@ -131,6 +156,7 @@ export const shopifyConnector = defineDataConnector({
         total_spent: '210.00',
         created_at: '2024-02-11T10:00:00Z',
         note: 'VIP — repeat buyer',
+        tax_exempt: false,
         default_address: { city: 'Austin', province: 'Texas', country: 'United States' },
       },
     },
@@ -337,6 +363,13 @@ export const shopifyConnector = defineDataConnector({
           fields: [
             { sourcePath: 'id', appField: 'customerId' },
             { sourcePath: 'email', target: 'primary_email', match: true },
+            // Tax exemption (money plan 48 §4.4). 24 of 250 measured orders are
+            // to an exempt customer, and until now nothing distinguished a
+            // dealer buying for resale from a sale that was simply never taxed.
+            // ⚠️ The FLAG is all Shopify gives: `tax_exemptions[]` was empty on
+            // every order measured, so the exemption reason and the resale
+            // certificate are not available here and stay a compliance surface.
+            { sourcePath: 'taxExempt', target: 'contact_tax_exempt' },
           ],
           connectionFields: [{ appField: 'storeDomain', from: 'label' }],
         },
@@ -357,6 +390,23 @@ export const shopifyConnector = defineDataConnector({
             // connector-managed line.
             { sourcePath: 'lineTotal', target: 'line_item_line_total' },
             { sourcePath: 'index', target: 'line_item_sort_order' },
+            // Tax, per line (money plan 48 §4.2 / §4.3). `line_item_taxable`
+            // has been in the registry since money plan 37 and unbound until
+            // now; `line_item_tax_total` is new in entity migration 136.
+            //
+            // Deliberately a SCALAR and not a `tax_lines[]` fan-out per line:
+            // filing needs the jurisdiction split per ORDER (the `tax_lines[]`
+            // mapping below), and the fulfillment builder needs one number per
+            // line. Fanning the per-line breakdown out too would multiply ~63k
+            // records over the order history to answer nothing.
+            //
+            // ⚠️ `taxTotal` is projected from `total_tax_set.shop_money.amount`,
+            // a STRING, never the bare `total_tax` sibling, which is a NUMBER
+            // carrying the same value (47 §4.1, measured). This is what lets
+            // `buildFulfillmentEntry` use exact per-line tax instead of
+            // allocating the order total pro rata across split shipments.
+            { sourcePath: 'taxable', target: 'line_item_taxable' },
+            { sourcePath: 'taxTotal', target: 'line_item_tax_total' },
             // `sku` / `vendor` bind nothing — the part already carries both.
             // The fulfillment rollup, all app fields (§5.2/§7.3).
             { sourcePath: 'fulfilledAt', appField: 'fulfilledAt' },
@@ -378,6 +428,132 @@ export const shopifyConnector = defineDataConnector({
           linkMode: 'reference',
           relationshipFieldKey: 'system:line_item_part',
           target: { entityKind: 'part' },
+        },
+
+        // refunds[] -> native refund, child of the order above (money plan 47
+        // §2, `plans/money/tasks/47-shopify-refunds.md`). A fan-out out of the
+        // order payload the connector already fetches, NOT a dedicated
+        // `refunds/create` stream: it needs no new fetch, watermark or
+        // pagination, it rides orders' Protected Customer Data approval instead
+        // of waiting on its own, and idempotency is free because `refunds[]` is
+        // a snapshot re-delivered on every order sync keyed on Shopify's stable
+        // `refund.id`. The dedicated stream wins only on latency and can be
+        // added later without rework (47 §2).
+        //
+        // ⚠️ There is NO total on a Shopify refund (47 §2.1). The measured
+        // top-level keys are `created_at, duties, id, note, order_adjustments,
+        // processed_at, refund_duties, refund_line_items,
+        // refund_shipping_lines, restock, transactions, user_id` and none of
+        // them is an amount. `amountRefunded` is therefore a DERIVATION the
+        // projection computes - the sum of the successful refund transactions,
+        // the money that actually moved - and it is named for that rather than
+        // called a total. A field called `refund_total` would have been null on
+        // every row, silently.
+        {
+          rootPath: 'refunds[]',
+          relationshipFieldKey: 'system:order_refunds',
+          target: { entityKind: 'refund' },
+          fields: [
+            { sourcePath: 'shopifyRefundId', appField: 'shopifyRefundId' }, // identity -> externalId
+            // The refund's OWN date, never ingest time. The connector is
+            // manual-only today, so the gap between a refund happening and auxx
+            // seeing it is unbounded and can cross a period close (47 §5.3).
+            { sourcePath: 'createdAt', target: 'refund_created_at' },
+            { sourcePath: 'note', target: 'refund_note' },
+            { sourcePath: 'amountRefunded', target: 'refund_amount_refunded' },
+          ],
+        },
+
+        // refunds[].refund_line_items[] -> native refund_line, the GOODS leg of
+        // a refund (47 §2.2, §3). Parent derives from the longest boundary
+        // prefix, which is the `refunds[]` mapping above, so no
+        // `parentRootPath` is needed.
+        //
+        // ⚠️ Most refunds have NO lines. Measured over the readable window, 8
+        // of 11 refunds moved money with zero `refund_line_items[]` - a
+        // concession or a discrepancy adjustment, not a physical return - so
+        // this mapping is the minority case and the refund record above is
+        // where the money actually lives (47 §3).
+        //
+        // ⚠️ `restock` is deliberately NOT bound. It is deprecated in favour of
+        // `restock_type`, and it sits at the refund level where the fact is per
+        // line. It is in the payload, so it will look bindable. `location_id`
+        // is left out for a different reason: nothing consumes it until the
+        // inventory leg exists (47 §2.2).
+        //
+        // `disposition` is auxx's own provider-neutral vocabulary
+        // (returned / not_returned / cancelled); the projection maps Shopify's
+        // `restock_type` token into it rather than storing the token, which is
+        // what `1200 Shopify Clearing` -> `1200 Card Clearing` cost when it was
+        // skipped (47 §3, §9 rule 1).
+        {
+          rootPath: 'refunds[].refund_line_items[]',
+          relationshipFieldKey: 'system:refund_lines',
+          target: { entityKind: 'refund_line' },
+          fields: [
+            { sourcePath: 'shopifyRefundLineId', appField: 'shopifyRefundLineId' }, // identity -> externalId
+            { sourcePath: 'quantity', target: 'refund_line_qty' },
+            // Both money paths are the `_set.shop_money.amount` STRING, never
+            // the bare `subtotal` / `total_tax` scalars (47 §4.1).
+            { sourcePath: 'subtotal', target: 'refund_line_subtotal' },
+            { sourcePath: 'taxTotal', target: 'refund_line_tax_total' },
+            { sourcePath: 'disposition', target: 'refund_line_disposition' },
+          ],
+        },
+
+        // refund line -> the order line it refunds, `reference` mode, the same
+        // shape as `line_items[].variant_id` -> part above (47 §2.2). Resolves
+        // by (connector, line_item def, Shopify line id) because the
+        // `line_items[]` mapping designates `shopifyLineId` as its external id.
+        //
+        // Unlike the part reference, the target here is in the SAME order
+        // payload rather than in another stream, so it is not exposed to the
+        // product backfill having to finish first.
+        {
+          rootPath: 'refunds[].refund_line_items[].line_item_id',
+          linkMode: 'reference',
+          relationshipFieldKey: 'system:refund_line_line_item',
+          target: { entityKind: 'line_item' },
+        },
+
+        // tax_lines[] -> native tax_line, the per-jurisdiction breakdown of the
+        // order tax total the root mapping already transcribes (money plan 48
+        // §4.1, `plans/money/tasks/48-shopify-tax-data.md`).
+        //
+        // auxx does NOT calculate tax and never will (48's banner). This
+        // carries the answer Shopify already computed: `rate` is display and
+        // filing only and is never multiplied by anything, and `price` is the
+        // amount as supplied.
+        //
+        // Records rather than a JSON blob because the question is "tax by
+        // jurisdiction over a period", which is an aggregation and aggregations
+        // want rows. Additive and safe: `sum(tax_lines.price) == total_tax` on
+        // all 250 orders measured, so nothing that posts today changes.
+        //
+        // ⚠️ Multi-jurisdiction is the NORM - 104 of 123 taxed orders carry more
+        // than one line - which is why the registry's `order_tax_rate` scalar
+        // stays unbound. It can represent 19 of 123 orders, and a partial
+        // answer there reads as a complete one (48 §2).
+        //
+        // ⚠️ `channelLiable` is not decoration: it is the one field on this
+        // record the LEDGER branches on. When it is true a marketplace
+        // facilitator remits that tax, not the merchant, so crediting it to
+        // `2200 Sales Tax Payable` books a liability the business does not owe
+        // and will never pay down (48 §3, §6.4).
+        {
+          rootPath: 'tax_lines[]',
+          relationshipFieldKey: 'system:order_tax_lines',
+          target: { entityKind: 'tax_line' },
+          fields: [
+            // ⚠️ SYNTHETIC identity - Shopify tax lines carry no id at all. See
+            // `shopifyTaxLineKey` in fields.ts for what the key is made of.
+            { sourcePath: 'taxLineKey', appField: 'shopifyTaxLineKey' }, // identity -> externalId
+            { sourcePath: 'title', target: 'tax_line_title' },
+            { sourcePath: 'rate', target: 'tax_line_rate' },
+            // `price_set.shop_money.amount`, the STRING (48 §8.1).
+            { sourcePath: 'price', target: 'tax_line_price' },
+            { sourcePath: 'channelLiable', target: 'tax_line_channel_liable' },
+          ],
         },
       ],
       // Backfill once, then run deltas off the `updated_at` watermark.
@@ -431,6 +607,7 @@ export const shopifyConnector = defineDataConnector({
           email: 'jane@example.com',
           firstName: 'Jane',
           lastName: 'Doe',
+          taxExempt: false,
         },
         line_items: [
           {
@@ -444,6 +621,9 @@ export const shopifyConnector = defineDataConnector({
             price: 1999,
             lineTotal: 5997,
             index: 0,
+            taxable: true,
+            // Minor units, from `total_tax_set.shop_money.amount` (48 §8.1).
+            taxTotal: 400,
             fulfillmentStatus: 'fulfilled',
             variant_id: '44556677',
             // Same line, two shipments: 2 units on the 12th, 1 on the 15th.
@@ -454,6 +634,48 @@ export const shopifyConnector = defineDataConnector({
             fulfilledQuantity: 3,
             shipmentCount: 2,
             trackingNumber: null,
+          },
+        ],
+        // A partial refund with one returned line (money plans 47 §2 / 48 §4.1).
+        // Money is already in MINOR UNITS here, like every other amount in this
+        // example: the projection scales the provider's decimal strings before
+        // the mapping ever sees them.
+        refunds: [
+          {
+            shopifyRefundId: '55667788',
+            createdAt: '2024-02-20T11:00:00Z',
+            note: 'Customer returned one shirt',
+            // Σ successful refund transactions, NOT a Shopify field (47 §2.1).
+            amountRefunded: 2132,
+            refund_line_items: [
+              {
+                shopifyRefundLineId: '99001122',
+                line_item_id: '11223344',
+                quantity: 1,
+                subtotal: 1999,
+                taxTotal: 133,
+                // auxx's vocabulary, mapped from Shopify's `restock_type`.
+                disposition: 'returned',
+              },
+            ],
+          },
+        ],
+        // Order-level jurisdiction breakdown. `sum(price) == totalTax` on every
+        // order measured, and more than one line is the norm (48 §1, §2).
+        tax_lines: [
+          {
+            taxLineKey: '1234567890:CA State Tax',
+            title: 'CA State Tax',
+            rate: 0.06,
+            price: 276,
+            channelLiable: false,
+          },
+          {
+            taxLineKey: '1234567890:Ventura County Tax',
+            title: 'Ventura County Tax',
+            rate: 0.0275,
+            price: 124,
+            channelLiable: false,
           },
         ],
         raw: {

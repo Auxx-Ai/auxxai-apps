@@ -32,6 +32,15 @@
 // period cut possible. `shipmentCount` is the honesty column: where it is 1 the
 // derived dates are exact, and where it is >1 the close job knows to look closer.
 //
+// The `order` projection also fans out `refunds[]` (each with its own nested
+// `refund_line_items[]`) and `tax_lines[]` (money plan 47/48) — the same
+// `rootPath` pattern `line_items[]` uses. Two things about those are load-bearing
+// and documented at their helpers rather than here: a Shopify refund carries NO
+// total, so `amountRefunded` is DERIVED from the successful refund transactions
+// (`refundAmountRefunded`); and a Shopify tax line carries NO id, so its identity
+// is SYNTHESISED as `${orderId}:${title}` (`projectTaxLine`). Both are still
+// dumped verbatim into `raw` as well.
+//
 // ── Field naming ─────────────────────────────────────────────────────────────
 // Every projected key here is exactly the `sourcePath` (relative to its
 // mapping's `rootPath`) a `shopify.connector.ts` mapping field reads — there is
@@ -250,6 +259,11 @@ interface RawCustomer {
   created_at: string
   updated_at: string
   default_address: RawAddress | null
+  /** Resale/dealer exemption. The FLAG only: Shopify's `tax_exemptions[]` was
+   *  empty on every order measured, so the exemption REASON and the resale
+   *  certificate are not obtainable here and stay a manual, out-of-scope
+   *  concern (plans/money/tasks/48-shopify-tax-data.md §4.4). */
+  tax_exempt: boolean | null
 }
 
 /** Project one REST customer into a SOURCE-shaped record (fields keyed by sourcePath). */
@@ -270,6 +284,14 @@ function toCustomerRecord(c: RawCustomer): ConnectorRecord {
       total_spent: c.total_spent,
       note: c.note,
       created_at: c.created_at,
+      // Resale/dealer exemption (plans/money/tasks/48-shopify-tax-data.md §4.4).
+      // Emitted HERE as well as on the order's embedded customer: a contact the
+      // customer stream syncs before it has ever ordered would otherwise carry
+      // no exemption flag at all, and for a dealer business this is the field
+      // that separates "exempt for resale" from "simply never taxed".
+      // `typeof` rather than truthiness so absent stays null and is never
+      // defaulted to false (§8.2 - not supplied is not the same as false).
+      tax_exempt: typeof c.tax_exempt === 'boolean' ? c.tax_exempt : null,
       // Flattened default-address scalars — bound onto the contact's city/region/country.
       default_address: c.default_address
         ? {
@@ -283,6 +305,97 @@ function toCustomerRecord(c: RawCustomer): ConnectorRecord {
 }
 
 // ── order stream ───────────────────────────────────────────────────────────────
+
+/**
+ * Shopify's money "set" wrapper (`{ shop_money, presentment_money }`). Only
+ * `shop_money` is ever read — it is the merchant's own currency, which is the one
+ * the ledger posts in, and it is the STRING form of the amount (see `RawTaxLine`).
+ */
+interface RawMoneySet {
+  shop_money?: { amount?: string | null } | null
+}
+
+/**
+ * One tax line — the same shape order-level and per line item. The measured key
+ * set on live data is exactly `[channel_liable, price, price_set, rate, title]`;
+ * note there is NO `id`, which is why `projectTaxLine` has to synthesise one.
+ *
+ * `price` (the bare scalar) is typed here for completeness and deliberately never
+ * read: the payload carries the same value as a NUMBER on `price`/`total_tax` and
+ * as a STRING on `*_set.shop_money.amount`, and only the string form is taken
+ * through `decimalToMinorUnits`. Binding the bare scalar opens a second numeric
+ * path into the ledger, which is where the 100x money bug lived last time.
+ */
+interface RawTaxLine {
+  title?: string | null
+  rate?: number | string | null
+  price?: number | string | null
+  price_set?: RawMoneySet | null
+  channel_liable?: boolean | null
+}
+
+/**
+ * Parse a tax RATE (e.g. `0.0625`). Not money, so it must never go through
+ * `decimalToMinorUnits` — a rate scaled by 100 is a 100x wrong rate. Accepts the
+ * string form too, because this payload is not consistent about number vs string.
+ */
+function toRate(rate: number | string | null | undefined): number | null {
+  if (rate === null || rate === undefined || rate === '') return null
+  const parsed = typeof rate === 'number' ? rate : Number.parseFloat(rate)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
+ * Project one order-level tax line for the `tax_lines[]` fan-out.
+ *
+ * 🛑 A Shopify tax line carries NO `id`, so there is no natural external id to key
+ * the record on and one has to be synthesised. `${orderId}:${title}` is a natural
+ * key on (order, jurisdiction), which is what a tax line actually is — the title
+ * IS the jurisdiction ("Texas State Tax", "Dallas Mta Transit"). Two tax lines on
+ * one order sharing a title would collide onto a single record; no such order has
+ * been observed, but nothing in the payload prevents it.
+ *
+ * `channelLiable` is a POSTING INPUT, not decoration: only a `false` line credits
+ * `2200 Sales Tax Payable`, because a `true` line is remitted by the marketplace
+ * facilitator and booking it would grow a liability the business does not owe. It
+ * is emitted as null when absent, never defaulted to `false` — "not supplied" has
+ * to stay distinguishable from "supplied as false".
+ */
+function projectTaxLine(orderId: string, tl: RawTaxLine) {
+  const title = tl.title ?? null
+  return {
+    taxLineKey: title != null ? `${orderId}:${title}` : null,
+    title,
+    rate: toRate(tl.rate),
+    // The `_set` STRING form, never the bare `price` number — see `RawTaxLine`.
+    price: decimalToMinorUnits(tl.price_set?.shop_money?.amount ?? null),
+    channelLiable: typeof tl.channel_liable === 'boolean' ? tl.channel_liable : null,
+  }
+}
+
+/**
+ * Total the tax a line item was charged, across every jurisdiction that taxed it.
+ *
+ * ⚠️ This is TOTALLING FIGURES THE PROVIDER SUPPLIED, not computing tax: every
+ * addend is a `price` Shopify already calculated, and no rate is ever multiplied
+ * and no total ever allocated. auxx does not calculate tax; it carries the answer
+ * the provider produced, and a sum of those answers is still their answer.
+ *
+ * Deliberately a SCALAR rather than a per-line `tax_lines[]` fan-out: filing needs
+ * jurisdiction detail per ORDER (which the order-level fan-out gives), and the
+ * fulfillment entry needs one number per line. Fanning per-line detail out too
+ * would multiply ~63k records over the order history to serve no question.
+ *
+ * Returns null when the provider sent no tax lines at all — "not supplied" is a
+ * third state and must not collapse into "supplied as zero".
+ */
+function lineTaxTotal(taxLines: RawTaxLine[] | null | undefined): number | null {
+  if (!taxLines) return null
+  return taxLines.reduce(
+    (sum, tl) => sum + (decimalToMinorUnits(tl.price_set?.shop_money?.amount ?? null) ?? 0),
+    0
+  )
+}
 
 interface RawLineItem {
   id: number | null
@@ -299,6 +412,14 @@ interface RawLineItem {
   price: string | null
   fulfillment_status: string | null
   product_id: number | null
+  /** Whether this line was subject to tax at all — binds `line_item_taxable`.
+   *  Distinct from "was taxed": an exempt customer buys a taxable line and pays
+   *  nothing, and only this flag tells the two apart. */
+  taxable: boolean | null
+  /** Per-line tax, one entry per jurisdiction. Totalled into a single
+   *  `taxTotal` scalar by `lineTaxTotal` — see its docblock for why it is not
+   *  fanned out. */
+  tax_lines: RawTaxLine[] | null
   /** Per-line discount allocation — how much of which order-level discount
    *  landed on THIS line. Feeds `lineTotal` (price × qty − Σ amounts) and is
    *  also folded into the order's `raw.discount_allocations` (money plan 37
@@ -431,6 +552,148 @@ function deriveFulfillments(o: RawOrder): OrderFulfillmentDerivation {
   }
 }
 
+/**
+ * One money movement on a refund (`refund.transactions[]`). `kind` is
+ * `refund | void | sale | authorization | capture`; `status` is
+ * `success | pending | failure | error`.
+ */
+interface RawRefundTransaction {
+  kind?: string | null
+  status?: string | null
+  amount?: string | null
+}
+
+/**
+ * One refunded line (`refund.refund_line_items[]`). Measured key set:
+ * `[id, line_item, line_item_id, location_id, quantity, restock_type, subtotal,
+ * subtotal_set, total_tax, total_tax_set]`.
+ *
+ * `subtotal` and `total_tax` (the bare scalars) are typed for completeness and
+ * deliberately never read — the same number/string split as `RawTaxLine`.
+ * `location_id` is omitted from the projection: nothing consumes it until the
+ * inventory leg exists.
+ */
+interface RawRefundLineItem {
+  id?: number | null
+  line_item_id?: number | null
+  quantity?: number | null
+  subtotal?: number | string | null
+  subtotal_set?: RawMoneySet | null
+  total_tax?: number | string | null
+  total_tax_set?: RawMoneySet | null
+  restock_type?: string | null
+}
+
+/**
+ * One refund on an order (`order.refunds[]`). Its twelve top-level properties are
+ * `created_at, duties, id, note, order_adjustments, processed_at, refund_duties,
+ * refund_line_items, refund_shipping_lines, restock, transactions, user_id` —
+ * note that **none of them is a total** (see `refundAmountRefunded`).
+ *
+ * 🛑 `restock` is deliberately NOT typed or projected. Shopify deprecates it
+ * ("use `restock_type` for refund line items instead") and it sits at the refund
+ * level while the fact it describes is per line. It is in the payload, so it will
+ * look bindable; `refund_line_items[].restock_type` is the field that carries it.
+ */
+interface RawRefund {
+  id?: number | null
+  created_at?: string | null
+  note?: string | null
+  refund_line_items?: RawRefundLineItem[] | null
+  transactions?: RawRefundTransaction[] | null
+}
+
+/** Provider-neutral disposition of a refunded line — what happened to the goods. */
+type RefundDisposition = 'returned' | 'not_returned' | 'cancelled'
+
+/**
+ * Shopify's `restock_type` vocabulary, mapped onto auxx's own. Kept as a table so
+ * an unrecognised token falls through to null rather than leaking into the field.
+ */
+const RESTOCK_TYPE_TO_DISPOSITION: Record<string, RefundDisposition> = {
+  return: 'returned',
+  legacy_restock: 'returned',
+  no_restock: 'not_returned',
+  cancel: 'cancelled',
+}
+
+/**
+ * Translate `restock_type` into the provider-neutral disposition.
+ *
+ * ⚠️ The stored value must never be Shopify's token. Other providers will send a
+ * different vocabulary for the same three facts, and the cost of baking a
+ * provider's words into stored data is already on the record: `1200 Shopify
+ * Clearing` had to be renamed to `1200 Card Clearing` by a migration.
+ *
+ * An unknown token maps to null rather than to a guess — an unrecognised
+ * disposition is "not supplied", not "not returned".
+ */
+function refundDisposition(restockType: string | null | undefined): RefundDisposition | null {
+  if (!restockType) return null
+  return RESTOCK_TYPE_TO_DISPOSITION[restockType] ?? null
+}
+
+/**
+ * The money that actually moved back on a refund, in integer minor units: the sum
+ * of `transactions[]` where `kind === 'refund'` and `status === 'success'`.
+ *
+ * 🛑 This is a DERIVATION over provider facts, NOT a transcription, and the name
+ * has to keep saying so. A Shopify refund object has **no total field at all** —
+ * a `refund_total` bound against one would have been null on every row, silently.
+ * The value is defensible because it aggregates facts that each stand on their own
+ * record (every transaction remains individually inspectable) and it invents no
+ * rate and allocates nothing. **Do not rename it to a "total".**
+ *
+ * Failed and pending legs are excluded: money that did not move is not refunded.
+ *
+ * Returns null only when the provider sent no `transactions` array at all. An
+ * empty or all-unsuccessful array yields 0, which is a real answer ("nothing
+ * settled yet") and must stay distinguishable from "not supplied".
+ */
+function refundAmountRefunded(
+  transactions: RawRefundTransaction[] | null | undefined
+): number | null {
+  if (!transactions) return null
+  return transactions
+    .filter((t) => t.kind === 'refund' && t.status === 'success')
+    .reduce((sum, t) => sum + (decimalToMinorUnits(t.amount) ?? 0), 0)
+}
+
+/**
+ * Project one refund for the `refunds[]` fan-out, with its `refund_line_items[]`
+ * nested for the child fan-out beneath it.
+ *
+ * `refund_line_items` and `line_item_id` stay snake_case ON PURPOSE: those exact
+ * literals are also mapping `rootPath`s in `shopify.connector.ts`, exactly like
+ * `line_items[].variant_id`. Every other key is camelCase like the rest of this
+ * projection.
+ */
+function projectRefund(r: RawRefund) {
+  return {
+    // The refund's own Shopify id — its identity. A refund is append-only at the
+    // source (there is no delete/void/reverse operation), so this id is stable.
+    shopifyRefundId: r.id != null ? String(r.id) : null,
+    // The date the refund HAPPENED. The posting builder dates the entry from this
+    // and never from ingest time: this connector is manual-only, so the gap
+    // between a refund occurring and auxx seeing it can cross a period close.
+    createdAt: r.created_at ?? null,
+    note: r.note ?? null,
+    amountRefunded: refundAmountRefunded(r.transactions),
+    refund_line_items: (r.refund_line_items ?? []).map((rl) => ({
+      shopifyRefundLineId: rl.id != null ? String(rl.id) : null,
+      quantity: typeof rl.quantity === 'number' ? rl.quantity : null,
+      // Both take the `_set` STRING form, never the bare `subtotal` / `total_tax`
+      // numbers sitting beside them — see `RawTaxLine`.
+      subtotal: decimalToMinorUnits(rl.subtotal_set?.shop_money?.amount ?? null),
+      taxTotal: decimalToMinorUnits(rl.total_tax_set?.shop_money?.amount ?? null),
+      disposition: refundDisposition(rl.restock_type),
+      // Reference back to the order line this refunded. NOT camelCased: this
+      // literal path is also a reference mapping's `rootPath`.
+      line_item_id: rl.line_item_id != null ? String(rl.line_item_id) : null,
+    })),
+  }
+}
+
 interface RawOrder {
   id: number
   name: string | null
@@ -473,12 +736,19 @@ interface RawOrder {
     email: string | null
     first_name: string | null
     last_name: string | null
+    /** Resale/dealer exemption. The FLAG is available; Shopify's
+     *  `tax_exemptions[]` array was empty on every order measured, so the
+     *  exemption REASON and the certificate are not obtainable here. */
+    tax_exempt: boolean | null
   } | null
   line_items: RawLineItem[] | null
+  // Modelled natively as of money plan 47/48 — fanned out into `refund` /
+  // `refund_line` / `tax_line` records, scaled through `decimalToMinorUnits`.
+  // Deliberately NOT also dumped into `raw`: see the note there.
+  refunds: RawRefund[] | null
+  tax_lines: RawTaxLine[] | null
   // ── Not modelled anywhere in the native order/line_item — folded verbatim
   // into `raw` (money plan 37 §6/§8) instead of a resync-to-answer round trip.
-  refunds: unknown[] | null
-  tax_lines: unknown[] | null
   shipping_lines: unknown[] | null
   discount_applications: unknown[] | null
 }
@@ -536,6 +806,11 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
             email: o.customer.email,
             firstName: o.customer.first_name,
             lastName: o.customer.last_name,
+            // Resale/dealer exemption. Null when absent, never defaulted to
+            // false: for a dealer business this is the difference between "sold
+            // to an exempt customer" and "was simply never taxed", and defaulting
+            // it would erase exactly that distinction.
+            taxExempt: typeof o.customer.tax_exempt === 'boolean' ? o.customer.tax_exempt : null,
           }
         : null,
       // Raw array — the platform fans each element out per the `line_items[]` mapping.
@@ -577,6 +852,14 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
           // Position within the order — line_item_sort_order.
           index,
           fulfillmentStatus: fulfillmentStatus(li.fulfillment_status),
+          // Whether the line was subject to tax — binds the already-registered
+          // `line_item_taxable`. Null when absent, never defaulted.
+          taxable: typeof li.taxable === 'boolean' ? li.taxable : null,
+          // One scalar per line, summed from the provider's OWN per-jurisdiction
+          // tax lines — totalling supplied figures, not calculating tax. This is
+          // what lets the fulfillment entry use exact per-line tax on a split
+          // shipment instead of allocating the order total pro rata.
+          taxTotal: lineTaxTotal(li.tax_lines),
           // Stringified to match the product stream's variant identity so the
           // line→part reference resolves (money plan 37 §7.2/§10.5). NOT
           // renamed to camelCase: this exact literal path is also the
@@ -591,6 +874,21 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
           trackingNumber: derivation.tracking_number,
         }
       }),
+      // Raw array — the platform fans each element out per the `refunds[]`
+      // mapping into the native `refund`, and each element's nested
+      // `refund_line_items[]` out again into `refund_line` beneath it. A refund
+      // is a SNAPSHOT re-delivered on every order sync and keyed on a stable
+      // `refund.id`, so re-ingest is idempotent for free; a second refund on an
+      // already-refunded order still lands, because it is a new external id even
+      // when the order root itself hashes identically.
+      refunds: (o.refunds ?? []).map(projectRefund),
+      // Raw array — fanned out per the `tax_lines[]` mapping into `tax_line`
+      // records. Records, not a JSON blob, because the question these exist to
+      // answer is "tax by jurisdiction over a period", which is an aggregation,
+      // and an aggregation wants rows. Multi-jurisdiction is the NORM (85% of
+      // taxed orders carry more than one line), which is also why the scalar
+      // `order_tax_rate` field can never be bound.
+      tax_lines: (o.tax_lines ?? []).map((tl) => projectTaxLine(String(o.id), tl)),
       // Everything the native order/line_item does not model (§6/§8) — stored
       // verbatim (no unit scaling: this is a query-later dump, not a bound
       // field) so an accrual question never needs a resync to answer.
@@ -598,8 +896,13 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
       // like the rest of this projection) — this is a query-later dump of the
       // provider's own shapes, not a bound field.
       raw: {
-        refunds: o.refunds ?? [],
-        tax_lines: o.tax_lines ?? [],
+        // `refunds` and `tax_lines` were dumped here until money plan 47/48
+        // modelled them natively. Removed rather than kept alongside: `raw` is
+        // UNSCALED by design ("a query-later dump, not a bound field"), so a
+        // second copy of the same money in decimal strings beside the native
+        // records in minor units is exactly the ambiguity §4.1 is about. The
+        // native `refund` / `refund_line` / `tax_line` records are the answer
+        // now, and they carry more than the dump did.
         shipping_lines: o.shipping_lines ?? [],
         discount_applications: o.discount_applications ?? [],
         // Shopify carries this PER LINE ITEM, not at the order level; line_item

@@ -57,6 +57,21 @@ import { defineFields } from '@auxx/sdk/fields'
  *   `discount_allocations`. Every open accrual question on the sell side
  *   currently needs a resync to answer; with `raw` stored at ingest it needs
  *   a query.
+ *
+ * Refund / tax-line fields (money plans
+ * `plans/money/tasks/47-shopify-refunds.md` §2 and
+ * `plans/money/tasks/48-shopify-tax-data.md` §4.1 — the order stream fans
+ * `refunds[]`, `refunds[].refund_line_items[]` and `tax_lines[]` out onto the
+ * native `refund`, `refund_line` and `tax_line` entities added by entity
+ * migration 136). Every value on those records is a native system attribute;
+ * the only thing left for this app to own is external identity:
+ *
+ * - `shopifyRefundId` / `shopifyRefundLineId` — Shopify's own `refund.id` and
+ *   `refund_line_items[].id`, mirrored to `RecordIdentity`. A refund is
+ *   append-only at the source (the Refund resource has no delete, void or
+ *   reverse), so these ids are stable for the life of the order.
+ * - `shopifyTaxLineKey` — SYNTHETIC, and the one field here that is not a
+ *   provider id.
  */
 export const shopifyFields = defineFields([
   {
@@ -352,6 +367,76 @@ export const shopifyFields = defineFields([
     targetEntity: 'line_item',
     scope: 'connection',
     name: 'Line Tracking Number',
+    capabilities: {
+      hidden: true,
+      filterable: true,
+      sortable: false,
+      creatable: false,
+      updatable: false,
+    },
+  },
+
+  // ── refund / refund_line (money plan 47 §2) ───────────────────────────────
+  // Identity only. Every other value on a refund is a native system attribute
+  // (`refund_created_at`, `refund_note`, `refund_amount_refunded`, and the
+  // `refund_lines` / `refund_order` edges), so there is no provenance column
+  // left for this app to own.
+  {
+    key: 'shopifyRefundId',
+    type: 'TEXT',
+    targetEntity: 'refund',
+    scope: 'connection',
+    name: 'Shopify Refund ID',
+    identity: true,
+    capabilities: {
+      hidden: true,
+      filterable: true,
+      sortable: false,
+      creatable: false,
+      updatable: false,
+    },
+  },
+  {
+    key: 'shopifyRefundLineId',
+    type: 'TEXT',
+    targetEntity: 'refund_line',
+    scope: 'connection',
+    name: 'Shopify Refund Line ID',
+    identity: true,
+    capabilities: {
+      hidden: true,
+      filterable: true,
+      sortable: false,
+      creatable: false,
+      updatable: false,
+    },
+  },
+
+  // ── tax_line (money plan 48 §4.1) ─────────────────────────────────────────
+  // ⚠️ SYNTHETIC. This is NOT a Shopify id, because there is no Shopify id to
+  // carry: a tax line's measured key set is exactly
+  // `[channel_liable, price, price_set, rate, title]` and it contains nothing
+  // identifying. A future reader will go looking for the provider id, so it is
+  // said here plainly: there is not one.
+  //
+  // The projection synthesises `${orderId}:${title}` instead, which is a
+  // NATURAL key on (order, jurisdiction) - an order carries at most one tax
+  // line per jurisdiction, and the jurisdiction title is what a
+  // tax-by-jurisdiction report groups by anyway. Consequences worth knowing:
+  //
+  // - It is stable across resyncs as long as Shopify keeps naming the
+  //   jurisdiction the same way. A RENAMED jurisdiction ("Ventura Co Local Tax
+  //   Sl" becoming anything else) reads as a new tax line rather than an edit,
+  //   which the reconciliation sweep then has to retire.
+  // - It is scoped by the order id, so it stays unique per store the way every
+  //   other `scope: 'connection'` identity here does.
+  {
+    key: 'shopifyTaxLineKey',
+    type: 'TEXT',
+    targetEntity: 'tax_line',
+    scope: 'connection',
+    name: 'Shopify Tax Line Key',
+    identity: true,
     capabilities: {
       hidden: true,
       filterable: true,
