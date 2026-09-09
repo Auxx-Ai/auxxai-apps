@@ -6,11 +6,12 @@
  * platform bridge picks the credId from
  * `Agent.appAccounts['quickbooks'].credId`. Multi-realm orgs (one
  * connection per QB company) select which company an agent acts on via
- * the account picker; tools see one resolved connection.
+ * the account picker; tools see one resolved connection — and its own
+ * environment, read off the connection rather than an installation setting.
  *
  * See plans/kopilot/apps/quickbooks-overhaul.md §3 decisions #1, #14, #15.
  */
-import { getConnection, getOrganizationSettings } from '@auxx/sdk/server'
+import { getConnection } from '@auxx/sdk/server'
 import { throwConnectionNotFound } from '../../blocks/quickbooks/shared/quickbooks-api'
 
 export interface QuickBooksConnectionInfo {
@@ -32,8 +33,11 @@ export async function getQuickbooksConnection(): Promise<QuickBooksConnectionInf
     throw err
   }
 
-  const settings = await getOrganizationSettings()
-  const sandbox = settings?.sandbox === true
+  // The environment is a property of the CONNECTION, not the installation: the token, the API
+  // host and every stored QuickBooks id belong to one company, so a multi-realm org can hold a
+  // sandbox and a production connection side by side. Stored as a string because the connect
+  // form serialises every variable that way.
+  const sandbox = connection.fields?.sandbox === 'true'
 
   return { credential: connection.value, realmId, sandbox }
 }

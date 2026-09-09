@@ -1,4 +1,4 @@
-import { getOrganizationConnection, getOrganizationSettings } from '@auxx/sdk/server'
+import { getOrganizationConnection } from '@auxx/sdk/server'
 import { BlockValidationError } from '@auxx/sdk/shared'
 import {
   quickbooksApi,
@@ -13,8 +13,10 @@ async function getConnectionAndRealm() {
   if (!connection?.value) throwConnectionNotFound()
   const realmId = connection.metadata?.realmId
   if (!realmId) throw new Error('QuickBooks realm ID not found. Please reconnect.')
-  const settings = await getOrganizationSettings()
-  const sandbox = settings?.sandbox === true
+  // The environment is a property of the CONNECTION, not the installation: the token, the API
+  // host and every stored QuickBooks id belong to one company. Stored as a string because the
+  // connect form serialises every variable that way.
+  const sandbox = connection.fields?.sandbox === 'true'
   return { credential: connection.value, realmId, sandbox }
 }
 
