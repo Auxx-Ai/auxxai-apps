@@ -27,7 +27,7 @@ interface TwilioCallsResponse {
 export default async function listTwilioCalls(
   input: ListTwilioCallsInput
 ): Promise<ListTwilioCallsOutput> {
-  const { accountSid, authToken } = await getTwilioCreds()
+  const { accountSid, authToken } = getTwilioCreds()
   const limit = input.limit ?? 20
 
   const raw = await twilioApi<TwilioCallsResponse>('/Calls.json', accountSid, authToken, {

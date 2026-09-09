@@ -15,7 +15,7 @@ interface GetTwilioCallOutput {
 export default async function getTwilioCall(
   input: GetTwilioCallInput
 ): Promise<GetTwilioCallOutput> {
-  const { accountSid, authToken } = await getTwilioCreds()
+  const { accountSid, authToken } = getTwilioCreds()
 
   const raw = await twilioApi<unknown>(
     `/Calls/${encodeURIComponent(input.sid)}.json`,

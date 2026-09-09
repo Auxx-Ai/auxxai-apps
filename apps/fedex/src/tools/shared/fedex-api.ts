@@ -59,7 +59,7 @@ function extractMessage(data: unknown): string | undefined {
 }
 
 async function fedexRequest<T>(path: string, body: unknown, allowRetry = true): Promise<T> {
-  const base = await getFedexBaseUrl()
+  const base = getFedexBaseUrl()
   const token = await getFedexToken()
 
   let response: Response

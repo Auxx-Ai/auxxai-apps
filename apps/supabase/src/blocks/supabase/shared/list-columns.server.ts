@@ -1,7 +1,7 @@
 // src/blocks/supabase/shared/list-columns.server.ts
 
-import { getOrganizationConnection, getOrganizationSetting } from '@auxx/sdk/server'
-import { supabaseApi, throwConnectionNotFound, throwProjectUrlNotSet } from './supabase-api'
+import { supabaseApi } from './supabase-api'
+import { getSupabaseAuth } from '../../../tools/shared/connection'
 import { getSchemaHeaders } from './get-schema-headers'
 
 /**
@@ -13,16 +13,12 @@ export default async function listColumns(
   table: string,
   schema: string = 'public'
 ): Promise<{ label: string; value: string }[]> {
-  const connection = getOrganizationConnection()
-  if (!connection?.value) throwConnectionNotFound()
-
-  const projectUrl = await getOrganizationSetting<string>('projectUrl')
-  if (!projectUrl) throwProjectUrlNotSet()
+  const { serviceRoleKey, projectUrl } = getSupabaseAuth()
 
   const useCustomSchema = schema !== 'public'
   const headers = getSchemaHeaders('GET', useCustomSchema, schema)
 
-  const spec = await supabaseApi('GET', '/', connection.value, projectUrl, { headers })
+  const spec = await supabaseApi('GET', '/', serviceRoleKey, projectUrl, { headers })
   const definition = (spec?.definitions ?? {})[table]
   if (!definition?.properties) return []
 

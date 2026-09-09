@@ -16,7 +16,7 @@ interface ListSupabaseTablesOutput {
 export default async function listSupabaseTables(
   input: ListSupabaseTablesInput
 ): Promise<ListSupabaseTablesOutput> {
-  const { serviceRoleKey, projectUrl } = await getSupabaseAuth()
+  const { serviceRoleKey, projectUrl } = getSupabaseAuth()
   const schema = (input.schema ?? 'public').trim() || 'public'
 
   const headers = getSchemaHeaders('GET', schema !== 'public', schema)

@@ -1,12 +1,13 @@
 // src/tools/shared/connection.ts
 
 /**
- * Resolve the bound Twilio credentials for a tool call. Twilio is the first
- * tool surface where `getConnection()` alone is not sufficient: the REST API
- * uses HTTP Basic with Account SID (org setting) as username and Auth Token
- * (`secret` cred) as password. See plans/kopilot/apps/twilio-overhaul.md §7.
+ * Resolve the bound Twilio credentials for a tool call. The Twilio REST API uses
+ * HTTP Basic with the Account SID as username and the Auth Token as password, so
+ * both are connection variables on one `secret` connect method: the SID identifies
+ * the account the token is valid for, and pairing them anywhere else lets one
+ * change without the other. See plans/kopilot/apps/twilio-overhaul.md §7.
  */
-import { getConnection, getOrganizationSettings } from '@auxx/sdk/server'
+import { getConnection } from '@auxx/sdk/server'
 import { BlockRuntimeError } from '@auxx/sdk/shared'
 
 export interface TwilioCreds {
@@ -14,23 +15,17 @@ export interface TwilioCreds {
   authToken: string
 }
 
-export async function getTwilioCreds(): Promise<TwilioCreds> {
-  const connection = getConnection()
-  if (!connection?.value) {
+export function getTwilioCreds(): TwilioCreds {
+  const fields = getConnection()?.fields
+  const accountSid = fields?.account_sid?.trim()
+  const authToken = fields?.auth_token?.trim()
+
+  if (!accountSid || !authToken) {
     throw new BlockRuntimeError(
-      'Twilio Auth Token not connected. Connect Twilio in Apps → Twilio.',
+      'Twilio not connected. Connect Twilio in Apps → Twilio.',
       'CONNECTION_REQUIRED'
     )
   }
 
-  const settings = await getOrganizationSettings<{ accountSid?: string }>()
-  const accountSid = settings.accountSid?.trim()
-  if (!accountSid) {
-    throw new BlockRuntimeError(
-      'Twilio Account SID not configured. Go to Settings → Apps → Twilio.',
-      'INVALID_CONFIG'
-    )
-  }
-
-  return { accountSid, authToken: connection.value }
+  return { accountSid, authToken }
 }

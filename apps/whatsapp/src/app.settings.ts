@@ -1,22 +1,18 @@
 // src/app.settings.ts
 
-import { type SettingsSchema, Settings } from '@auxx/sdk'
+import { type SettingsSchema } from '@auxx/sdk'
 
+/**
+ * WhatsApp declares no app settings.
+ *
+ * `businessAccountId`, `appId` and `appSecret` used to live here, the last of them
+ * in plaintext because app settings have no secret type. All three are now
+ * connection variables beside the access token: the token is minted for one Meta
+ * app against one business account, so held apart they could name a different Meta
+ * app than the one whose webhooks the secret verifies.
+ */
 export const appSettingsSchema = {
-  organization: {
-    businessAccountId: Settings.string({
-      label: 'Business Account ID',
-      description: 'WhatsApp Business Account ID',
-    }),
-    appId: Settings.string({
-      label: 'Meta App ID',
-      description: 'Meta App ID (from developers.facebook.com)',
-    }),
-    appSecret: Settings.string({
-      label: 'Meta App Secret',
-      description: 'Meta App Secret (for webhook signature verification)',
-    }),
-  },
+  organization: {},
   user: {},
 } satisfies SettingsSchema
 

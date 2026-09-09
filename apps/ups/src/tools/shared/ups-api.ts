@@ -23,9 +23,8 @@ import {
   InvalidInputError,
   RateLimitError,
   UpstreamServiceError,
-  getOrganizationSetting,
 } from '@auxx/sdk/server'
-import { getUpsConnection } from './connection'
+import { getUpsConnection, isUpsTestEnvironment } from './connection'
 
 const PROD_BASE = 'https://onlinetools.ups.com'
 const CIE_BASE = 'https://wwwcie.ups.com'
@@ -61,13 +60,12 @@ interface TrackEnvelope {
 }
 
 /**
- * Base URL for all UPS API calls. CIE (`wwwcie.ups.com`) when the org enables
- * the `useTestEnvironment` setting; production otherwise. The OAuth connection
- * always points at production — CIE only changes where API calls go.
+ * Base URL for all UPS API calls. CIE (`wwwcie.ups.com`) when the connection was
+ * made with the test-environment box ticked; production otherwise. The OAuth
+ * connection always points at production — CIE only changes where API calls go.
  */
-export async function getUpsBaseUrl(): Promise<string> {
-  const useTest = await getOrganizationSetting<boolean>('useTestEnvironment')
-  return useTest ? CIE_BASE : PROD_BASE
+export function getUpsBaseUrl(): string {
+  return isUpsTestEnvironment() ? CIE_BASE : PROD_BASE
 }
 
 /** UPS transId must be ≤ 32 chars — a hyphenless UUID is exactly 32 hex chars. */
@@ -162,7 +160,7 @@ export async function trackNumbers(
   trackingNumbers: string[],
   opts: UpsTrackOptions = {}
 ): Promise<UpsTrackResult[]> {
-  const base = await getUpsBaseUrl()
+  const base = getUpsBaseUrl()
   const { token } = getUpsConnection()
   return pool(trackingNumbers, CONCURRENCY, (n) => trackOne(base, token, n, opts))
 }
@@ -177,7 +175,7 @@ export async function trackNumbersSettled(
   trackingNumbers: string[],
   opts: UpsTrackOptions = {}
 ): Promise<UpsTrackSettled[]> {
-  const base = await getUpsBaseUrl()
+  const base = getUpsBaseUrl()
   const { token } = getUpsConnection()
   return pool(trackingNumbers, CONCURRENCY, async (n) => {
     try {

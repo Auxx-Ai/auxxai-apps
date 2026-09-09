@@ -1,16 +1,18 @@
 // src/app.settings.ts
 
-import { Settings, type SettingsSchema } from '@auxx/sdk'
+import { type SettingsSchema } from '@auxx/sdk'
 
+/**
+ * FedEx declares no app settings.
+ *
+ * `useTestEnvironment` used to live here and is now the `test_environment`
+ * CHECKBOX **connection variable**, beside the client id and secret it belongs
+ * with. An app setting is scoped to the INSTALLATION, so it repointed the host
+ * while the sandbox keys on the connection stayed put; the environment is a
+ * property of one CONNECTION.
+ */
 export const appSettingsSchema = {
-  organization: {
-    useTestEnvironment: Settings.boolean({
-      label: 'Use FedEx sandbox environment',
-      description:
-        'Route API calls to apis-sandbox.fedex.com. Requires sandbox API credentials on the connection; sandbox returns canned data for FedEx test tracking numbers only.',
-      isOptional: true,
-    }),
-  },
+  organization: {},
   user: {},
 } satisfies SettingsSchema
 

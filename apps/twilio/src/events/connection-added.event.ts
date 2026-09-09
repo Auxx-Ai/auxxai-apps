@@ -1,21 +1,17 @@
 // src/events/connection-added.event.ts
 
 import type { Connection, ConnectionAddedResult } from '@auxx/sdk/server'
-import { getOrganizationSettings } from '@auxx/sdk/server'
 
 /**
- * Twilio auth tokens don't require webhook registration. Label the connection
- * with the configured Account SID so it's recognizable in the list.
+ * Twilio auth tokens don't require webhook registration. Label the connection with
+ * its own Account SID, which now arrives on the connection being added rather than
+ * from an org-wide setting — so two Twilio accounts in one org stay tellable apart.
  */
-export default async function connectionAdded(_args: {
+export default async function connectionAdded({
+  connection,
+}: {
   connection: Connection
 }): Promise<ConnectionAddedResult> {
-  try {
-    const settings = await getOrganizationSettings<{ accountSid?: string }>()
-    const accountSid = settings?.accountSid?.trim()
-    if (accountSid) return { label: accountSid }
-  } catch {
-    // Fall back to the default label.
-  }
-  return {}
+  const accountSid = connection.fields?.account_sid?.trim()
+  return accountSid ? { label: accountSid } : {}
 }

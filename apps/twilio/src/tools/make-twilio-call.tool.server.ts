@@ -39,7 +39,7 @@ export default async function makeTwilioCall(
     )
   }
 
-  const { accountSid, authToken } = await getTwilioCreds()
+  const { accountSid, authToken } = getTwilioCreds()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await twilioApi<any>('/Calls.json', accountSid, authToken, {

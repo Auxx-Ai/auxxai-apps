@@ -34,7 +34,7 @@ export default async function insertSupabaseRow(
     throw err
   }
 
-  const { serviceRoleKey, projectUrl } = await getSupabaseAuth()
+  const { serviceRoleKey, projectUrl } = getSupabaseAuth()
   const schema = (input.schema ?? 'public').trim() || 'public'
   const headers = getSchemaHeaders('POST', schema !== 'public', schema)
 

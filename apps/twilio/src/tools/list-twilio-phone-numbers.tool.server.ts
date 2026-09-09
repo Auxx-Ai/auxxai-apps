@@ -14,7 +14,7 @@ interface TwilioListResponse {
 }
 
 export default async function listTwilioPhoneNumbers(): Promise<ListTwilioPhoneNumbersOutput> {
-  const { accountSid, authToken } = await getTwilioCreds()
+  const { accountSid, authToken } = getTwilioCreds()
 
   const raw = await twilioApi<TwilioListResponse>(
     '/IncomingPhoneNumbers.json',

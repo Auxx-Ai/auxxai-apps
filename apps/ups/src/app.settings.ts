@@ -1,16 +1,17 @@
 // src/app.settings.ts
 
-import { Settings, type SettingsSchema } from '@auxx/sdk'
+import { type SettingsSchema } from '@auxx/sdk'
 
+/**
+ * UPS declares no app settings.
+ *
+ * `useTestEnvironment` used to live here and is now the `test_environment`
+ * CHECKBOX **connection variable**. An app setting is scoped to the INSTALLATION
+ * and could be flipped under a live connection with nothing reacting; which
+ * environment a connection talks to is a property of that connection alone.
+ */
 export const appSettingsSchema = {
-  organization: {
-    useTestEnvironment: Settings.boolean({
-      label: 'Use UPS test environment (CIE)',
-      description:
-        'Route API calls to wwwcie.ups.com. Returns canned responses for UPS test tracking numbers only. The OAuth connection still points at production.',
-      isOptional: true,
-    }),
-  },
+  organization: {},
   user: {},
 } satisfies SettingsSchema
 

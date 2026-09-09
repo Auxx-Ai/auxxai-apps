@@ -13,7 +13,7 @@ interface GetSupabaseTableSchemaInput {
 export default async function getSupabaseTableSchema(
   input: GetSupabaseTableSchemaInput
 ): Promise<MappedTableSchema> {
-  const { serviceRoleKey, projectUrl } = await getSupabaseAuth()
+  const { serviceRoleKey, projectUrl } = getSupabaseAuth()
   const schema = (input.schema ?? 'public').trim() || 'public'
 
   if (!input.table?.trim()) {

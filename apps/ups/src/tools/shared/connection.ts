@@ -22,6 +22,15 @@ export function throwConnectionNotFound(): never {
  * token lives on `connection.value` and the platform refreshes it lazily ahead
  * of expiry — tool code never mints or refreshes tokens itself.
  */
+/**
+ * True when this connection was made with the CIE test-environment box ticked.
+ * It rides on the connection rather than the installation so it cannot drift
+ * away from the token it was minted beside.
+ */
+export function isUpsTestEnvironment(): boolean {
+  return getConnection()?.fields?.test_environment === 'true'
+}
+
 export function getUpsConnection(): { token: string } {
   const connection = getConnection()
   if (!connection?.value) throwConnectionNotFound()

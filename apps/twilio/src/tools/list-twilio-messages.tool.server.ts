@@ -26,7 +26,7 @@ interface TwilioMessagesResponse {
 export default async function listTwilioMessages(
   input: ListTwilioMessagesInput
 ): Promise<ListTwilioMessagesOutput> {
-  const { accountSid, authToken } = await getTwilioCreds()
+  const { accountSid, authToken } = getTwilioCreds()
   const limit = input.limit ?? 20
 
   const raw = await twilioApi<TwilioMessagesResponse>('/Messages.json', accountSid, authToken, {
