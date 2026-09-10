@@ -16,6 +16,7 @@ import { getQuickbooksEstimateTool } from './tools/get-quickbooks-estimate.tool'
 import { getQuickbooksInvoiceTool } from './tools/get-quickbooks-invoice.tool'
 import { getQuickbooksItemTool } from './tools/get-quickbooks-item.tool'
 import { getQuickbooksPaymentTool } from './tools/get-quickbooks-payment.tool'
+import { getQuickbooksBalanceSheetTool } from './tools/get-quickbooks-balance-sheet.tool'
 import { getQuickbooksVendorTool } from './tools/get-quickbooks-vendor.tool'
 import { quickbooksBillCreateTool } from './tools/internal/bill-create.tool'
 import { quickbooksBillDeleteTool } from './tools/internal/bill-delete.tool'
@@ -131,6 +132,8 @@ export const app = {
     sendQuickbooksEstimateTool,
     createQuickbooksPaymentTool,
     updateQuickbooksPaymentTool,
+    // Platform-called tool, not a chat-agent tool - see toolsets.ts.
+    getQuickbooksBalanceSheetTool,
     // Internal-only tools (no `agent` / `action` keys) — invoked via the
     // QuickBooks workflow block dispatcher (toolMap).
     quickbooksBillCreateTool,
