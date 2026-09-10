@@ -1249,6 +1249,17 @@ export default async function shopifySync(
         resource: 'products',
         rootKey: 'products',
         toRecord: toProductRecord,
+        // ⚠️ EXPLICITLY UNFILTERED, and it has to stay that way. This stream is
+        // `syncMode: 'snapshot'`, so the platform treats a product ABSENT from the
+        // crawl as deleted and archives it. Anything that narrows this query turns
+        // "filtered out" into "deleted": scoping to `status=active` alone would
+        // archive every product the merchant archived in Shopify, and a
+        // `collection_id` would archive everything outside that collection.
+        //
+        // The status set is spelled out rather than left to the endpoint's default
+        // for the same reason the order stream passes `status: 'any'` — a default is
+        // not a contract, and this one decides whether records get archived.
+        firstPageParams: { status: 'active,archived,draft', published_status: 'any' },
       })
     default:
       throw new Error(`shopify: unknown stream "${args.streamKey}"`)
