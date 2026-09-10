@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { InvalidInputError } from '@auxx/sdk/server'
+import { parseMoneyMinor } from './parse-money'
 
 /** A single account or computed line out of a mapped BalanceSheet report. */
 export interface ProviderBalanceRow {
@@ -30,35 +31,9 @@ export interface ProviderBalanceSheet {
   rows: ProviderBalanceRow[]
 }
 
-/**
- * QuickBooks money, as a STRING.
- *
- * 🛑 The `\.\d{1,2}` alternative is not decoration: the General Ledger report
- * renders a zero-amount row's debit as `".00"`, with no leading zero (brief 20
- * §4.7, observed in the 2026-09-10 sandbox fixture). A pattern that demands a
- * leading digit turns that benign row into a refusal naming it. `parseMoneyMinor`
- * splits on `.` and `Number('')` is 0, so the missing whole part already parses.
- */
-const MONEY_RE = /^-?(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/
-
-/**
- * Parse a QuickBooks money string into integer minor units, from the string
- * only, never through a float. `""` is zero - the 2026-06-30 sandbox run
- * returned the Net Income cell as the empty string.
- */
-function parseMoneyMinor(value: string, rowName: string): number {
-  if (value === '') return 0
-  if (!MONEY_RE.test(value)) {
-    throw new InvalidInputError(
-      `Balance sheet row "${rowName}" has an unparseable amount: "${value}"`
-    )
-  }
-  const negative = value.startsWith('-')
-  const unsigned = negative ? value.slice(1) : value
-  const [wholePart, centsPart = ''] = unsigned.split('.')
-  const cents = `${centsPart}00`.slice(0, 2)
-  const minor = Number(wholePart) * 100 + Number(cents)
-  return negative ? -minor : minor
+/** Money is parsed by the one shared parser - see `./parse-money.ts`. */
+function balanceSheetMoney(value: string, rowName: string): number {
+  return parseMoneyMinor(value, `Balance sheet row "${rowName}"`)
 }
 
 function dataRowName(row: any): string {
@@ -93,14 +68,14 @@ function emitDataRow(row: any, sectionMultiplier: number, out: ProviderBalanceRo
   const moneyCell: string = row.ColData?.[1]?.value ?? ''
 
   if (id != null) {
-    const minorSigned = sectionMultiplier * parseMoneyMinor(moneyCell, name)
+    const minorSigned = sectionMultiplier * balanceSheetMoney(moneyCell, name)
     if (minorSigned === 0) return
     out.push({ providerAccountId: id, name, kind: 'account', minorSigned })
     return
   }
 
   if (row.group === 'NetIncome') {
-    const minorSigned = sectionMultiplier * parseMoneyMinor(moneyCell, name)
+    const minorSigned = sectionMultiplier * balanceSheetMoney(moneyCell, name)
     if (minorSigned === 0) return
     out.push({ providerAccountId: null, name, kind: 'net_income', minorSigned })
     return
