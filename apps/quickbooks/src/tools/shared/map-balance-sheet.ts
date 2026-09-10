@@ -30,7 +30,16 @@ export interface ProviderBalanceSheet {
   rows: ProviderBalanceRow[]
 }
 
-const MONEY_RE = /^-?\d+(\.\d{1,2})?$/
+/**
+ * QuickBooks money, as a STRING.
+ *
+ * 🛑 The `\.\d{1,2}` alternative is not decoration: the General Ledger report
+ * renders a zero-amount row's debit as `".00"`, with no leading zero (brief 20
+ * §4.7, observed in the 2026-09-10 sandbox fixture). A pattern that demands a
+ * leading digit turns that benign row into a refusal naming it. `parseMoneyMinor`
+ * splits on `.` and `Number('')` is 0, so the missing whole part already parses.
+ */
+const MONEY_RE = /^-?(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/
 
 /**
  * Parse a QuickBooks money string into integer minor units, from the string

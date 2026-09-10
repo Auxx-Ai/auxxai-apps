@@ -127,6 +127,23 @@ describe('mapBalanceSheet - refusals', () => {
     expect(() => mapBalanceSheet(bad, '2025-12-31')).toThrow(/Checking/)
   })
 
+  // Brief 20 §4.7: the General Ledger report renders a zero-amount row's debit
+  // as ".00", with no leading zero. A pattern demanding a leading digit turned
+  // that benign row into a refusal naming it. Unobserved on BalanceSheet, but
+  // the parser is shared, so the case is pinned here.
+  it('accepts a money string with no leading zero, like ".00"', () => {
+    const dotted = structuredClone(validReport) as any
+    dotted.Rows.Row[0].Rows.Row[0].Rows.Row[0].Rows.Row[0].ColData[1].value = '.25'
+    const rows = mapBalanceSheet(dotted, '2025-12-31').rows
+    expect(rows.find((r) => r.name === 'Checking')?.minorSigned).toBe(25)
+  })
+
+  it('still refuses a lone separator with no digits at all', () => {
+    const bad = structuredClone(validReport) as any
+    bad.Rows.Row[0].Rows.Row[0].Rows.Row[0].Rows.Row[0].ColData[1].value = '.'
+    expect(() => mapBalanceSheet(bad, '2025-12-31')).toThrow(/Checking/)
+  })
+
   it('throws naming an unknown top-level section group', () => {
     const bad = structuredClone(validReport) as any
     bad.Rows.Row[0].group = 'SomethingElse'
