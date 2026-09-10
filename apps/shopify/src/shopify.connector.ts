@@ -188,7 +188,21 @@ export const shopifyConnector = defineDataConnector({
     // a column comparison.
     {
       key: 'product',
-      syncMode: 'incremental',
+      // SNAPSHOT, not incremental — this is what gives products crawl-based DELETE
+      // detection (platform plan `plans/data-connectors/v12/`). A Shopify webhook is
+      // the only other delete channel and it is not trustworthy on its own: deliveries
+      // retry for 48h and are then dropped for good, and none arrives at all if the app
+      // was reinstalled, the connector was paused, or the product was deleted before
+      // the connector existed. A crawl re-answers the question every night; a missed
+      // webhook is never redelivered. `reconcileOrphans` gates on this exact value,
+      // because absence only means deletion when the fetch saw everything.
+      //
+      // Affordable here in a way it is not for orders/customers: the product catalog is
+      // the small collection, the crawl RESUMES from its cursor when the per-run ingest
+      // ceiling parks it (slice-orchestrator `resumable`), and `listBackfillRunIds`
+      // spans those runs so a resumed crawl never archives what an earlier run saw.
+      // v9's brief always intended `variants → snapshot`; this is that, applied.
+      syncMode: 'snapshot',
       // Webhook STEERING: an `inventory_levels/update` delivery carries the changed
       // inventory_item_id as `resourceId` (extractTriggerData) — the platform debounces
       // same-item bursts, then re-invokes `execute` with `triggerContext.resourceId` for
@@ -204,6 +218,13 @@ export const shopifyConnector = defineDataConnector({
         {
           rootPath: '',
           target: { entityKind: 'product' },
+          // Deleted in Shopify ⇒ archived here. Safe because the crawl is explicitly
+          // unfiltered (see `firstPageParams` in the server handler): every status is
+          // requested, so "absent" really does mean gone rather than filtered out. The
+          // platform adds two more guards on top — it refuses to archive a record this
+          // connector did not create, and refuses the whole pass if an implausible
+          // number of records vanish at once.
+          orphanBehavior: 'archive',
           fields: [
             { sourcePath: 'shopify_id', appField: 'productId' }, // identity -> externalId
             { sourcePath: 'title', target: 'product_title' },
@@ -223,6 +244,13 @@ export const shopifyConnector = defineDataConnector({
           rootPath: 'variants[]',
           relationshipFieldKey: 'system:product_parts',
           target: { entityKind: 'part' },
+          // 🛑 NEVER `archive`. A part carries `stock_movement` rows and a QoH balance
+          // on an append-only ledger where a mistake is corrected by REVERSING, never
+          // by removing history. Deleting a variant in Shopify is a merchandising
+          // decision and must not retire a part that has physical inventory and cost
+          // behind it — the part may also be built, purchased or counted here, none of
+          // which Shopify knows about. Flag it and let a human decide.
+          orphanBehavior: 'mark_deleted',
           fields: [
             { sourcePath: 'shopifyId', appField: 'variantId' }, // identity -> externalId
             { sourcePath: 'title', target: 'part_title', mergeStrategy: 'fill_blank' },
@@ -241,6 +269,10 @@ export const shopifyConnector = defineDataConnector({
           parentRootPath: 'variants[]',
           relationshipFieldKey: 'system:part_catalog_items',
           target: { entityKind: 'catalog_item' },
+          // Unlike its part, a catalog item is purely a sellable-price row sourced from
+          // this variant. Nothing else accumulates against it, so when the variant is
+          // gone the row is genuinely dead and archiving it is the honest outcome.
+          orphanBehavior: 'archive',
           fields: [
             // `fill_blank` as the part title (plan 39 §6.3); the unit price stays
             // overwrite because Shopify is the main price.
