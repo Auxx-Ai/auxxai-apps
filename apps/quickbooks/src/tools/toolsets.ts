@@ -14,10 +14,11 @@ import type { Toolset } from '@auxx/sdk/tools'
  * true`), so reference lookups stay reachable without being listed. Do not also
  * add them to a toolset; pick one.
  *
- * `get_quickbooks_balance_sheet` is also toolset-less, but for a different
- * reason: it is a platform-called tool for the opening-balance fill, not a
- * chat-agent reference lookup. It has no `agent` key at all, so it never
- * shows up in an agent's tool list; the platform calls it by id.
+ * `get_quickbooks_balance_sheet` and `get_quickbooks_general_ledger` are also
+ * toolset-less, but for a different reason: they are platform-called tools for
+ * the opening-balance fill and the inbound ledger sync, not chat-agent
+ * reference lookups. Neither has an `agent` key at all, so neither shows up in
+ * an agent's tool list; the platform calls them by id.
  *
  * `quickbooks.ledger.*` is deliberately separate from `quickbooks.sales.*` —
  * posting to the general ledger is a categorically different blast radius from
