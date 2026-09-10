@@ -4,35 +4,32 @@ import { defineFields } from '@auxx/sdk/fields'
 
 /**
  * Identity custom fields the QuickBooks app owns — one set per connected
- * QuickBooks company (`scope: 'connection'`). These are the id-map keys the
- * invoice-sync orchestrator (`packages/lib/src/money/quickbooks/sync-invoice.ts`)
- * reads/writes via `RecordIdentity` to keep pushes idempotent (find-or-create
- * instead of duplicate customers/items/invoices on re-sync).
+ * QuickBooks company (`scope: 'connection'`).
  *
- * All three are hidden, `identity: true` text fields — the platform mirrors
- * writes into `RecordIdentity` (`source:'quickbooks'`) and the orchestrator
- * resolves them via `findByIntegrationId`. Never shown, filtered, or edited
- * by end users.
+ * The invoice mirror (`qboInvoiceId` on `invoice`, `qboItemId` on
+ * `catalog_item`) was retired on 2026-09-10 (platform brief 14, platform
+ * PR #2100): `sync-invoice.ts` and `upsert-item.ts` are gone from the
+ * platform and nothing reads or writes those two identity fields any more.
+ * Do not re-add them without a new sync orchestrator to back them.
+ *
+ * The remaining fields:
+ * - `qboCustomerId` (on `contact`) — written when Auxx creates the matching
+ *   QuickBooks customer, so a re-push finds instead of duplicates.
+ * - `qboAccountId` (on `gl_account`) — filled in by a person via the
+ *   accounting setup wizard when they confirm an account pairing.
+ * - `qboVendorId` (on `company`) — the counterparty id the accounting
+ *   adapter resolves on an accounts-payable journal line (brief 13 §1,
+ *   platform PR #2100): without it, a vendor line refuses to export with
+ *   "has not been synced to QuickBooks yet."
+ *
+ * All are hidden, `identity: true` text fields — the platform mirrors
+ * writes into `RecordIdentity` (`source:'quickbooks'`) and app code resolves
+ * them via `findByIntegrationId`. Never shown, filtered, or edited by end
+ * users.
  *
  * See plans/dispatch/37e-quickbooks-invoice-sync.md §3 "Id map (D9)".
  */
 export const quickbooksFields = defineFields([
-  {
-    key: 'qboInvoiceId',
-    type: 'TEXT',
-    targetEntity: 'invoice',
-    scope: 'connection',
-    name: 'QuickBooks invoice ID',
-    description: 'The QuickBooks Online Invoice.Id this Auxx invoice was pushed to.',
-    identity: true,
-    capabilities: {
-      hidden: true,
-      filterable: true,
-      sortable: false,
-      creatable: false,
-      updatable: false,
-    },
-  },
   {
     key: 'qboCustomerId',
     type: 'TEXT',
@@ -50,12 +47,12 @@ export const quickbooksFields = defineFields([
     },
   },
   {
-    key: 'qboItemId',
+    key: 'qboVendorId',
     type: 'TEXT',
-    targetEntity: 'catalog_item',
+    targetEntity: 'company',
     scope: 'connection',
-    name: 'QuickBooks item ID',
-    description: 'The QuickBooks Online Item.Id this catalog item is mapped to.',
+    name: 'QuickBooks vendor ID',
+    description: 'The QuickBooks Online Vendor.Id this company is mapped to.',
     identity: true,
     capabilities: {
       hidden: true,
@@ -66,7 +63,7 @@ export const quickbooksFields = defineFields([
     },
   },
   {
-    // Decision `G19`: the account map. This is the only one of the four that a
+    // Decision `G19`: the account map. This is the only one of the three that a
     // PERSON fills in rather than the sync writing as a side effect of a push —
     // `qboCustomerId` and friends are recorded when Auxx creates the record in
     // QuickBooks, but nothing creates an account, so this cell is written by the
