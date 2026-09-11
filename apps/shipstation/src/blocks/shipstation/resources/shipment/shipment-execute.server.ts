@@ -261,6 +261,7 @@ function buildCreateBody(input: any): Record<string, any> {
     }),
   }
 
+  assertCarrierServicePair(input.shipmentCreateCarrierId, input.shipmentCreateServiceCode)
   assign(body, 'carrier_id', input.shipmentCreateCarrierId)
   assign(body, 'service_code', input.shipmentCreateServiceCode)
   assign(body, 'external_shipment_id', input.shipmentCreateExternalShipmentId)
@@ -304,6 +305,7 @@ function buildUpdateBody(input: any, current: RawShipment): Record<string, any> 
     body.warehouse_id = origin.warehouse_id ?? null
   }
 
+  assertCarrierServicePair(input.shipmentUpdateCarrierId, input.shipmentUpdateServiceCode)
   assign(body, 'carrier_id', input.shipmentUpdateCarrierId)
   assign(body, 'service_code', input.shipmentUpdateServiceCode)
   assign(body, 'external_shipment_id', input.shipmentUpdateExternalShipmentId)
@@ -342,6 +344,30 @@ function originFor(
     )
   }
   return { warehouse_id: warehouseId }
+}
+
+/**
+ * Refuse a carrier without a service level, the way buying a label will.
+ *
+ * ShipStation validates this pair asymmetrically: `POST /v2/shipments` accepts a
+ * `carrier_id` with no `service_code` and returns 201, then
+ * `POST /v2/labels/shipment/{id}` rejects that same shipment with
+ * `service_code is required when carrier_id is provided`. So without this the
+ * error always lands on the NEXT node, against a shipment that already exists —
+ * and `shipment.update` is a full-document PUT, so repairing it in place means
+ * a read-modify-write rather than filling in one field.
+ *
+ * Raised here instead, naming the field the author has to fill.
+ */
+function assertCarrierServicePair(carrierId: unknown, serviceCode: unknown): void {
+  const hasCarrier = typeof carrierId === 'string' && carrierId.trim() !== ''
+  const hasService = typeof serviceCode === 'string' && serviceCode.trim() !== ''
+  if (hasCarrier && !hasService) {
+    throw new InvalidInputError(
+      'Service code is required when a carrier is selected. Pick the service level ' +
+        'beside the carrier, or clear the carrier to let the label step choose.'
+    )
+  }
 }
 
 /** Fail with the missing parts named, rather than letting ShipStation answer an opaque 400. */

@@ -144,3 +144,30 @@ describe('listPackageTypes', () => {
     expect(await listPackageTypes('se-1')).toEqual([])
   })
 })
+
+describe('the service picker is wired to a panel', () => {
+  // `listServices` existed, was tested, and had ZERO call sites: `serviceCode`
+  // rendered as a free-text box, so authors left it empty and ShipStation
+  // accepted the shipment then refused the label. These pin the wiring, not the
+  // loader, so deleting the hook or reverting the field to a string fails here.
+  it('useCarrierServices keys its cache by carrier, so switching reloads', async () => {
+    const mod = await import('../src/blocks/shipstation/shared/use-carrier-services')
+    expect(typeof mod.useCarrierServices).toBe('function')
+  })
+
+  it('the shipment panel renders serviceCode as a select, not a text box', async () => {
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(
+        new URL(
+          '../src/blocks/shipstation/resources/shipment/shipment-panel.tsx',
+          import.meta.url
+        ),
+        'utf8'
+      )
+    )
+    expect(source).not.toMatch(/StringInput\s+name="shipmentCreateServiceCode"/)
+    expect(source).not.toMatch(/StringInput\s+name="shipmentUpdateServiceCode"/)
+    expect(source).toMatch(/OptionsInput[\s\S]{0,120}name="shipmentCreateServiceCode"/)
+    expect(source).toMatch(/OptionsInput[\s\S]{0,120}name="shipmentUpdateServiceCode"/)
+  })
+})
