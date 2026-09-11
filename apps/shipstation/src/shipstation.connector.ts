@@ -1,10 +1,18 @@
 // src/shipstation.connector.ts
 //
-// The single ShipStation data connector. ONE stream, `label`, whose every record
-// is one ShipStation LABEL, fanned out onto two NATIVE hidden entities:
+// The single ShipStation data connector. TWO streams.
+//
+// `label` is the grain: every record is one ShipStation LABEL, fanned out onto
+// two NATIVE hidden entities:
 //   • the label root  -> contributing native `shipment`
 //   • `packages[]`    -> contributing native `parcel`, hung off the shipment
 //                        through the system edge `system:shipment_parcels`.
+//
+// `shipment` is a narrow ENRICHMENT of the same `shipment` rows, carrying the
+// two values that live on the shipment resource and appear on no label
+// (`shipment_number`, `store_id`). Its field set is strictly disjoint from the
+// label stream's — see the rule for the next contributor below, which applies to
+// this connector's own two streams just as much as to another app.
 //
 // Like Shopify, this app declares NO entities at all. Every column below is
 // either a native system attribute (`target`) or a `defineFields` app field
@@ -41,8 +49,10 @@
 // shipment delta query is ACCEPTED (HTTP 200 with plausible rows). It did NOT
 // prove boundary inclusivity, tie handling at a window edge, pagination
 // stability under concurrent updates, or that a label void bumps its parent
-// shipment's `modified_at`. Nothing in this file assumes any of those, and the
-// snapshot sync mode below is the direct consequence.
+// shipment's `modified_at`. Nothing here assumes any of those: every window
+// start is inclusive and re-reads its own boundary, subdivided windows abut
+// rather than gap, and the void half of the label delta is keyed on `voided_at`
+// rather than on any shipment-level timestamp.
 //
 // ⚠️ Any field whose projected value is an ARRAY or an OBJECT is silently
 // dropped by the fan-out before it reaches the field-value layer, unless it
@@ -93,11 +103,13 @@ export const shipstationConnector = defineDataConnector({
     // `package_id` or on array position.
     {
       key: 'label',
-      // 🛑 SNAPSHOT, over the fixed `importStart` window, and this is a
-      // correctness decision rather than a default (build plan §5):
+      // INCREMENTAL, on TWO cursors. This was a snapshot until the delta below
+      // was implemented, and the history matters because the reasoning is easy
+      // to re-derive wrongly.
       //
-      //   1. `created_at_start` / `created_at_end` are the label filters that
-      //      exist. There is no proved label modified-time delta.
+      // ── Why it was a snapshot ────────────────────────────────────────────
+      //   1. `created_at_start` / `created_at_end` are the only date filters
+      //      `/v2/labels` has. There is no label modified-time filter at all.
       //   2. A new-labels-only watermark would therefore never see a VOID on an
       //      old label, which is the single most important state change this
       //      connector exists to carry. The probe found 117 voided labels in the
@@ -106,34 +118,43 @@ export const shipstationConnector = defineDataConnector({
       //      `modified_at` is explicitly unproved, so a shipment-level delta
       //      cannot stand in for one either.
       //
-      // Re-reading the configured history every run is the simple correctness
-      // baseline. Optimize only after measuring it AND validating a real change
-      // feed, not before.
+      // Point 2 is the one that mattered, and it is the one the second cursor
+      // removes. Points 1 and 3 still stand and are still why the obvious delta
+      // is not the one implemented.
       //
-      // ── When you DO come to optimize this ────────────────────────────────
-      // A docs check on 2026-09-10 settled what is and is not available, and
-      // the build plan §5 subsection "The delta that IS available" carries the
-      // table. The two things to know before you start:
+      // ── 🛑 The delta that CANNOT be written ──────────────────────────────
+      // `sort_by=modified_at` is accepted on `/v2/labels`, but `modified_at` is
+      // NOT a field the label response returns — the V2 schema has no such
+      // property on a label, and every documented example carries `created_at`,
+      // `voided` and `voided_at` instead. So "sort by modified_at descending and
+      // stop at the watermark" cannot be written: the stop value is a field the
+      // API sorts on and never hands back. Do not reach for it.
       //
-      //   • `sort_by=modified_at` is accepted, but `modified_at` is NOT a field
-      //     the label response returns. So the obvious "sort by modified_at
-      //     desc, stop at the watermark" delta cannot be written: the stop
-      //     value is one the API sorts on and never hands back. Do not reach
-      //     for it.
-      //   • `voided_at` IS returned AND is a legal `sort_by`. So the void half
-      //     can be a true delta: `label_status=voided`, `sort_by=voided_at`,
-      //     desc, stop at the first `voided_at` at or before the watermark.
-      //     Paired with a `created_at_start` watermark for new labels, that
-      //     covers both reasons this is a snapshot, at which point point 2
-      //     above no longer applies and this can become `incremental`.
+      // ── The delta that IS written ────────────────────────────────────────
+      //   • NEW LABELS: `created_at_start=<created watermark>`,
+      //     `sort_by=created_at`, ascending, over frozen, subdividable windows.
+      //   • VOIDS: `label_status=voided`, `sort_by=voided_at`, DESCENDING,
+      //     stopping at the first label whose `voided_at` is at or before the
+      //     void watermark. `voided_at` IS returned and IS a legal `sort_by`,
+      //     which is the whole reason this half is possible.
       //
-      // The residual gap would be a label change that is neither a creation nor
-      // a void, principally `tracking_status` drift. That is already an
-      // accepted loss: probe §3 disproved label `tracking_status` as evidence
+      // The two watermarks are carried in the single string the platform
+      // persists per stream; `encodeLabelWatermark` in the server module
+      // explains why a lexical max over that encoding is the right fold rather
+      // than a lucky one. Each half advances ONLY when its own sweep has been
+      // crawled to exhaustion, so a sweep that errors or runs out of page budget
+      // leaves both floors where they were.
+      //
+      // The residual gap is a label change that is neither a creation nor a
+      // void, principally `tracking_status` drift. That is an accepted loss, not
+      // a new compromise: probe §3 disproved label `tracking_status` as evidence
       // of where any box is, and per-box status belongs to the carrier apps.
       //
-      // Owner's call 2026-09-10: measure this snapshot on real data first.
-      syncMode: 'snapshot',
+      // Measured before the switch (build plan §9): 141 labels over 10 days in
+      // 76s steady state, extrapolating to 35-40 minutes per cycle over ~4,290
+      // labels and growing with history forever. Nothing was broken; it was just
+      // expensive.
+      syncMode: 'incremental',
       mappings: [
         // ── label root -> native shipment ────────────────────────────────────
         {
@@ -148,6 +169,12 @@ export const shipstationConnector = defineDataConnector({
           // void state is mapped explicitly onto the parcels below, so absence
           // from a page is never read as a void. There is exactly one way a
           // parcel becomes voided here, and it is an explicit field.
+          //
+          // ⚠️ Kept DECLARED even though the stream is now `incremental`, where
+          // the platform ignores it outright ("absence means unchanged, not
+          // deleted"). It is the answer if this stream ever goes back to a
+          // snapshot, and the reasoning above is what a future reader would
+          // otherwise have to reconstruct.
           orphanBehavior: 'ignore',
           // ── mergeStrategy: none, and here is why ──────────────────────────
           // Every binding below takes the default `overwrite`, deliberately.
@@ -175,12 +202,19 @@ export const shipstationConnector = defineDataConnector({
             // below: both records designate the same `shipmentId`, so both land
             // on the same shipment row.
             { sourcePath: 'shipmentId', appField: 'shipmentId' },
+            // NOT bound here: `storeId`. It is on the SHIPMENT resource and on
+            // no label (the `shipment` object a label carries is `writeOnly` in
+            // the V2 schema, so it never comes back on a read), which is why
+            // build plan §9 recorded it as empty. The `shipment` stream below
+            // owns it now, and owning it in exactly one place is what keeps two
+            // mappings of this connector off one cell.
+            //
             // Per-app external ids stay in APP fields (proposal §6). They are
             // deliberately not native columns: a native id column would have to
             // be claimed by one app, and it would still be useless as a
             // cross-app join key, because `match` cannot bind an `appField` at
             // all (proposal §4).
-            { sourcePath: 'storeId', appField: 'storeId' },
+            //
             // ⚠️ `externalShipmentId` looks like two commerce ids joined by a
             // hyphen (`7489518207152-8681743417520`) and its semantics are
             // UNVERIFIED. Do not parse it. A fulfillment order id and a
@@ -196,7 +230,11 @@ export const shipstationConnector = defineDataConnector({
             { sourcePath: 'externalOrderId', appField: 'externalOrderId' },
 
             // Native structural columns. ShipStation is the sole writer.
-            { sourcePath: 'shipmentNumber', target: 'shipment_number' },
+            //
+            // ⚠️ `shipment_number` is NOT among them any more. Same reason as
+            // `storeId` above: it lives on the shipment resource, the label
+            // payload has no such property, and it was empty on 135 of 135
+            // shipments in the first real sync. The `shipment` stream binds it.
             { sourcePath: 'carrier', target: 'shipment_carrier' },
             { sourcePath: 'service', target: 'shipment_service' },
             // ⚠️ The shipment and its label DISAGREE on this date: the probe saw
@@ -225,11 +263,19 @@ export const shipstationConnector = defineDataConnector({
             // `label_purchased`) is a label-lifecycle value, not a transit one,
             // which is precisely why it is not bound through raw.
             { sourcePath: 'shipmentStatus', target: 'shipment_status' },
-            // The shipment's display name. Denormalized off the active label's
-            // master parcel by the server, because `computeDisplayValue` reads a
-            // field on the shipment ROW and a tracking number otherwise lives
-            // only on a `parcel`. `shipment_number` cannot do this job: it is
-            // not on the label payload at all.
+            // The shipment's display name, and its PRIMARY DISPLAY FIELD.
+            // Denormalized off the label's master parcel by the server, because
+            // `computeDisplayValue` reads a field on the shipment ROW and a
+            // tracking number otherwise lives only on a `parcel`.
+            // `shipment_number` cannot do this job: it is not on the label
+            // payload at all, which is exactly why it is not the display field.
+            //
+            // ⚠️ This is the ONE shipment-level value a VOIDED label also emits,
+            // and that is the voided-master fallback build plan §9 listed as
+            // owed: a shipment whose every label is voided (1 of 135 live) was
+            // rendering nameless. `projectLabelRecord`'s doc comment carries the
+            // ordering argument for why that does not reopen the race the
+            // non-voided filter exists to close.
             //
             // 🛑 No `match`, for the same reason as `parcel_tracking_number` and
             // one more: this value CHANGES when a label is voided and reprinted.
@@ -420,9 +466,20 @@ export const shipstationConnector = defineDataConnector({
       // of the two wins within one run is ordering-dependent. The server
       // therefore emits shipment structure ONLY from non-voided labels. The
       // voided label still emits its parcels, so the void history is kept.
+      //
+      // The single exception is `masterTrackingNumber`, which a voided label DOES
+      // emit so that an all-voided shipment has a name. The crawl is
+      // `created_at` ascending and ShipStation allows one live label per
+      // shipment, so a replacement is always read after the label it replaced,
+      // and the live master lands last. See `projectLabelRecord`.
       exampleRecord: {
         labelId: 'se-197559213',
         shipmentId: 'se-428778294',
+        // ⚠️ Shown because the projection still emits these two keys, NOT because
+        // a label read carries them. The V2 label object has no `shipment_number`
+        // and no `store_id`, and the `shipment` it does declare is `writeOnly`, so
+        // in production both arrive null and both are bound by the `shipment`
+        // stream instead. Neither is bound on this stream any more.
         shipmentNumber: '14530',
         storeId: 'se-2943015',
         externalShipmentId: '7489518207152-8681743417520',
@@ -506,6 +563,84 @@ export const shipstationConnector = defineDataConnector({
             providerTrackingStatus: 'in_transit',
           },
         ],
+      },
+    },
+
+    // ── shipment ────────────────────────────────────────────────────────────
+    // One record per ShipStation SHIPMENT, contributing into the SAME native
+    // `shipment` rows the label stream resolves, through the same
+    // `shipmentId` external id.
+    //
+    // This stream exists for exactly two values. `shipment_number` (the
+    // merchant's order number, and the value a support agent is quoting) and
+    // `store_id` live on the shipment resource and on NO label: the `shipment`
+    // object a label carries is `writeOnly` in the V2 schema, so it never comes
+    // back on a read. Build plan §9 measured the consequence — `shipment_number`
+    // empty on 135 of 135 shipments — and listed this stream as owed.
+    //
+    // ── 🛑 What this stream must never grow into ────────────────────────────
+    //   • NO `packages[]` fan-out. `GET /v2/shipments` returns package
+    //     DEFINITIONS: distinct `shipment_package_id`s, the SAME `package_id`
+    //     (`se-3`) on every row, and no tracking number at all. They are a
+    //     packaging TYPE, not a box (probe §2, and `fields.ts` says so at
+    //     length). Parcels come from labels, and only from labels.
+    //   • NO carrier, service, ship date or status. The label stream owns all
+    //     four. Two mappings of one connector writing one cell is the flip-flop
+    //     the header warns about, and keeping the two field sets disjoint is
+    //     what prevents it.
+    //   • NO `external_order_id`. `fields.ts` is explicit that the app field
+    //     holds the id "as it appears ON THE LABEL", and probe §2 found the
+    //     SHIPMENT's own `external_order_id` null on the very sample where the
+    //     label carried one. Binding it here would overwrite a real value with a
+    //     null. This is a deliberate departure from the expansion plan §10,
+    //     which lists `external_order_id` among what this stream populates.
+    {
+      key: 'shipment',
+      // A GENUINE `modified_at` delta, unlike labels: `modified_at_start` /
+      // `modified_at_end` are real filters, `modified_at` is a legal `sort_by`,
+      // AND it is returned on the shipment object. One cursor, not two.
+      syncMode: 'incremental',
+      mappings: [
+        {
+          rootPath: '',
+          target: { entityKind: 'shipment' },
+          // Same answer and same reasoning as the label stream's root mapping:
+          // the crawl is bounded by `importStart` and filtered locally to
+          // shipments that have had a label, so "not returned" is never deletion
+          // evidence. Declared for the same reason too — the platform ignores it
+          // on an `incremental` stream, and it is the answer if that ever
+          // changes.
+          orphanBehavior: 'ignore',
+          fields: [
+            // Identity, and the whole point: `shipmentId` is `identity: true` in
+            // fields.ts, so this binding auto-stamps
+            // `identityRole: { kind: 'externalId' }` and the record lands on the
+            // SAME native `shipment` row the label stream's root mapping
+            // resolves from the same value. The two streams' `DataConnectorItem`
+            // rows are distinct (the unique key is
+            // `(connector, mapping, externalId)`) and both point at one instance,
+            // which is the documented shape for two mappings contributing to one
+            // record.
+            { sourcePath: 'shipmentId', appField: 'shipmentId' },
+            // 🛑 No `match` here either, and for a stronger reason than usual:
+            // `shipment_number` is documented by ShipStation as "optional,
+            // mutable, and does not require uniqueness, allowing multiple
+            // shipments to share the same value". Match candidates are OR'd, so
+            // a match on it would merge unrelated shipments that happen to share
+            // a merchant order number.
+            { sourcePath: 'shipmentNumber', target: 'shipment_number' },
+            { sourcePath: 'storeId', appField: 'storeId' },
+          ],
+        },
+      ],
+      // The probe's own shipment (§2), the parent of the three-box label in the
+      // label stream's example above. Its `external_order_id` was NULL on this
+      // very record while the label carried `17954843328688`, which is the
+      // evidence behind not binding it here.
+      exampleRecord: {
+        shipmentId: 'se-428778294',
+        shipmentNumber: '14530',
+        storeId: 'se-2943015',
       },
     },
   ],
