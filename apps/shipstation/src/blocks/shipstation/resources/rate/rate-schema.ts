@@ -55,22 +55,43 @@ const RESIDENTIAL_OPTIONS = [
 ] as const
 
 /**
- * The locality fields `POST /v2/rates/estimate` actually requires.
+ * `POST /v2/rates/estimate` READS only country, postal code, city and state on
+ * each end. No street, no name, no phone. The builder in
+ * `rate-execute.server.ts` therefore sends only those, and adding a street here
+ * changes nothing about the request.
  *
- * Its schema requires country, postal code, city AND state on both ends, but
- * nothing else: no street, no name, no phone. So this is a `Workflow.address()`
- * narrowed to exactly those components rather than either a full shipping
- * address (which would demand a street and a phone the endpoint never reads) or
- * eight loose string inputs (which would cost eight bindings instead of one).
+ * The field nonetheless SHOWS the full address, for two reasons:
+ *
+ *  1. Consistency. Every other address in this block is a whole address, and a
+ *     picker that silently omits the street line reads as a bug rather than as
+ *     an optimisation. It was reported as one.
+ *  2. Binding. `addressComponents` is display-only, so an address bound from an
+ *     upstream node keeps every key whether or not this field renders it. An
+ *     author who binds a Shopify order's shipping address and then opens the
+ *     detail view should see the address they bound, not a four-field subset of
+ *     it.
+ *
+ * Nothing here is `required`, so the fields the estimate ignores can be left
+ * blank without blocking the node.
  */
-const ESTIMATE_ADDRESS_COMPONENTS = ['city', 'state', 'zipCode', 'country'] as const
-
-/** The same, plus the residential indicator the estimate body carries separately. */
-const ESTIMATE_DESTINATION_COMPONENTS = [
+const ESTIMATE_ADDRESS_COMPONENTS = [
+  'name',
+  'street1',
+  'street2',
   'city',
   'state',
   'zipCode',
   'country',
+] as const
+
+/**
+ * The same, plus the residential indicator the estimate body carries separately.
+ * Only the DESTINATION gets it: `estimate_rates_request_body` has no origin
+ * residential flag, so offering one on ship-from would imply an input that is
+ * never sent.
+ */
+const ESTIMATE_DESTINATION_COMPONENTS = [
+  ...ESTIMATE_ADDRESS_COMPONENTS,
   'residential',
 ] as const
 
