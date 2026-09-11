@@ -37,9 +37,16 @@
 // this stream can stop being a snapshot.
 //
 // The residual gap is a label change that is neither a creation nor a void,
-// principally `tracking_status` drift. That is an accepted loss, not a new
-// compromise: probe §3 already disproved label `tracking_status` as evidence of
-// where any box is, and per-box status belongs to the carrier apps.
+// principally `tracking_status` drift.
+//
+// ⚠️ That gap got EXPENSIVE on 2026-09-11. It was an accepted loss while
+// `tracking_status` was provenance only; it now decides `shipment_status`
+// (status plan §3), so a shipment's status freezes at whatever the label said
+// when its creation was first read, and a box delivered a day later still reads
+// `in_transit`. Nothing here can close it: `/v2/labels` has no modified-time
+// filter and never returns a modified time, so there is no third sweep to write.
+// The fix is the per-box tracking stream in status plan §6, which supersedes
+// this value at rung 1 of the ladder.
 //
 // ── Two watermarks, one engine slot ──────────────────────────────────────────
 // The platform persists ONE watermark string per stream (`nextState.updatedSince`
@@ -76,22 +83,32 @@
 //
 // ── 🛑 The honest limitation, stated once ────────────────────────────────────
 // Per-box carrier status HAS NO WRITER in this pass. FedEx and UPS have no
-// connectors, so `parcel_status` simply stays null and the only status
-// information reaching this file is the LABEL-level one. Probe §3 proved that
-// value is not evidence of individual delivery:
+// connectors, and a label's package object carries an id, a tracking number, a
+// sequence, weight and dimensions and NO status field of any kind, so
+// `parcel_status` stays null and the only status information reaching this file
+// is LABEL-level. That value is a coarse indicator, not a fact about any
+// individual box. Probe §3:
 //
 //   • the three-box label reported `tracking_status: 'in_transit'` while
 //     `GET /v2/labels/{id}/track` returned `Not Yet In System` (`NY`) with null
 //     ship and delivery dates, and
 //   • VOIDED labels also reported `tracking_status: 'in_transit'`.
 //
-// So `shipmentStatus` here is derived from the LABEL LIFECYCLE only: a
-// non-voided label is `label_created`, a voided label contributes nothing. The
-// label's raw `tracking_status` is still emitted, unnormalized, as
-// `providerTrackingStatus` (provenance, so a later reader can see what
-// ShipStation actually said), but it is never copied onto every package as if
-// it were per-box truth, and it never feeds the roll-up. Preferring `unknown`
-// over a value we cannot support is the rule, not a fallback.
+// What follows from that is what the value may be used FOR, and that answer
+// changed on 2026-09-11 (status plan §2). It may NOT be fanned out across a
+// label's 2 to 28 boxes: FedEx ground parcels route independently and arrive on
+// their own days, so one value stamped on all of them is manufactured agreement,
+// and "I got 5 of my 6 boxes" is precisely the case a customer calls about. It
+// MAY decide the ONE shipment-level status, because ShipStation allows one live
+// label per shipment and a label carries exactly one `tracking_status`, so
+// nothing is duplicated and nothing is invented.
+//
+// Until then `shipmentStatus` was derived from the LABEL LIFECYCLE alone, and
+// all 135 live shipments read `label_created` while ShipStation was reporting 57
+// of them delivered. `deriveShipmentStatus` is the ladder that replaced it. The
+// raw string is still copied onto every parcel as `providerTrackingStatus`,
+// unnormalized, as provenance and nothing more: it is what ShipStation said, not
+// where any box is.
 //
 // ── Which ship date ─────────────────────────────────────────────────────────
 // The LABEL's `ship_date` is used. Probe §2 recorded the shipment's
@@ -282,29 +299,36 @@ const SHIPMENT_STATUS_PRECEDENCE: readonly ShipmentStatus[] = [
 ]
 
 /**
- * Normalize ShipStation's own `shipment_status` string into `ShipmentStatus`.
+ * Normalize the LIVE label's `tracking_status` into a transit state, or `null`
+ * meaning "no transit opinion" (status plan §3.2).
  *
- * The ONLY value the live probe observed is `label_purchased`, which is a
- * label-lifecycle value ("a label exists"), not a transit one. It maps to
- * `label_created`.
+ * An EXHAUSTIVE `switch` over the values observed live, never a `Set<string>`
+ * membership test: a set hides the member nobody added, while a switch makes
+ * every recognized value a line somebody had to write. The 2026-09-11 probe saw
+ * exactly three across 50 labels, `in_transit`, `delivered` and `unknown`. A
+ * fourth is added HERE, from a live payload, never from vendor documentation.
  *
- * An ABSENT value is deliberately treated differently from an UNRECOGNIZED one:
- *
- * - absent/blank → `label_created`. We are holding a non-voided label record we
- *   just fetched, so a label demonstrably was created. That is a fact about the
- *   artifact in hand, not an inference about the carrier.
- * - anything else → `unknown`. No second value has ever been observed, so any
- *   other string is a value this app has no evidence for, and rule 2 of §8d says
- *   that becomes `unknown` rather than a guess. When a real second value shows
- *   up in production, add it HERE with the evidence, never from vendor docs.
+ * 🛑 `null` is NOT our `unknown`, and that distinction is the entire reason for
+ * the nullable return type. A null falls through to rung 3 and the shipment
+ * reads `label_created`, because we are holding a live label and a label
+ * demonstrably was printed. Writing `unknown` there would ERASE a fact we hold.
+ * "The provider said nothing useful" and "we know nothing" are different states,
+ * and `unknown` belongs to the second alone: rung 4, no live label at all.
  */
-export function normalizeProviderShipmentStatus(raw: string | null | undefined): ShipmentStatus {
-  if (raw === null || raw === undefined || raw === '') return 'label_created'
+export function normalizeLabelTrackingStatus(
+  raw: string | null | undefined
+): ShipmentStatus | null {
   switch (raw) {
-    case 'label_purchased':
-      return 'label_created'
+    case 'in_transit':
+      return 'in_transit'
+    case 'delivered':
+      return 'delivered'
+    // The provider declining to answer, which is exactly "no transit opinion".
+    // Deliberately NOT passed through to our own `unknown`; see above.
+    case 'unknown':
+      return null
     default:
-      return 'unknown'
+      return null
   }
 }
 
@@ -330,6 +354,10 @@ export interface RollUpParcel {
  * 4. Otherwise the **highest-precedence status present** wins, attention-first
  *    (see `SHIPMENT_STATUS_PRECEDENCE`).
  *
+ * This is rung 1 of `deriveShipmentStatus`, the best evidence there is and the
+ * one this connector cannot produce: see that function for why it is reached
+ * only once something writes real per-box status.
+ *
  * Kept pure and separate from the fetch so it can be unit-tested against the
  * mixed cases that matter, and so the FedEx/UPS connectors have something to
  * reuse when they arrive to write real per-box status.
@@ -351,7 +379,71 @@ export function rollUpShipmentStatus(parcels: readonly RollUpParcel[]): Shipment
   return 'unknown'
 }
 
+/**
+ * Decide ONE `ShipmentStatus` for a shipment, best evidence first (status plan
+ * §3.1).
+ *
+ * ```
+ * 1. a parcel carries real per-box status -> roll them up  (best; empty today)
+ * 2. the live label's tracking_status normalizes -> use it (133 of 135 live)
+ * 3. a live label exists                  -> label_created (1)
+ * 4. no live label at all                 -> unknown       (1)
+ * ```
+ *
+ * Rung 1 is vacuous from THIS connector and will stay that way: a ShipStation
+ * package carries no status field, so every parcel this app can build has a null
+ * status and the ladder falls straight through to rung 2. It is written and
+ * tested anyway because this function is the ladder itself, and the per-box
+ * tracking stream (status plan §6) is what fills rung 1 in. A box-level fact has
+ * to beat a label-level indicator the moment one exists, and putting the
+ * precedence here means that needs no second decision later.
+ *
+ * Rung 4 is the only honest use of `unknown`: no active parcel means no live
+ * label, so we hold nothing at all, not even "a label was printed".
+ *
+ * 🛑 Deliberately NOT clamped forward-only (status plan §3.4). `tracking_status`
+ * has unverified provenance, so a stale read could in principle flap a shipment
+ * backwards, but `delivered -> returned_to_shipper` is a legitimate transition
+ * and a monotonic clamp would block it. Let it overwrite, and watch for flapping.
+ */
+export function deriveShipmentStatus(
+  parcels: readonly RollUpParcel[],
+  liveLabelTrackingStatus: string | null | undefined
+): ShipmentStatus {
+  const active = parcels.filter((p) => !p.voided)
+  if (active.length === 0) return 'unknown'
+  // `!= null` so an undefined status counts as absent too. A parcel with no
+  // status must not pull the decision into the roll-up, which would answer
+  // `unknown` and quietly outrank the live label's real transit state.
+  if (active.some((p) => p.status != null)) return rollUpShipmentStatus(parcels)
+  return normalizeLabelTrackingStatus(liveLabelTrackingStatus) ?? 'label_created'
+}
+
 // ── raw payload ──────────────────────────────────────────────────────────────
+
+/**
+ * A provider money value: a DECIMAL `amount` alongside its own currency code.
+ * Every amount observed on this account is `usd`.
+ *
+ * 🛑 The decimal is why `toMinorUnits` exists. It must never be written through
+ * to a CURRENCY field as-is.
+ */
+export interface RawMoney {
+  currency?: string | null
+  amount?: number | null
+}
+
+/**
+ * The label's downloadable renderings, an OBJECT rather than a string. `pdf`,
+ * `zpl` and `href` were present on all 50 probed labels and `png` on 49, with
+ * `href` duplicating `pdf`. The PDF is the one a person prints.
+ */
+export interface RawLabelDownload {
+  pdf?: string | null
+  png?: string | null
+  zpl?: string | null
+  href?: string | null
+}
 
 /**
  * A label as the connector reads it. Extends the tool-side `RawLabel` with the
@@ -364,12 +456,29 @@ export function rollUpShipmentStatus(parcels: readonly RollUpParcel[]): Shipment
  * provider change would then land for free, but the fields that actually
  * populate them are bound by the `shipment` stream, not here. Build plan §9
  * recorded them as "empty or partial" for exactly this reason.
+ *
+ * ⚠️ `shipment_status` is here for the same permissive reason and NOTHING READS
+ * IT any more. The 2026-09-11 probe's 50 raw labels carry no such key at all,
+ * which is why it used to normalize to `label_created` on every single label and
+ * why every shipment read that value. The transit signal is `tracking_status`.
  */
 export interface RawConnectorLabel extends RawLabel {
   shipment_number?: string | null
   shipment_status?: string | null
   store_id?: string | null
   external_shipment_id?: string | null
+  /** What the merchant paid for this label. 50/50 live, and a DECIMAL. */
+  shipment_cost?: RawMoney | null
+  /** `amount: 0` on all 50 probed labels: this merchant insures nothing. */
+  insurance_cost?: RawMoney | null
+  label_download?: RawLabelDownload | null
+  /**
+   * ⚠️ Typed `unknown` on purpose. It was null on all 50 probed labels, which
+   * follows from `insurance_cost.amount` being 0 on every one of them, so its
+   * wire shape has NEVER been observed and declaring one here would be a guess
+   * dressed as a type. `readInsuranceClaim` decides what may be written.
+   */
+  insurance_claim?: unknown
 }
 
 /** A shipment as the `shipment` stream reads it, off `GET /v2/shipments`. */
@@ -437,6 +546,68 @@ export function isLabelVoided(label: RawConnectorLabel): boolean {
 
 // ── projection ───────────────────────────────────────────────────────────────
 
+/**
+ * Convert a provider money value into the INTEGER MINOR UNITS a CURRENCY field
+ * stores (status plan §7.1).
+ *
+ * `field-value-helpers.ts:389` is explicit: "CURRENCY is NUMBER's shape exactly:
+ * an integer minor-unit amount." ShipStation sends
+ * `{"currency":"usd","amount":16.54}`, and a mapping field has no transform
+ * hook, so the multiply happens here or a $16.54 label is stored as 16 cents.
+ *
+ * 🛑 `Math.round`, never a bare `* 100`. Binary floating point puts the probe's
+ * `74.1 * 100` at `7409.999999999999`, so anything that truncates loses a cent
+ * on a real amount from this account (`70.9 * 100` lands on the other side, at
+ * `7090.000000000001`). Rounding is exact for any two-decimal input, because the
+ * representation error is many orders of magnitude below half a unit.
+ *
+ * ⚠️ `16.54 * 100` is NOT one of those cases: it evaluates to exactly `1654`.
+ * The status plan and its brief both cite it as the example, which is wrong, and
+ * a reader who checks the cited value and finds it fine could conclude the whole
+ * hazard was imaginary. 74.1 and 70.9 are the two real ones in the 50 labels.
+ *
+ * ⚠️ Two decimal places is assumed, which is what the field's own
+ * `options.decimals` declares and what every observed amount carries. A
+ * zero-decimal currency (JPY) would need the exponent; nothing on this account
+ * is non-USD, and whether a connector mapping can emit per-row currency meta at
+ * all is still open (status plan §7.1).
+ */
+function toMinorUnits(money: RawMoney | null | undefined): number | null {
+  const amount = money?.amount
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return null
+  return Math.round(amount * 100)
+}
+
+/**
+ * Read `insurance_claim` into the TEXT column, or refuse.
+ *
+ * 🛑 The wire shape is UNKNOWN. It was null on all 50 probed labels, which
+ * follows from `insurance_cost.amount` being 0 on every one of them (nothing
+ * uninsured can be claimed), so the field is forward-looking by owner decision
+ * rather than evidenced. A string is written through; anything else is NOT,
+ * because `JSON.stringify`-ing a structure into a text column produces a value
+ * no reader can use and no filter can match, and it would look like the shape
+ * had been decided when it had not.
+ *
+ * The warning is how the shape gets decided. It names the KEYS and not the
+ * values, because a claim plausibly carries personal data. Whoever sees one
+ * picks the single scalar that belongs in this column and records which.
+ */
+function readInsuranceClaim(raw: unknown): string | null {
+  if (typeof raw === 'string') return raw.trim() === '' ? null : raw
+  if (raw === null || raw === undefined) return null
+  const shape =
+    typeof raw === 'object'
+      ? `object with keys ${Object.keys(raw as Record<string, unknown>).join(',')}`
+      : typeof raw
+  console.warn(
+    `[shipstation] insurance_claim arrived as ${shape}; its wire shape has never been ` +
+      'observed, so nothing is written. Pick the ONE scalar that belongs in the text column ' +
+      'and record which, rather than serialising the structure into it.'
+  )
+  return null
+}
+
 /** Per-sweep switches on the label projection. */
 export interface LabelProjectionOptions {
   /**
@@ -461,9 +632,10 @@ export interface LabelProjectionOptions {
  * display order comes from `sequence`, never array position: in the observed
  * three-box label the master was returned LAST.
  *
- * 🛑 Structural shipment fields (`shipmentNumber`, `carrier`, `service`,
- * `shipDate`, `parcelCount`, `shipmentStatus`) are emitted ONLY for a non-voided
- * label. This is load-bearing, not hygiene.
+ * 🛑 Shipment-level fields (`shipmentNumber`, `carrier`, `service`, `shipDate`,
+ * `parcelCount`, `shipmentStatus`, and the label money and documents
+ * `costMinor`, `insuranceCostMinor`, `labelUrl`, `insuranceClaim`) are emitted
+ * ONLY for a non-voided label. This is load-bearing, not hygiene.
  *
  * Probe §3 found one shipment carrying two labels, one voided and one active,
  * both sharing the shipment id, so both records map onto the SAME shipment row.
@@ -607,15 +779,33 @@ export function projectLabelRecord(
     fields.service = label.service_code ?? null
     fields.shipDate = label.ship_date ?? null
     fields.parcelCount = packages.length
-    // Every active box of a live label shares the label's lifecycle status,
-    // because that is the only status this app has any evidence for. The roll-up
-    // is still routed through `rollUpShipmentStatus` so the shipment's value is
-    // produced by ONE rule, ready for the day a carrier app writes real per-box
-    // status and the boxes start to disagree.
-    const parcelStatus = normalizeProviderShipmentStatus(label.shipment_status)
-    fields.shipmentStatus = rollUpShipmentStatus(
-      packages.map((p) => ({ voided: p.voided, status: parcelStatus }))
+    // The status ladder (status plan §3.1), through the one function that owns
+    // it. Every box is offered with a null status, because a ShipStation package
+    // has no status field at all, so rung 1 is vacuous here and the LIVE label's
+    // `tracking_status` decides. Anything that normalizer does not recognize
+    // lands on `label_created`, never on `unknown`.
+    fields.shipmentStatus = deriveShipmentStatus(
+      packages.map((p) => ({ voided: p.voided, status: null })),
+      label.tracking_status
     )
+
+    // Label money and documents (status plan §7). Being inside this block is
+    // right on their own terms as well as by the rule above: voiding refunds the
+    // label, so the live label's cost is what was actually paid and its PDF is
+    // what a person would actually print. The accepted consequence is that a
+    // superseded label's PDF becomes unreachable after a void and reprint.
+    //
+    // 🛑 CURRENCY is INTEGER MINOR UNITS and the wire is a decimal, so these two
+    // are multiplied and rounded here. There is no transform hook downstream.
+    fields.costMinor = toMinorUnits(label.shipment_cost)
+    fields.insuranceCostMinor = toMinorUnits(label.insurance_cost)
+    // 🛑 `labelUrl` is a BEARER SECRET. Verified 2026-09-11: the URL fetches
+    // UNAUTHENTICATED and the PDF carries the customer's name and address, so
+    // the opaque path segment is the only thing protecting it. Never log it,
+    // export it, or put it in a webhook payload. `label_download` is an OBJECT
+    // (`pdf`, `png`, `zpl`, `href`), so the PDF is read out by name.
+    fields.labelUrl = label.label_download?.pdf ?? null
+    fields.insuranceClaim = readInsuranceClaim(label.insurance_claim)
   }
 
   return {

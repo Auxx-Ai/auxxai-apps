@@ -10,7 +10,7 @@
  * the probe only ever printed SHA-256 fingerprints.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   type RawConnectorLabel,
   isLabelVoided,
@@ -39,6 +39,18 @@ const threeBoxLabel: RawConnectorLabel = {
   is_return_label: false,
   created_at: '2026-09-10T07:00:00.000Z',
   ship_date: '2026-09-10T07:00:00Z',
+  // The label money and documents, shaped as the 2026-09-11 probe returned them
+  // on all 50 labels: a DECIMAL amount beside its currency, and `label_download`
+  // as an OBJECT rather than a string.
+  shipment_cost: { currency: 'usd', amount: 16.54 },
+  insurance_cost: { currency: 'usd', amount: 0 },
+  label_download: {
+    pdf: 'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-198067499.pdf',
+    png: 'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-198067499.png',
+    zpl: 'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-198067499.zpl',
+    href: 'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-198067499.pdf',
+  },
+  insurance_claim: null,
   packages: [
     {
       package_id: 158414018,
@@ -153,12 +165,24 @@ describe('projectLabelRecord, three-box label', () => {
     expect(record.fields.shipDate).toBe('2026-09-10T07:00:00Z')
   })
 
-  it('normalizes the shipment status and never derives it from tracking_status', () => {
-    // `label_purchased` -> `label_created`. The label's own `tracking_status` is
-    // `in_transit`, and it must not become the shipment's status: probe §3 found
-    // that value disagreeing with the carrier's own `/track` answer.
-    expect(record.fields.shipmentStatus).toBe('label_created')
+  it('takes the shipment status from the live label tracking status', () => {
+    // This read `label_created` until 2026-09-11, on every shipment in the
+    // account, while ShipStation was reporting 57 of 135 delivered. Rung 2 of
+    // the ladder is what changed it. One live label per shipment means the
+    // shipment-level value is not duplicated from anything.
+    expect(record.fields.shipmentStatus).toBe('in_transit')
     expect(record.fields.providerTrackingStatus).toBe('in_transit')
+  })
+
+  it('does NOT fan the label status out onto the boxes as a per-box status', () => {
+    // 🛑 The boxes get the raw string as provenance and no normalized status of
+    // their own. These three FedEx ground parcels route independently, and a
+    // confidently wrong box status is worse than a null one.
+    for (const pkg of packagesOf(record)) {
+      expect(pkg.providerTrackingStatus).toBe('in_transit')
+      expect(pkg).not.toHaveProperty('status')
+      expect(pkg).not.toHaveProperty('parcelStatus')
+    }
   })
 
   it('copies the label tracking status down onto each box as provenance', () => {
@@ -210,6 +234,11 @@ const voidedLabel: RawConnectorLabel = {
   voided_at: '2026-09-08T22:52:25.177Z',
   created_at: '2026-09-08T22:50:32.873Z',
   ship_date: '2026-09-08T07:00:00Z',
+  shipment_cost: { currency: 'usd', amount: 43.78 },
+  insurance_cost: { currency: 'usd', amount: 0 },
+  label_download: {
+    pdf: 'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-196479007.pdf',
+  },
   packages: [
     {
       package_id: 158000001,
@@ -224,6 +253,13 @@ const voidedLabel: RawConnectorLabel = {
 const replacementLabel: RawConnectorLabel = {
   ...voidedLabel,
   label_id: 'se-196479653',
+  // The reprint's own cost and its own PDF. The voided label's were refunded and
+  // its PDF is superseded, which is why only these reach the shipment.
+  shipment_cost: { currency: 'usd', amount: 74.1 },
+  insurance_cost: { currency: 'usd', amount: 0 },
+  label_download: {
+    pdf: 'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-196479653.pdf',
+  },
   tracking_number: 'EXAMPLE-TRACKING-LIVE',
   voided: false,
   voided_at: null,
@@ -260,11 +296,18 @@ describe('projectLabelRecord, the void and replacement pair on one shipment', ()
       'shipDate',
       'parcelCount',
       'shipmentStatus',
+      // The label money and documents follow the same rule, which is also the
+      // right answer on its own terms: voiding refunds the label.
+      'costMinor',
+      'insuranceCostMinor',
+      'labelUrl',
+      'insuranceClaim',
     ]) {
       expect(voidRecord.fields[key]).toBeUndefined()
       expect(liveRecord.fields[key]).toBeDefined()
     }
-    expect(liveRecord.fields.shipmentStatus).toBe('label_created')
+    // The replacement label reports `in_transit`, so the shipment does too.
+    expect(liveRecord.fields.shipmentStatus).toBe('in_transit')
   })
 
   it('still emits the voided label parcels, flagged voided', () => {
@@ -286,6 +329,85 @@ describe('projectLabelRecord, the void and replacement pair on one shipment', ()
     expect(packagesOf(voidRecord)[0].packageKey).not.toBe(packagesOf(liveRecord)[0].packageKey)
     expect(packagesOf(voidRecord)[0].labelId).toBe('se-196479007')
     expect(packagesOf(liveRecord)[0].labelId).toBe('se-196479653')
+  })
+})
+
+describe('projectLabelRecord, the label money and documents', () => {
+  const record = projectLabelRecord(threeBoxLabel)
+
+  it('emits CURRENCY as an integer minor-unit amount, never the wire decimal', () => {
+    // `field-value-helpers.ts`: CURRENCY is NUMBER's shape exactly, an integer
+    // minor-unit amount. The wire sends `{"currency":"usd","amount":16.54}` and
+    // there is no transform hook downstream, so 1654 has to be emitted here.
+    expect(record.fields.costMinor).toBe(1654)
+    expect(Number.isInteger(record.fields.costMinor)).toBe(true)
+  })
+
+  it('🛑 rounds rather than truncating, on the amounts where that differs', () => {
+    // `74.1 * 100` is `7409.999999999999` in binary floating point, so anything
+    // that truncates stores 7409 and loses a cent on a real amount from this
+    // account. `70.9 * 100` lands at `7090.000000000001`, on the other side.
+    const at = (amount: number) =>
+      projectLabelRecord({ ...threeBoxLabel, shipment_cost: { currency: 'usd', amount } }).fields
+        .costMinor
+    expect(74.1 * 100).not.toBe(7410)
+    expect(at(74.1)).toBe(7410)
+    expect(at(70.9)).toBe(7090)
+    expect(at(0.01)).toBe(1)
+    expect(at(348.15)).toBe(34815)
+  })
+
+  it('keeps a zero insurance cost as a real reading, not a missing value', () => {
+    // `insurance_cost.amount` was 0 on all 50 probed labels: this merchant
+    // insures nothing. A 0 must not be flattened into a null.
+    expect(record.fields.insuranceCostMinor).toBe(0)
+  })
+
+  it('emits null when the provider sends no money value at all', () => {
+    const bare = projectLabelRecord({
+      ...threeBoxLabel,
+      shipment_cost: undefined,
+      insurance_cost: { currency: 'usd', amount: null },
+    })
+    expect(bare.fields.costMinor).toBeNull()
+    expect(bare.fields.insuranceCostMinor).toBeNull()
+  })
+
+  it('reads the label PDF out of the label_download OBJECT', () => {
+    // `label_download` is `{ pdf, png, zpl, href }`, not a string. The PDF is
+    // the one a person prints; `href` merely duplicates it.
+    expect(record.fields.labelUrl).toBe(
+      'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-198067499.pdf'
+    )
+    const noDownload = projectLabelRecord({ ...threeBoxLabel, label_download: null })
+    expect(noDownload.fields.labelUrl).toBeNull()
+  })
+
+  it('writes an insurance claim only when the provider sends a string', () => {
+    expect(record.fields.insuranceClaim).toBeNull()
+    const claimed = projectLabelRecord({ ...threeBoxLabel, insurance_claim: 'CLAIM-123' })
+    expect(claimed.fields.insuranceClaim).toBe('CLAIM-123')
+    const blank = projectLabelRecord({ ...threeBoxLabel, insurance_claim: '  ' })
+    expect(blank.fields.insuranceClaim).toBeNull()
+  })
+
+  it('🛑 refuses to serialise a claim OBJECT into the text column', () => {
+    // The field was null on all 50 probed labels, so its wire shape is UNKNOWN.
+    // A `JSON.stringify`-ed structure in a text column is a value no reader can
+    // use and no filter can match, and it would look like the shape had been
+    // decided. Emit nothing and warn instead.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const structured = projectLabelRecord({
+      ...threeBoxLabel,
+      insurance_claim: { claim_id: 'c-1', status: 'open', amount: { currency: 'usd', amount: 10 } },
+    })
+    expect(structured.fields.insuranceClaim).toBeNull()
+    const logged = String(warn.mock.calls[0]?.[0] ?? '')
+    // The keys are named so the shape can be decided; the VALUES are not, because
+    // a claim plausibly carries personal data.
+    expect(logged).toContain('claim_id')
+    expect(logged).not.toContain('c-1')
+    warn.mockRestore()
   })
 })
 

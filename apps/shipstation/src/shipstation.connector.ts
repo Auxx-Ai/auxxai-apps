@@ -146,9 +146,15 @@ export const shipstationConnector = defineDataConnector({
       // leaves both floors where they were.
       //
       // The residual gap is a label change that is neither a creation nor a
-      // void, principally `tracking_status` drift. That is an accepted loss, not
-      // a new compromise: probe §3 disproved label `tracking_status` as evidence
-      // of where any box is, and per-box status belongs to the carrier apps.
+      // void, principally `tracking_status` drift.
+      //
+      // ⚠️ That gap got expensive on 2026-09-11. It was an accepted loss while
+      // `tracking_status` was provenance only; it now decides `shipment_status`
+      // (status plan §3), so a shipment's status freezes at whatever the label
+      // said when its creation was first read. No third sweep can close it,
+      // because `/v2/labels` has no modified-time filter and never returns a
+      // modified time. The fix is the per-box tracking stream in status plan §6,
+      // which outranks this value at rung 1 of the ladder.
       //
       // Measured before the switch (build plan §9): 141 labels over 10 days in
       // 76s steady state, extrapolating to 35-40 minutes per cycle over ~4,290
@@ -249,19 +255,27 @@ export const shipstationConnector = defineDataConnector({
             // sampled carried more than one package, up to ten (probe §1).
             { sourcePath: 'parcelCount', target: 'shipment_parcel_count' },
             // ⚠️ ALREADY NORMALIZED by the server, into the platform's
-            // `ShipmentStatus` enum, and already rolled up over the label's
-            // active parcels. A `ConnectorMapping` field is a `sourcePath` to
-            // `target` binding with NO transform hook, so normalization cannot
-            // happen here and has to happen in `shipstation.connector.server.ts`
-            // (proposal §8d). Two rules live with that function, not with this
-            // mapping: enumerate the provider's real values from the live API
-            // rather than from vendor documentation, and map anything
-            // unrecognized to `unknown` rather than to a guess. That is what the
-            // explicit `unknown` case in the enum is for.
+            // `ShipmentStatus` enum. A `ConnectorMapping` field is a
+            // `sourcePath` to `target` binding with NO transform hook, so
+            // normalization cannot happen here and has to happen in
+            // `shipstation.connector.server.ts` (proposal §8d).
             //
-            // The provider's own `shipment_status` (the probe observed
-            // `label_purchased`) is a label-lifecycle value, not a transit one,
-            // which is precisely why it is not bound through raw.
+            // The value comes off the four-rung ladder in `deriveShipmentStatus`
+            // (status plan §3.1): per-box status where any box has one, else the
+            // LIVE label's `tracking_status` normalized, else `label_created`,
+            // else `unknown`. Until 2026-09-11 it was derived from the label
+            // LIFECYCLE alone, so all 135 shipments read `label_created` while
+            // ShipStation was reporting 57 of them delivered.
+            //
+            // 🛑 An unenumerated provider value falls to `label_created`, NEVER
+            // to `unknown`. Our enum has `unknown` as a member and writing it
+            // would erase a fact we hold, that a label was printed. `unknown` is
+            // reserved for the shipment with no live label at all. Enumerate new
+            // provider values from a live payload, never from vendor docs.
+            //
+            // The provider's own `shipment_status` is not bound and is not even
+            // sent on a label payload: it was a label-lifecycle value, never a
+            // transit one.
             { sourcePath: 'shipmentStatus', target: 'shipment_status' },
             // The shipment's display name, and its PRIMARY DISPLAY FIELD.
             // Denormalized off the label's master parcel by the server, because
@@ -280,6 +294,37 @@ export const shipstationConnector = defineDataConnector({
             // 🛑 No `match`, for the same reason as `parcel_tracking_number` and
             // one more: this value CHANGES when a label is voided and reprinted.
             { sourcePath: 'masterTrackingNumber', target: 'shipment_master_tracking_number' },
+
+            // ── label money and documents (status plan §7) ──────────────────
+            // All four are LABEL-level values on NATIVE fields, so they bind by
+            // `target` rather than `appField`, and all four are emitted from the
+            // LIVE label only. That is the same rule as the structural fields
+            // above and it is also right on its own terms: voiding refunds the
+            // label, so the reprint is what was paid for and what gets printed.
+            //
+            // 🛑 CURRENCY IS INTEGER MINOR UNITS. The provider sends
+            // `{"currency":"usd","amount":16.54}`, a decimal, and there is no
+            // transform hook here, so the server multiplies and ROUNDS before it
+            // emits: `74.1 * 100` is `7409.999999999999` in binary floating
+            // point, so a truncating conversion loses a cent on a real amount
+            // from this account. That is what the `Minor` suffix on the source
+            // key means, and binding a raw decimal here would store 16 cents.
+            { sourcePath: 'costMinor', target: 'shipment_cost' },
+            // 0 on all 50 probed labels: this merchant insures nothing, so a
+            // zero here is a real reading rather than a missing value.
+            { sourcePath: 'insuranceCostMinor', target: 'shipment_insurance_cost' },
+            // 🛑 A BEARER SECRET. Verified 2026-09-11: the URL fetches
+            // UNAUTHENTICATED and the PDF carries the customer's name and
+            // address, so the opaque path segment is the only thing protecting
+            // it. Never export it, log it, or put it in a webhook payload. Read
+            // off `label_download.pdf`; that object also carries png and zpl.
+            { sourcePath: 'labelUrl', target: 'shipment_label_url' },
+            // ⚠️ Null on all 50 probed labels, so its WIRE SHAPE IS UNKNOWN, and
+            // the field is forward-looking by owner decision rather than
+            // evidenced. The server writes it only when the provider sends a
+            // string, and warns otherwise instead of serialising a structure
+            // into a text column.
+            { sourcePath: 'insuranceClaim', target: 'shipment_insurance_claim' },
 
             // NOT bound here, and each for a reason:
             //
@@ -489,21 +534,35 @@ export const shipstationConnector = defineDataConnector({
         // The LABEL's ship date. The shipment's own was 2026-09-10T00:00:00Z.
         shipDate: '2026-09-10T07:00:00.000Z',
         parcelCount: 3,
-        // Normalized into `ShipmentStatus` by the server and rolled up over the
-        // ACTIVE parcels, never bound raw.
+        // Normalized into `ShipmentStatus` by the server, off the ladder in
+        // `deriveShipmentStatus`, never bound raw.
         //
-        // 🛑 `label_created`, NOT the `in_transit` sitting in
-        // `providerTrackingStatus` right below it. That difference is the whole
-        // point of normalizing in the server (§8d). The label's own
-        // `tracking_status` is not evidence of where any box is: probe §3 found
-        // it reading `in_transit` on this label while `/labels/{id}/track`
-        // returned `Not Yet In System`, and reading `in_transit` on VOIDED
-        // labels too. Per-box carrier status has no writer until FedEx and UPS
-        // get connectors, so the only thing this shipment can honestly claim is
-        // that its label exists.
-        shipmentStatus: 'label_created',
+        // ⚠️ `in_transit`, agreeing with the `providerTrackingStatus` below it.
+        // This example read `label_created` until 2026-09-11, when the ladder
+        // began preferring the live label's `tracking_status` over the bare fact
+        // that a label exists (status plan §3). The two keys agree by
+        // construction: one live label per shipment is one transit value per
+        // shipment, so nothing is duplicated and nothing is invented.
+        //
+        // 🛑 The agreement stops at the shipment. The same value is NOT fanned
+        // out onto the boxes below as a per-box status; they carry the raw string
+        // as `providerTrackingStatus` provenance and nothing more, because these
+        // three FedEx ground parcels route independently and arrive on their own
+        // days. "I got 5 of my 6 boxes" is the case that would be lied about.
+        shipmentStatus: 'in_transit',
         // The master parcel below (sequence 1), copied up so the shipment has a name.
         masterTrackingNumber: 'FAKE0000000000000003',
+        // INTEGER MINOR UNITS, multiplied and rounded by the server from the
+        // provider's `{"currency":"usd","amount":16.54}`. 1654 is $16.54.
+        costMinor: 1654,
+        // 0 on every label on this account, and a real reading, not a null.
+        insuranceCostMinor: 0,
+        // 🛑 A bearer secret, so this one is fabricated like the tracking
+        // numbers above. Real values are on `api.shipstation.com` and fetch
+        // unauthenticated.
+        labelUrl: 'https://api.shipstation.com/v2/downloads/14/EXAMPLE/label-198067499.pdf',
+        // Null on all 50 probed labels; its wire shape has never been observed.
+        insuranceClaim: null,
         // The provider's raw value, same run, kept for audit. Deliberately
         // disagrees with `shipmentStatus` above.
         providerTrackingStatus: 'in_transit',
