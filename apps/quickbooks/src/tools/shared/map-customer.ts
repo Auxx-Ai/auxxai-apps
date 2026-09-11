@@ -24,6 +24,19 @@ export interface MappedCustomerDetail extends MappedCustomerSummary {
   billingAddress: MappedAddress | null
   taxable: boolean | null
   preferredDeliveryMethod: string | null
+  /**
+   * `Customer.Notes`, free text. Carried because auxx stamps
+   * `auxx:contact:<id>` here on a customer it created, and reads it back to
+   * tell its own record apart from a stranger who happens to share a name
+   * (plans/accounting/tasks/23 section 2.4).
+   *
+   * On the DETAIL shape and not the summary: `Notes` is not a list-view field,
+   * and `search_quickbooks_customers` has no use for it.
+   *
+   * Note it is NOT filterable in QQL, so nothing may resolve a customer BY this
+   * value. It is read off a record already found some other way.
+   */
+  notes: string | null
   syncToken: string
 }
 
@@ -64,6 +77,7 @@ export function mapCustomerDetail(c: any): MappedCustomerDetail {
     billingAddress: mapAddress(c.BillAddr),
     taxable: typeof c.Taxable === 'boolean' ? c.Taxable : null,
     preferredDeliveryMethod: c.PreferredDeliveryMethod ?? null,
+    notes: c.Notes ?? null,
     syncToken: String(c.SyncToken ?? '0'),
   }
 }

@@ -24,11 +24,14 @@ interface CreateQuickbooksCustomerInput {
     state?: string
   }
   taxable?: boolean
+  notes?: string
 }
 
 interface CreateQuickbooksCustomerOutput {
   customerId: string
   displayName: string
+  /** `Customer.Notes` as stored, so a caller can confirm its stamp landed. */
+  notes: string | null
   syncToken: string
   auxxContactId: string | null
   auxxCompanyId: string | null
@@ -50,6 +53,7 @@ export default async function createQuickbooksCustomer(
     ...(input.familyName && { FamilyName: input.familyName }),
     ...(input.companyName && { CompanyName: input.companyName }),
     ...(input.taxable !== undefined && { Taxable: input.taxable }),
+    ...(input.notes?.trim() && { Notes: input.notes.trim() }),
   }
 
   const email = buildEmail(input.email)
@@ -73,6 +77,7 @@ export default async function createQuickbooksCustomer(
   return {
     customerId: String(raw.Id),
     displayName: raw.DisplayName,
+    notes: raw.Notes ?? null,
     syncToken: String(raw.SyncToken ?? '0'),
     auxxContactId: refsResolved.auxxContactId,
     auxxCompanyId: refsResolved.auxxCompanyId,
