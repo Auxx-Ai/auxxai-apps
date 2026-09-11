@@ -342,6 +342,19 @@ export async function executeLabel(
       }
     }
 
+    case 'cancelRefund': {
+      // Returns the updated label object, not a void-shaped verdict, so the
+      // caller sees the label's `status` and refund state rather than an
+      // approved/declined pair.
+      const labelId = segment(input.labelCancelRefundId, 'Label id')
+      const raw = await shipstationApi<RawLabelResponse>({
+        endpoint: `/labels/${labelId}/cancel_refund`,
+        apiKey,
+        method: 'POST',
+      })
+      return { label: toDetail(raw) }
+    }
+
     case 'createReturn': {
       const labelId = segment(input.labelCreateReturnId, 'Outbound label id')
       const raw = await shipstationApi<RawLabelResponse>({

@@ -59,6 +59,7 @@ import { labelCreateTool } from './tools/internal/label-create.tool'
 import { labelGetManyTool } from './tools/internal/label-get-many.tool'
 import { labelGetTool } from './tools/internal/label-get.tool'
 import { labelTrackTool } from './tools/internal/label-track.tool'
+import { labelCancelRefundTool } from './tools/internal/label-cancel-refund.tool'
 import { labelVoidTool } from './tools/internal/label-void.tool'
 import { rateEstimateTool } from './tools/internal/rate-estimate.tool'
 import { rateGetForShipmentTool } from './tools/internal/rate-get-for-shipment.tool'
@@ -121,6 +122,7 @@ export const app = {
     labelGetTool,
     labelCreateTool,
     labelVoidTool,
+    labelCancelRefundTool,
     labelCreateReturnTool,
     labelTrackTool,
     trackingGetTool,

@@ -286,6 +286,15 @@ export const labelInputs = {
     acceptsVariables: true,
   }),
 
+  // --- label.cancelRefund: POST /v2/labels/{id}/cancel_refund ---
+  labelCancelRefundId: Workflow.string({
+    label: 'Label id',
+    description:
+      'Withdraws a refund that voiding scheduled, so the postage stays charged. Only a ' +
+      'label whose refund is still scheduled can be pulled back.',
+    acceptsVariables: true,
+  }),
+
   // --- label.createReturn: POST /v2/labels/{id}/return ---
   labelCreateReturnId: Workflow.string({
     label: 'Outbound label id',
@@ -422,7 +431,13 @@ export function labelComputeOutputs(operation: string) {
     }
   }
 
-  if (operation === 'get' || operation === 'create' || operation === 'createReturn') {
+  // `cancel_refund` returns the updated label object, same shape as a get.
+  if (
+    operation === 'get' ||
+    operation === 'create' ||
+    operation === 'createReturn' ||
+    operation === 'cancelRefund'
+  ) {
     return { label: Workflow.struct(labelDetailFields, { label: 'label' }) }
   }
 
@@ -431,9 +446,14 @@ export function labelComputeOutputs(operation: string) {
       approved: Workflow.boolean({ label: 'approved' }),
       message: Workflow.string({ label: 'message' }),
       reasonCode: Workflow.string({ label: 'reasonCode' }),
+      // NOT `se-`-prefixed label ids. The API types these as
+      // `Array of integers (int64)` while every id a label endpoint ACCEPTS
+      // must match `^se(-[a-z0-9]+)+$`, so one of these fed back into
+      // `label.get` or `label.void` is rejected. Named to make that obvious
+      // rather than inviting the round trip.
       voidedLabelIds: Workflow.array({
         label: 'voidedLabelIds',
-        items: Workflow.string({ label: 'labelId' }),
+        items: Workflow.string({ label: 'voidedLabelNumber' }),
       }),
     }
   }

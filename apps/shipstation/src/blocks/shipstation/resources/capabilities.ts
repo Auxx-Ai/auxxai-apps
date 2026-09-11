@@ -64,6 +64,7 @@ const WRITE_OPS: ReadonlySet<string> = new Set([
   'removeTag',
   'addNote',
   'void',
+  'cancelRefund',
   'createReturn',
 ])
 
@@ -73,6 +74,11 @@ const OPERATION_CAPABILITY_OVERRIDES: Record<string, readonly ShipstationCapabil
   'label.create': ['purchase'],
   // Corrective action for a mistaken purchase, so it must not need `purchase`.
   'label.void': ['write'],
+  // Withdraws a scheduled refund, so the account KEEPS the postage charge. That
+  // is a spending decision in effect, but not a purchase — it buys nothing new,
+  // it declines to undo something already bought. `write`, for the same reason
+  // `void` is: an org able to void must be able to change its mind about it.
+  'label.cancelRefund': ['write'],
 }
 
 /** The capabilities one `resource.operation` pair requires. Empty means always allowed. */
