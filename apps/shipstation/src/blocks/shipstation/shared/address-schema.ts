@@ -58,7 +58,7 @@ export function shippingAddress(options: { label: string; description?: string }
  * from the upstream order rather than typing it.
  */
 export function shippingPhone(options: { label: string }) {
-  return Workflow.string({
+  return Workflow.phone({
     label: options.label,
     description: 'Required by ShipStation. Bind the phone from the upstream order.',
     acceptsVariables: true,

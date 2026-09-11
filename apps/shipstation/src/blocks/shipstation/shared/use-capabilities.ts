@@ -1,6 +1,7 @@
 // src/blocks/shipstation/shared/use-capabilities.ts
 
-import { useEffect, useState } from 'react'
+import { onSettingsChanged } from '@auxx/sdk/client'
+import { useCallback, useEffect, useState } from 'react'
 import { deriveCapabilities } from '../resources/capabilities'
 import loadCapabilities from './capabilities.server'
 
@@ -27,6 +28,18 @@ const READ_ONLY: Capabilities = (() => {
   return { resources, operations }
 })()
 
+/**
+ * Last known answer. Module scope, so it is shared by every panel in this app
+ * and survives a panel unmounting.
+ *
+ * 🛑 That lifetime is longer than it looks. The app runtime iframe is pooled
+ * per installation in the host's `AppStore` and is only torn down with the
+ * wrapper, so module state here outlives navigation around the host. A plain
+ * `if (cached) return` therefore made the first answer permanent until a full
+ * page reload: an admin who enabled `allowWrites` and walked back to the
+ * workflow found the write operations still missing. `onSettingsChanged` is
+ * what makes this cache honest.
+ */
 let cached: Capabilities | null = null
 let inFlight: Promise<Capabilities> | null = null
 
@@ -42,28 +55,49 @@ export function useCapabilities(): { capabilities: Capabilities; loading: boolea
   const [capabilities, setCapabilities] = useState<Capabilities>(cached ?? READ_ONLY)
   const [loading, setLoading] = useState(!cached)
 
-  useEffect(() => {
-    if (cached) return
-    let active = true
+  /** Fetch unless an identical request is already in the air. */
+  const load = useCallback((isActive: () => boolean) => {
     inFlight ??= loadCapabilities().then((result) => {
       cached = result
       return result
     })
-    inFlight
+    const request = inFlight
+
+    request
       .then((result) => {
-        if (active) setCapabilities(result)
+        if (isActive()) setCapabilities(result)
       })
       .catch(() => {
-        // Leave the read-only surface in place; the executor is the real guard.
-        inFlight = null
+        // Keep the last known answer; the executor is the real guard.
       })
       .finally(() => {
-        if (active) setLoading(false)
+        // Never reuse a SETTLED promise, or an invalidation would be served the
+        // stale result it was sent to replace.
+        if (inFlight === request) inFlight = null
+        if (isActive()) setLoading(false)
       })
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    const isActive = () => active
+
+    if (!cached) load(isActive)
+    else setLoading(false)
+
+    // The host pushes this when an admin saves this app's settings. Drop the
+    // shared cache and re-read, so a panel that is already open corrects itself
+    // without the user reloading.
+    const unsubscribe = onSettingsChanged(() => {
+      cached = null
+      load(isActive)
+    })
+
     return () => {
       active = false
+      unsubscribe()
     }
-  }, [])
+  }, [load])
 
   return { capabilities, loading }
 }

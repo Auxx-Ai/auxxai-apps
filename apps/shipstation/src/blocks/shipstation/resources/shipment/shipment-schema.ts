@@ -333,7 +333,7 @@ const shipmentFields = {
   packageCount: Workflow.number({ integer: true }),
   tags: Workflow.array({ label: 'tags', items: Workflow.string() }),
   shipToName: Workflow.string(),
-  shipToPhone: Workflow.string(),
+  shipToPhone: Workflow.phone(),
   shipToLine1: Workflow.string(),
   shipToLine2: Workflow.string(),
   shipToCity: Workflow.string(),
