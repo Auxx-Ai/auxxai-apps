@@ -38,6 +38,7 @@ export const findQuickbooksCustomerTool = defineTool({
         phone: z.string().nullable(),
         balance: z.number().describe('Open balance in the company currency.'),
         active: z.boolean(),
+        notes: z.string().nullable().describe('Customer.Notes, free text.'),
         syncToken: z.string().describe('Required for follow-up update_quickbooks_customer calls.'),
         auxxContactId: refs
           .entity('contact')
@@ -72,6 +73,7 @@ export const findQuickbooksCustomerTool = defineTool({
       phone: '+1 415-555-0188',
       balance: 1240.5,
       active: true,
+      notes: null,
       syncToken: '3',
       auxxContactId: null,
       auxxCompanyId: null,

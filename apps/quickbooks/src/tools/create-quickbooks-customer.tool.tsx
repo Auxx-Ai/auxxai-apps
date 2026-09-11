@@ -26,10 +26,17 @@ export const createQuickbooksCustomerTool = defineTool({
       })
       .optional(),
     taxable: z.boolean().optional(),
+    notes: z
+      .string()
+      .optional()
+      .describe(
+        'Free text stored on Customer.Notes. Not filterable in QQL, so it is readable by a person and by a caller that already has the record, never a way to look one up.'
+      ),
   }),
   outputs: z.object({
     customerId: z.string(),
     displayName: z.string(),
+    notes: z.string().nullable(),
     syncToken: z.string(),
     auxxContactId: refs.entity('contact').nullable(),
     auxxCompanyId: refs.entity('company').nullable(),
@@ -38,6 +45,7 @@ export const createQuickbooksCustomerTool = defineTool({
   exampleOutput: {
     customerId: '59',
     displayName: 'Globex LLC',
+    notes: null,
     syncToken: '0',
     auxxContactId: null,
     auxxCompanyId: null,
