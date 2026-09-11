@@ -33,7 +33,19 @@ export interface RawLabel {
   service_code?: string
   tracking_number?: string
   tracking_status?: string
-  label_status?: string
+  /**
+   * The label's lifecycle status: `processing | completed | error | voided`.
+   *
+   * 🛑 The property is `status`. `label_status` is the name of its SCHEMA and
+   * of the `/v2/labels` QUERY parameter, and it is not a property of a label
+   * object anywhere in the V2 spec. Reading `label_status` off the response
+   * silently yields `undefined`, which is why the build plan recorded
+   * `labelStatus` as "observed null on live list and get responses": it was
+   * never a provider quirk, it was this. Both keys are read below so that a
+   * response shaped either way still projects.
+   */
+  status?: string | null
+  label_status?: string | null
   voided?: boolean
   voided_at?: string | null
   is_return_label?: boolean
@@ -118,7 +130,8 @@ export function projectLabel(label: RawLabel): ProjectedLabel {
     carrierCode: label.carrier_code ?? null,
     serviceCode: label.service_code ?? null,
     masterTrackingNumber,
-    labelStatus: label.label_status ?? null,
+    // `status` first: it is the real property name. See RawLabel.status.
+    labelStatus: label.status ?? label.label_status ?? null,
     trackingStatus: label.tracking_status ?? null,
     voided: Boolean(label.voided),
     voidedAt: label.voided_at ?? null,

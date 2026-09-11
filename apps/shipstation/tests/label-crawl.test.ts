@@ -100,7 +100,10 @@ describe('request shape', () => {
   })
 
   it('refuses an unknown stream', async () => {
-    await expect(shipstationSync(args({ streamKey: 'shipment' }))).rejects.toThrow(/unknown stream/)
+    // `label` and `shipment` are the two declared streams; anything else is a
+    // catalog/handler mismatch and must fail loudly rather than fetch something.
+    await expect(shipstationSync(args({ streamKey: 'parcel' }))).rejects.toThrow(/unknown stream/)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('refuses to guess an import window when the config has no importStart', async () => {
