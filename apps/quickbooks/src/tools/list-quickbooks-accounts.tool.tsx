@@ -26,6 +26,12 @@ export const listQuickbooksAccountsTool = defineTool({
             'The account NUMBER ("1200"), not the id. Null when the company does not use account numbers.'
           ),
         accountType: z.string().describe('Income, Expense, Bank, Accounts Receivable, etc.'),
+        accountSubType: z
+          .string()
+          .nullable()
+          .describe(
+            "QuickBooks' detail type, one rung finer than accountType, e.g. 'OtherCurrentAssets'."
+          ),
         classification: z.enum(['Asset', 'Liability', 'Equity', 'Revenue', 'Expense']),
         active: z.boolean(),
       })
@@ -39,6 +45,7 @@ export const listQuickbooksAccountsTool = defineTool({
         fullyQualifiedName: 'Income:Sales:Consulting',
         acctNum: '4010',
         accountType: 'Income',
+        accountSubType: 'SalesOfProductIncome',
         classification: 'Revenue',
         active: true,
       },
@@ -48,6 +55,7 @@ export const listQuickbooksAccountsTool = defineTool({
         fullyQualifiedName: 'Accounts Receivable',
         acctNum: null,
         accountType: 'Accounts Receivable',
+        accountSubType: 'AccountsReceivable',
         classification: 'Asset',
         active: true,
       },

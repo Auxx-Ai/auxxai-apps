@@ -3,6 +3,7 @@
 import { TextBlock } from '@auxx/sdk/client'
 import { quickbooksBlock } from './blocks/quickbooks/quickbooks.workflow'
 import { quickbooksFields } from './fields'
+import { createQuickbooksAccountTool } from './tools/create-quickbooks-account.tool'
 import { createQuickbooksCustomerTool } from './tools/create-quickbooks-customer.tool'
 import { createQuickbooksEstimateTool } from './tools/create-quickbooks-estimate.tool'
 import { createQuickbooksInvoiceTool } from './tools/create-quickbooks-invoice.tool'
@@ -136,6 +137,7 @@ export const app = {
     // Platform-called tools, not chat-agent tools - see toolsets.ts.
     getQuickbooksBalanceSheetTool,
     getQuickbooksGeneralLedgerTool,
+    createQuickbooksAccountTool,
     // Internal-only tools (no `agent` / `action` keys) — invoked via the
     // QuickBooks workflow block dispatcher (toolMap).
     quickbooksBillCreateTool,
