@@ -236,6 +236,70 @@ describe('create', () => {
     expect(shipment.ship_from.phone).toBe('555-0199')
   })
 
+  it('refuses a carrier with no service code, before the call', async () => {
+    // ShipStation validates this pair asymmetrically: POST /v2/shipments takes
+    // a carrier with no service and returns 201, then label.create refuses that
+    // same shipment. Without this guard the error lands on the NEXT node,
+    // against a shipment that already exists and cannot be patched in place.
+    const promise = executeShipment('create', {
+      shipmentCreateShipTo: COMPLETE_ADDRESS,
+      shipmentCreateShipToPhone: '555-0100',
+      shipmentCreateShipFromMode: 'warehouse',
+      shipmentCreateWarehouseId: 'se-wh-1',
+      shipmentCreateCarrierId: 'se-3891373',
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(InvalidInputError)
+    await expect(promise).rejects.toThrow(/Service code is required/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('allows a carrier WITH a service code', async () => {
+    fetchMock.mockResolvedValue(json({ has_errors: false, shipments: [RAW_SHIPMENT] }))
+
+    await executeShipment('create', {
+      shipmentCreateShipTo: COMPLETE_ADDRESS,
+      shipmentCreateShipToPhone: '555-0100',
+      shipmentCreateShipFromMode: 'warehouse',
+      shipmentCreateWarehouseId: 'se-wh-1',
+      shipmentCreateCarrierId: 'se-3891373',
+      shipmentCreateServiceCode: 'fedex_home_delivery',
+    })
+
+    const shipment = bodyOf(callAt(0).init).shipments[0]
+    expect(shipment.carrier_id).toBe('se-3891373')
+    expect(shipment.service_code).toBe('fedex_home_delivery')
+  })
+
+  it('allows NEITHER — no carrier means the label step still chooses', async () => {
+    fetchMock.mockResolvedValue(json({ has_errors: false, shipments: [RAW_SHIPMENT] }))
+
+    await executeShipment('create', {
+      shipmentCreateShipTo: COMPLETE_ADDRESS,
+      shipmentCreateShipToPhone: '555-0100',
+      shipmentCreateShipFromMode: 'warehouse',
+      shipmentCreateWarehouseId: 'se-wh-1',
+    })
+
+    const shipment = bodyOf(callAt(0).init).shipments[0]
+    expect(shipment.carrier_id).toBeUndefined()
+    expect(shipment.service_code).toBeUndefined()
+  })
+
+  it('treats a whitespace-only service code as absent', async () => {
+    await expect(
+      executeShipment('create', {
+        shipmentCreateShipTo: COMPLETE_ADDRESS,
+        shipmentCreateShipToPhone: '555-0100',
+        shipmentCreateShipFromMode: 'warehouse',
+        shipmentCreateWarehouseId: 'se-wh-1',
+        shipmentCreateCarrierId: 'se-3891373',
+        shipmentCreateServiceCode: '   ',
+      })
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('refuses warehouse mode with no warehouse chosen, before the call', async () => {
     await expect(
       executeShipment('create', {

@@ -29,6 +29,7 @@ export const shipstationToolMap = {
   'label.get': 'block_shipstation_label_get',
   'label.create': 'block_shipstation_label_create',
   'label.void': 'block_shipstation_label_void',
+  'label.cancelRefund': 'block_shipstation_label_cancel_refund',
   'label.createReturn': 'block_shipstation_label_create_return',
   'label.track': 'block_shipstation_label_track',
   // tracking

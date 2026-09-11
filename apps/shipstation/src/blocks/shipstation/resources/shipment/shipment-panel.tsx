@@ -12,6 +12,7 @@
 import type { UseWorkflowApi } from '@auxx/sdk/client'
 import listCarriers from '../../shared/list-carriers.server'
 import listWarehouses from '../../shared/list-warehouses.server'
+import { useCarrierServices } from '../../shared/use-carrier-services'
 import { usePackageTypes } from '../../shared/use-package-types'
 import { useShipstationData } from '../../shared/use-shipstation-data'
 import type { shipstationSchema } from '../../shipstation-schema'
@@ -57,8 +58,23 @@ export function ShipmentPanel({ api }: ShipmentPanelProps) {
 
   const { data: packageTypes, loading: packageTypesLoading } = usePackageTypes(describesAShipment)
 
+  // Scoped to whichever carrier THIS operation has selected — create and update
+  // are separate fields and only one of them renders at a time.
+  const selectedCarrierId = (
+    operation === 'update' ? data?.shipmentUpdateCarrierId : data?.shipmentCreateCarrierId
+  ) as string | undefined
+  const { data: services, loading: servicesLoading } = useCarrierServices(
+    selectedCarrierId,
+    describesAShipment
+  )
+
   const warehouseOptions = withLoading(warehouses, warehousesLoading, 'warehouses')
   const carrierOptions = withLoading(carriers, carriersLoading, 'carriers')
+  // No carrier chosen yet is not "loading" — it is a question the author has not
+  // answered, so say that rather than spinning forever on an empty list.
+  const serviceOptions = selectedCarrierId
+    ? withLoading(services, servicesLoading, 'services')
+    : [{ label: 'Choose a carrier first', value: '' }]
 
   return (
     <>
@@ -241,7 +257,12 @@ export function ShipmentPanel({ api }: ShipmentPanelProps) {
               />
             </VarField>
             <VarField>
-              <StringInput name="shipmentCreateServiceCode" />
+              <OptionsInput
+                name="shipmentCreateServiceCode"
+                options={serviceOptions}
+                loading={servicesLoading}
+                acceptsVariables
+              />
             </VarField>
             <VarField>
               <VarInput name="shipmentCreateShipDate" />
@@ -374,7 +395,12 @@ export function ShipmentPanel({ api }: ShipmentPanelProps) {
               />
             </VarField>
             <VarField>
-              <StringInput name="shipmentUpdateServiceCode" />
+              <OptionsInput
+                name="shipmentUpdateServiceCode"
+                options={serviceOptions}
+                loading={servicesLoading}
+                acceptsVariables
+              />
             </VarField>
             <VarField>
               <VarInput name="shipmentUpdateShipDate" />

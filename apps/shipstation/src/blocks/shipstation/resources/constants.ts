@@ -40,6 +40,7 @@ export const OPERATIONS_ALL = {
     { value: 'get', label: 'Get' },
     { value: 'create', label: 'Purchase' },
     { value: 'void', label: 'Void' },
+    { value: 'cancelRefund', label: 'Cancel Refund Request' },
     { value: 'createReturn', label: 'Create Return Label' },
     { value: 'track', label: 'Track (master)' },
   ],

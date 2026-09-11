@@ -325,6 +325,17 @@ export function LabelPanel({ api }: LabelPanelProps) {
         </Section>
       </ConditionalRender>
 
+      {/* --- Label: Cancel Refund Request --- */}
+      <ConditionalRender when={(d) => d.operation === 'cancelRefund'}>
+        <Section title="Cancel refund">
+          <VarFieldGroup>
+            <VarField>
+              <StringInput name="labelCancelRefundId" />
+            </VarField>
+          </VarFieldGroup>
+        </Section>
+      </ConditionalRender>
+
       {/* --- Label: Create Return Label --- */}
       <ConditionalRender when={(d) => d.operation === 'createReturn'}>
         <Section title="Return label">

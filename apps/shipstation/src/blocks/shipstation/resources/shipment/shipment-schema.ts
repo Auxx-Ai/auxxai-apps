@@ -180,9 +180,15 @@ export const shipmentInputs = {
     description: 'The carrier account billed for the shipping charges.',
     options: [] as { value: string; label: string }[],
   }),
-  shipmentCreateServiceCode: Workflow.string({
+  // A select, not a string, and its options are the chosen carrier's services
+  // (`useCarrierServices`). Left as free text it read as optional — "leave empty
+  // to decide later" — which is only true until something tries to buy a label:
+  // `POST /v2/shipments` takes a carrier with no service, `label.create` then
+  // refuses that shipment outright. `buildCreateBody` enforces the pair.
+  shipmentCreateServiceCode: Workflow.select({
     label: 'Service code',
-    description: 'Carrier service, e.g. usps_priority_mail. Leave empty to decide later.',
+    description: "The carrier's service level. Required once a carrier is chosen.",
+    options: [] as { value: string; label: string }[],
     acceptsVariables: true,
   }),
   shipmentCreateExternalShipmentId: Workflow.string({
@@ -233,8 +239,10 @@ export const shipmentInputs = {
     label: 'Carrier',
     options: [] as { value: string; label: string }[],
   }),
-  shipmentUpdateServiceCode: Workflow.string({
+  shipmentUpdateServiceCode: Workflow.select({
     label: 'Service code',
+    description: "The carrier's service level.",
+    options: [] as { value: string; label: string }[],
     acceptsVariables: true,
   }),
   shipmentUpdateExternalShipmentId: Workflow.string({
