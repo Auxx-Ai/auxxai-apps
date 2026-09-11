@@ -1,0 +1,4 @@
+node_modules
+graphql.d.ts
+.auxx
+.DS_Store

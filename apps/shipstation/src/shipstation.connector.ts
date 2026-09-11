@@ -1,0 +1,513 @@
+// src/shipstation.connector.ts
+//
+// The single ShipStation data connector. ONE stream, `label`, whose every record
+// is one ShipStation LABEL, fanned out onto two NATIVE hidden entities:
+//   • the label root  -> contributing native `shipment`
+//   • `packages[]`    -> contributing native `parcel`, hung off the shipment
+//                        through the system edge `system:shipment_parcels`.
+//
+// Like Shopify, this app declares NO entities at all. Every column below is
+// either a native system attribute (`target`) or a `defineFields` app field
+// (`appField`, see `fields.ts`), which is namespaced by app slug and therefore
+// cannot collide with another app's id for the same row.
+//
+// ⚠️ This SUPERSEDES build plan §4 and its `shipments` / `labels` / `packages`
+// app-owned entities, and the illustrative mapping block in §5 that used them.
+// The replacement is `plans/apps/shipstation/shared-shipment-entities-proposal.md`:
+// two native, hidden (`isVisible: false`) entity kinds, `shipment` and `parcel`,
+// landed by entity migration `149-shipment-parcel` and admitted to the SDK's
+// `EntityRefKind` union, that SEVERAL apps write into. There is deliberately no
+// `label` entity: a label is a carrier artifact, not a universal concept, so a
+// void-and-reprint becomes `parcel_voided` / `parcel_voided_at` plus new parcel
+// rows, and the relabel history survives without one (proposal §6).
+//
+// ── Why native, and the ownership split that makes it safe ───────────────────
+// Three apps know different things about the same box. ShipStation knows what
+// was dispatched (which boxes belong together, weights, dimensions, void and
+// relabel history); FedEx and UPS know where each box is (status, scans,
+// delivery); Shopify knows which order it belongs to. App-owned entities would
+// give each of them its own table with no way to join a ShipStation box to the
+// FedEx status of that same box (proposal §2).
+//
+// ShipStation owns STRUCTURE, the carrier apps own STATUS. Those two field sets
+// are disjoint on the same row, and a parcel has exactly one carrier, so FedEx
+// and UPS write disjoint sets of ROWS and never touch each other (proposal §5).
+// That is what makes multi-app contribution safe here, and it is load-bearing
+// rather than a convention. See the `mergeStrategy` note on the shipment mapping
+// for the rule any later contributor has to follow.
+//
+// ── What is NOT proved ───────────────────────────────────────────────────────
+// The live probe (`plans/apps/shipstation/api-probe-2026-09-10.md`) proved the
+// shipment delta query is ACCEPTED (HTTP 200 with plausible rows). It did NOT
+// prove boundary inclusivity, tie handling at a window edge, pagination
+// stability under concurrent updates, or that a label void bumps its parent
+// shipment's `modified_at`. Nothing in this file assumes any of those, and the
+// snapshot sync mode below is the direct consequence.
+//
+// ⚠️ Any field whose projected value is an ARRAY or an OBJECT is silently
+// dropped by the fan-out before it reaches the field-value layer, unless it
+// targets a JSON field. Every binding here is a scalar.
+
+import { defineDataConnector } from '@auxx/sdk/data-connectors'
+import { z } from '@auxx/sdk/tools'
+import shipstationSync from './shipstation.connector.server'
+
+export const shipstationConnector = defineDataConnector({
+  id: 'shipstation',
+  label: 'ShipStation',
+  description:
+    'Sync shipments and every package tracking number from ShipStation, including voided and re-printed labels.',
+  requiresConnection: true,
+  iconKey: 'package',
+  config: z.object({
+    // The FIXED start of the import window, and the only reason this connector
+    // can use a snapshot mode at all (build plan §5). It is a floor that never
+    // moves: a cutoff that crept forward would silently abandon labels already
+    // imported, and a void arriving on one of them would then never be seen.
+    // The provider reported 4,290 labels with the oldest observed at
+    // 2025-10-20, so this bounds the crawl to history the merchant cares about
+    // rather than to whatever the API still serves.
+    // `z.iso.datetime()`, not a bare `z.string()`. It emits
+    // `format: 'date-time'` into the extracted JSON Schema, which is what lets
+    // the platform render a datetime picker instead of a free-text box: a
+    // required text field with no validation accepts "last week" at save time
+    // and only fails when the sync runs.
+    importStart: z.iso
+      .datetime()
+      .describe(
+        'Import labels created on or after this date. Fixed, not a moving cutoff: every run re-reads this whole window.'
+      ),
+  }),
+  // No connector-level `webhookTrigger`. `GET /v2/environment/webhooks` returned
+  // an empty list on the probe and no V2 event contract, signature scheme or
+  // delivery behaviour was verified. V1 `SHIP_NOTIFY` must not be assumed to
+  // work with a V2 key (build plan §5), so scheduled sync is the only driver
+  // until that is proved. Webhooks are an acceleration, never the truth source.
+  streams: [
+    // ── label ───────────────────────────────────────────────────────────────
+    // One record per ShipStation LABEL. The label, not the shipment, is the
+    // fetch grain because the label is the only object that carries package
+    // tracking numbers: the shipment's own package definitions have distinct
+    // `shipment_package_id`s, the SAME `package_id` on every row, and NO
+    // tracking number at all (probe §2). Never join the two arrays on
+    // `package_id` or on array position.
+    {
+      key: 'label',
+      // 🛑 SNAPSHOT, over the fixed `importStart` window, and this is a
+      // correctness decision rather than a default (build plan §5):
+      //
+      //   1. `created_at_start` / `created_at_end` are the label filters that
+      //      exist. There is no proved label modified-time delta.
+      //   2. A new-labels-only watermark would therefore never see a VOID on an
+      //      old label, which is the single most important state change this
+      //      connector exists to carry. The probe found 117 voided labels in the
+      //      account; a delta keyed on creation time sees none of them change.
+      //   3. Whether a label change advances its parent shipment's
+      //      `modified_at` is explicitly unproved, so a shipment-level delta
+      //      cannot stand in for one either.
+      //
+      // Re-reading the configured history every run is the simple correctness
+      // baseline. Optimize only after measuring it AND validating a real change
+      // feed, not before.
+      //
+      // ── When you DO come to optimize this ────────────────────────────────
+      // A docs check on 2026-09-10 settled what is and is not available, and
+      // the build plan §5 subsection "The delta that IS available" carries the
+      // table. The two things to know before you start:
+      //
+      //   • `sort_by=modified_at` is accepted, but `modified_at` is NOT a field
+      //     the label response returns. So the obvious "sort by modified_at
+      //     desc, stop at the watermark" delta cannot be written: the stop
+      //     value is one the API sorts on and never hands back. Do not reach
+      //     for it.
+      //   • `voided_at` IS returned AND is a legal `sort_by`. So the void half
+      //     can be a true delta: `label_status=voided`, `sort_by=voided_at`,
+      //     desc, stop at the first `voided_at` at or before the watermark.
+      //     Paired with a `created_at_start` watermark for new labels, that
+      //     covers both reasons this is a snapshot, at which point point 2
+      //     above no longer applies and this can become `incremental`.
+      //
+      // The residual gap would be a label change that is neither a creation nor
+      // a void, principally `tracking_status` drift. That is already an
+      // accepted loss: probe §3 disproved label `tracking_status` as evidence
+      // of where any box is, and per-box status belongs to the carrier apps.
+      //
+      // Owner's call 2026-09-10: measure this snapshot on real data first.
+      syncMode: 'snapshot',
+      mappings: [
+        // ── label root -> native shipment ────────────────────────────────────
+        {
+          rootPath: '',
+          target: { entityKind: 'shipment' },
+          // 🛑 `ignore`, NEVER `archive` or `mark_deleted` (build plan §5). A
+          // filtered or partial scan is not deletion evidence: this crawl is
+          // bounded by `importStart`, so "not returned" legitimately means
+          // "outside the window", "on a page we have not reached yet", or
+          // "expired from the provider's visible history" far more often than
+          // it means "gone". Voided labels are INCLUDED in the crawl and their
+          // void state is mapped explicitly onto the parcels below, so absence
+          // from a page is never read as a void. There is exactly one way a
+          // parcel becomes voided here, and it is an explicit field.
+          orphanBehavior: 'ignore',
+          // ── mergeStrategy: none, and here is why ──────────────────────────
+          // Every binding below takes the default `overwrite`, deliberately.
+          // ShipStation owns structure and the carrier apps own status, and the
+          // two sets are disjoint (proposal §5), so no field on either def has
+          // two `overwrite` writers and the mutual-drift ping-pong in proposal
+          // §4 cannot start. Nothing needs `fill_blank` to protect it, because
+          // nothing else writes it.
+          //
+          // 🛑 THE RULE FOR THE NEXT CONTRIBUTOR: anything that later writes a
+          // field this connector owns MUST take `fill_blank`,
+          // `connector_owned_only` or `ignore`, or route its value to its own
+          // namespaced app field instead. Two `overwrite` writers on one field
+          // each see the other's `FieldValue.managedByConnectorId` as drift, so
+          // the content-hash skip never fires and both rewrite and re-stamp the
+          // cell on every run, forever. Nothing errors. Nothing logs. The only
+          // symptom is churn.
+          fields: [
+            // Identity. `shipmentId` is declared `identity: true` in fields.ts,
+            // so this binding auto-stamps `identityRole: { kind: 'externalId' }`
+            // and the DESIGNATED external id wins over the record-level
+            // `externalId` hint (which is the LABEL id) for this mapping.
+            //
+            // ⚠️ That is the mechanism behind the two-labels-one-shipment case
+            // below: both records designate the same `shipmentId`, so both land
+            // on the same shipment row.
+            { sourcePath: 'shipmentId', appField: 'shipmentId' },
+            // Per-app external ids stay in APP fields (proposal §6). They are
+            // deliberately not native columns: a native id column would have to
+            // be claimed by one app, and it would still be useless as a
+            // cross-app join key, because `match` cannot bind an `appField` at
+            // all (proposal §4).
+            { sourcePath: 'storeId', appField: 'storeId' },
+            // ⚠️ `externalShipmentId` looks like two commerce ids joined by a
+            // hyphen (`7489518207152-8681743417520`) and its semantics are
+            // UNVERIFIED. Do not parse it. A fulfillment order id and a
+            // fulfillment id are different identifiers, and one sample is not a
+            // contract (probe §2, build plan §6 step 2). Carried raw so a later
+            // resolver has the original string to validate against Shopify.
+            { sourcePath: 'externalShipmentId', appField: 'externalShipmentId' },
+            // ⚠️ Named `external_order_id` by the provider, but in the probe's
+            // sample it equalled the shipment ITEM's `external_order_item_id`,
+            // not an order id. A verified mismatch with the naive reading of
+            // the field name, and not yet proof that it equals a Shopify line
+            // id either. Same rule: carried raw, never parsed.
+            { sourcePath: 'externalOrderId', appField: 'externalOrderId' },
+
+            // Native structural columns. ShipStation is the sole writer.
+            { sourcePath: 'shipmentNumber', target: 'shipment_number' },
+            { sourcePath: 'carrier', target: 'shipment_carrier' },
+            { sourcePath: 'service', target: 'shipment_service' },
+            // ⚠️ The shipment and its label DISAGREE on this date: the probe saw
+            // `2026-09-10T00:00:00Z` on the shipment against
+            // `2026-09-10T07:00:00Z` on the label, and did not establish the
+            // timezone contract. The server emits the LABEL's value, since the
+            // label is this stream's grain. This never replaces the accounting
+            // fulfillment date on the order, which is a different fact with a
+            // different writer.
+            { sourcePath: 'shipDate', target: 'shipment_ship_date' },
+            // Multi-box is the common case, not the edge: 34 of the 50 labels
+            // sampled carried more than one package, up to ten (probe §1).
+            { sourcePath: 'parcelCount', target: 'shipment_parcel_count' },
+            // ⚠️ ALREADY NORMALIZED by the server, into the platform's
+            // `ShipmentStatus` enum, and already rolled up over the label's
+            // active parcels. A `ConnectorMapping` field is a `sourcePath` to
+            // `target` binding with NO transform hook, so normalization cannot
+            // happen here and has to happen in `shipstation.connector.server.ts`
+            // (proposal §8d). Two rules live with that function, not with this
+            // mapping: enumerate the provider's real values from the live API
+            // rather than from vendor documentation, and map anything
+            // unrecognized to `unknown` rather than to a guess. That is what the
+            // explicit `unknown` case in the enum is for.
+            //
+            // The provider's own `shipment_status` (the probe observed
+            // `label_purchased`) is a label-lifecycle value, not a transit one,
+            // which is precisely why it is not bound through raw.
+            { sourcePath: 'shipmentStatus', target: 'shipment_status' },
+            // The shipment's display name. Denormalized off the active label's
+            // master parcel by the server, because `computeDisplayValue` reads a
+            // field on the shipment ROW and a tracking number otherwise lives
+            // only on a `parcel`. `shipment_number` cannot do this job: it is
+            // not on the label payload at all.
+            //
+            // 🛑 No `match`, for the same reason as `parcel_tracking_number` and
+            // one more: this value CHANGES when a label is voided and reprinted.
+            { sourcePath: 'masterTrackingNumber', target: 'shipment_master_tracking_number' },
+
+            // NOT bound here, and each for a reason:
+            //
+            // • `labelVoided` / `labelVoidedAt` are LABEL lifecycle, and a
+            //   shipment can carry two labels at once (see below), so there is
+            //   no honest shipment-level answer. The void lands per box, on the
+            //   parcel rows, where the fact actually is.
+            // • `shipment_order` is declared on the registry def but cannot be
+            //   populated by a reference mapping from here: `linkMode:
+            //   'reference'` cannot cross connectors, because `findItemByDef`
+            //   filters `dataConnectorId` with hard equality, so a ShipStation
+            //   reference to a Shopify-created order resolves nothing and is
+            //   pushed back onto `stillPending` and retried every run forever
+            //   (proposal §4). Populating it needs the platform-side resolver in
+            //   build plan §6. It does not block anything here: the parcel data
+            //   is useful before any order is matched.
+          ],
+        },
+
+        // ── packages[] -> native parcel ──────────────────────────────────────
+        // One physical box with one tracking number, which is the grain a
+        // customer actually asks about. Shopify has no parcel concept at all
+        // (`Fulfillment.trackingInfo` is a bare list of `{ company, number, url
+        // }` with no per-box identity, sequence, weight or status), so this is
+        // the gap ShipStation fills and the reason the box is a row rather than
+        // a repeated column (proposal §6).
+        //
+        // The parent is derived from the longest boundary prefix, which is the
+        // root mapping above, so no `parentRootPath` is needed. The edge is a
+        // pre-existing SYSTEM relationship field on the shipment def, so nothing
+        // is provisioned for it; the resolver resolves the key against the
+        // PARENT def, which is why it is `system:shipment_parcels` (on
+        // `shipment`) and not `system:parcel_shipment`.
+        {
+          rootPath: 'packages[]',
+          relationshipFieldKey: 'system:shipment_parcels',
+          target: { entityKind: 'parcel' },
+          // 🛑 `ignore`, for the same reason as the root mapping, plus one of
+          // its own: a relabel MINTS new parcel rows and leaves the old ones
+          // standing as voided. That is how relabel history survives without a
+          // `label` entity, and archiving or flagging the superseded boxes on
+          // the grounds that a later page did not return them would destroy
+          // exactly the history this design keeps on purpose.
+          orphanBehavior: 'ignore',
+          fields: [
+            // Identity: `${labelId}:${packageId}`, e.g.
+            // `se-197559213:158414020`. `labelPackageId` is declared
+            // `identity: true` in fields.ts, so this auto-stamps the external
+            // id role for the subtree.
+            //
+            // ⚠️ It is the LABEL package id, never the SHIPMENT package id.
+            // The two are different keyspaces: `GET /v2/shipments/<id>` returns
+            // three package definitions with distinct `shipment_package_id`s,
+            // the same `package_id: 'se-3'` on every one of them, and no
+            // tracking number; `GET /v2/labels/<id>` returns the numeric
+            // label-package ids and the tracking numbers (probe §2).
+            { sourcePath: 'packageKey', appField: 'labelPackageId' },
+            // Which label minted this box. Kept because the parcel outlives its
+            // label: a voided label's boxes stay as voided parcel rows, and
+            // this is what says which print they came from.
+            { sourcePath: 'labelId', appField: 'labelId' },
+
+            // 🛑🛑 THE MOST IMPORTANT LINE IN THIS FILE: `parcel_tracking_number`
+            // gets NO `match`, and adding one would be a data-corruption bug.
+            //
+            // ShipStation MINTS parcels. Its parcel identity is the
+            // `labelPackageId` external id directly above, which is its own and
+            // is never reused. Only the CARRIER apps (FedEx and UPS, neither of
+            // which has a connector yet) match on the tracking number, and they
+            // mint nothing: they match an existing row and write status onto it.
+            //
+            // Why a `match: true` here would be actively harmful, in order:
+            //
+            //   1. Carriers DO reuse tracking numbers after long intervals. The
+            //      FedEx app already accepts `shipDateBegin` / `shipDateEnd`
+            //      specifically to disambiguate reused ones. Tracking numbers
+            //      are treated as unique by owner's decision (proposal §8b) and
+            //      that decision was made on the basis that ShipStation is
+            //      UNAFFECTED, precisely because it does not match on the
+            //      number. This line is what makes that true.
+            //   2. Match candidates are OR'd, not ANDed (proposal §8a, settled
+            //      by reading `lookup-entities-by-field-value.ts`; the
+            //      `IdentityRole` docblock claiming otherwise is wrong). So an
+            //      extra match key only ever WIDENS a match. It is not a guard,
+            //      it is another independent chance to collide, and a composite
+            //      key such as "this number AND this ship date" is unavailable
+            //      to a connector at all.
+            //   3. The concrete failure: a new box whose number an old, long
+            //      since delivered parcel happens to reuse would MERGE onto that
+            //      old row, overwriting its sequence, master flag, weight,
+            //      dimensions and void state with this label's. The structural
+            //      history of both shipments would be silently wrong.
+            //   4. Ambiguity is not an error on this path. `lookupByField` runs
+            //      under `onAmbiguous: 'first'`, so a collision does not fail
+            //      the sync loudly; it takes the first hit and files a
+            //      `DuplicateSuggestion`.
+            //
+            // The field is NATIVE rather than an app field only so the carrier
+            // apps can match on it: `buildContributingMatchBindings` binds a
+            // native `target` column and never an `appField`.
+            { sourcePath: 'trackingNumber', target: 'parcel_tracking_number' },
+
+            // ⚠️ Use `sequence` for presentation, never array position. The
+            // probe's three-box label returned its packages in sequence order
+            // 3, 2, 1, and the MASTER (sequence 1) was returned LAST. There were
+            // three distinct tracking numbers, not a master plus three children.
+            { sourcePath: 'sequence', target: 'parcel_sequence' },
+            { sourcePath: 'isMaster', target: 'parcel_is_master' },
+
+            // ⚠️ ShipStation reports weight in OUNCES (the three-box label
+            // reported 1280, 464 and 704). The unit is not decorative and the
+            // number is meaningless without it: a reader who assumes pounds is
+            // off by a factor of sixteen.
+            { sourcePath: 'weight', target: 'parcel_weight' },
+            { sourcePath: 'weightUnit', target: 'parcel_weight_unit' },
+            // Inches in the probe (26 x 50 x 4, 96 x 4 x 4, 71 x 6 x 13), but
+            // carried rather than assumed, same as the weight unit.
+            { sourcePath: 'length', target: 'parcel_length' },
+            { sourcePath: 'width', target: 'parcel_width' },
+            { sourcePath: 'height', target: 'parcel_height' },
+            { sourcePath: 'dimUnit', target: 'parcel_dim_unit' },
+
+            // Label lifecycle, NOT transit state, and the two must be preserved
+            // independently: the probe found VOIDED labels still carrying a
+            // `tracking_status` of `in_transit`, so a carrier's status says
+            // nothing about whether the label is live (probe §3). A voided
+            // parcel is excluded from the shipment status roll-up entirely.
+            //
+            // This is also the reason `orphanBehavior` above can be `ignore`
+            // without losing anything: a void is an explicit mapped field, so
+            // the crawl never has to infer one from absence.
+            { sourcePath: 'voided', target: 'parcel_voided' },
+            { sourcePath: 'voidedAt', target: 'parcel_voided_at' },
+
+            // ⚠️ SOURCED FROM THE PACKAGE, WRITTEN BY THE LABEL. The provider's
+            // raw, unnormalized tracking status is a LABEL-level value, but a
+            // field's `sourcePath` is strictly relative to its mapping's
+            // `rootPath` (the SDK contract, and `joinSourcePath` in
+            // `app-catalog.ts` simply concatenates the two), so a parent-scoped
+            // path is not reachable from inside `packages[]`. The server
+            // therefore COPIES the label's `providerTrackingStatus` onto every
+            // package it emits, and this binding reads that copy.
+            //
+            // It is kept raw and in an APP field on purpose, beside the
+            // normalized `parcel_status` that the carrier apps will own. That
+            // keeps the normalization auditable, and it keeps ShipStation out of
+            // a field it does not own: `parcel_status` is the carrier's, and
+            // writing it from here would put two `overwrite` writers on one cell
+            // the moment FedEx or UPS ships.
+            //
+            // ⚠️ It is also not evidence of per-box delivery. The three-box
+            // label read `in_transit` while `/v2/labels/<id>/track` returned
+            // `NY` / `Not Yet In System` with null ship and delivery dates, for
+            // the MASTER number only. Never copy a master's status onto every
+            // package.
+            { sourcePath: 'providerTrackingStatus', appField: 'providerTrackingStatus' },
+          ],
+        },
+      ],
+
+      // ── exampleRecord ─────────────────────────────────────────────────────
+      // The probe's real three-box case (`plans/apps/shipstation/api-probe-2026-09-10.md`
+      // §2), reproduced rather than invented, because the two things most likely
+      // to be got wrong are both visible in it: the packages arrive in sequence
+      // order 3, 2, 1, and the MASTER is the LAST element of the array. Tracking
+      // numbers are obviously fake; the probe only ever printed SHA-256
+      // fingerprints and no real number was recorded anywhere.
+      //
+      // ⚠️ THE OTHER FIXTURE, not representable in a single example record: a
+      // VOID AND REPLACEMENT (probe §3). Shipment `se-426507931` carries TWO
+      // labels, `se-196479007` (created 2026-09-08T22:50:32.873Z, voided
+      // 2026-09-08T22:52:25.177Z) and `se-196479653` (created
+      // 2026-09-08T22:52:48.923Z, active). They share a shipment id AND an
+      // external shipment id, with different tracking numbers.
+      //
+      // That produces TWO records on this stream, and both designate the SAME
+      // `shipmentId`, so both land on the SAME shipment row while each
+      // contributes its own parcels (the voided label's boxes as voided parcels,
+      // the replacement's as active ones). This is what the entity split is for:
+      // shipment identity and label identity are not the same thing.
+      //
+      // 🛑 The consequence, and the reason it matters here: a voided label's
+      // page would otherwise rewrite the shipment's structural fields, and which
+      // of the two wins within one run is ordering-dependent. The server
+      // therefore emits shipment structure ONLY from non-voided labels. The
+      // voided label still emits its parcels, so the void history is kept.
+      exampleRecord: {
+        labelId: 'se-197559213',
+        shipmentId: 'se-428778294',
+        shipmentNumber: '14530',
+        storeId: 'se-2943015',
+        externalShipmentId: '7489518207152-8681743417520',
+        externalOrderId: '17954843328688',
+        carrier: 'fedex',
+        service: 'fedex_home_delivery',
+        // The LABEL's ship date. The shipment's own was 2026-09-10T00:00:00Z.
+        shipDate: '2026-09-10T07:00:00.000Z',
+        parcelCount: 3,
+        // Normalized into `ShipmentStatus` by the server and rolled up over the
+        // ACTIVE parcels, never bound raw.
+        //
+        // 🛑 `label_created`, NOT the `in_transit` sitting in
+        // `providerTrackingStatus` right below it. That difference is the whole
+        // point of normalizing in the server (§8d). The label's own
+        // `tracking_status` is not evidence of where any box is: probe §3 found
+        // it reading `in_transit` on this label while `/labels/{id}/track`
+        // returned `Not Yet In System`, and reading `in_transit` on VOIDED
+        // labels too. Per-box carrier status has no writer until FedEx and UPS
+        // get connectors, so the only thing this shipment can honestly claim is
+        // that its label exists.
+        shipmentStatus: 'label_created',
+        // The master parcel below (sequence 1), copied up so the shipment has a name.
+        masterTrackingNumber: 'FAKE0000000000000003',
+        // The provider's raw value, same run, kept for audit. Deliberately
+        // disagrees with `shipmentStatus` above.
+        providerTrackingStatus: 'in_transit',
+        labelVoided: false,
+        labelVoidedAt: null,
+        packages: [
+          {
+            packageKey: 'se-197559213:158414018',
+            labelId: 'se-197559213',
+            trackingNumber: 'EXAMPLE-TRACKING-0003',
+            sequence: 3,
+            isMaster: false,
+            weight: 1280,
+            weightUnit: 'ounce',
+            length: 26,
+            width: 50,
+            height: 4,
+            dimUnit: 'inch',
+            voided: false,
+            voidedAt: null,
+            // Copied down from the label by the server, see the binding above.
+            providerTrackingStatus: 'in_transit',
+          },
+          {
+            packageKey: 'se-197559213:158414019',
+            labelId: 'se-197559213',
+            trackingNumber: 'EXAMPLE-TRACKING-0002',
+            sequence: 2,
+            isMaster: false,
+            weight: 464,
+            weightUnit: 'ounce',
+            length: 96,
+            width: 4,
+            height: 4,
+            dimUnit: 'inch',
+            voided: false,
+            voidedAt: null,
+            providerTrackingStatus: 'in_transit',
+          },
+          // ⚠️ The MASTER, sequence 1, returned LAST by the provider. This
+          // ordering is the whole point of the example: index zero is not the
+          // master, and nothing may assume it is.
+          {
+            packageKey: 'se-197559213:158414020',
+            labelId: 'se-197559213',
+            trackingNumber: 'EXAMPLE-TRACKING-0001',
+            sequence: 1,
+            isMaster: true,
+            weight: 704,
+            weightUnit: 'ounce',
+            length: 71,
+            width: 6,
+            height: 13,
+            dimUnit: 'inch',
+            voided: false,
+            voidedAt: null,
+            providerTrackingStatus: 'in_transit',
+          },
+        ],
+      },
+    },
+  ],
+  execute: shipstationSync,
+})
