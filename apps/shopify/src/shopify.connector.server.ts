@@ -32,6 +32,16 @@
 // period cut possible. `shipmentCount` is the honesty column: where it is 1 the
 // derived dates are exact, and where it is >1 the close job knows to look closer.
 //
+// The `order` projection also fans out `fulfillments[]` (each with its own
+// nested `line_items[]`) into the native `fulfillment` / `fulfillment_line`
+// entities (money plan 55, `plans/money/tasks/55-shipment-lines.md` §5). This
+// is a SEPARATE walk from `deriveFulfillments` above: that rollup still feeds
+// the order/line-level summary fields (kept - other code reads them, and
+// retiring them is its own cleanup, 55 §5), while `projectFulfillments` emits
+// the full per-dispatch, per-line grain `deriveFulfillments` collapses away.
+// Cancelled fulfillments ARE emitted as records here (never filtered, unlike
+// `deriveFulfillments`'s rollup) - see `projectFulfillments`'s docblock.
+//
 // The `order` projection also fans out `refunds[]` (each with its own nested
 // `refund_line_items[]`) and `tax_lines[]` (money plan 47/48, accounting plan
 // 10) with the same `rootPath` pattern `line_items[]` uses. A Shopify refund
@@ -557,6 +567,131 @@ function deriveFulfillments(o: RawOrder): OrderFulfillmentDerivation {
 }
 
 /**
+ * One `fulfillment_line` as the `fulfillments[].line_items[]` fan-out sees it
+ * (money plan 55 §5). `id` stays snake_case-shaped (a bare `id`) ON PURPOSE:
+ * that exact literal is also a reference mapping's `sourcePath` in
+ * `shopify.connector.ts`, the same discipline `line_item_id` follows on
+ * `ProjectedCreditMemoLine` above.
+ */
+interface ProjectedFulfillmentLine {
+  shopifyFulfillmentLineId: string | null
+  quantity: number | null
+  /** The ORDER line item id this fulfillment line shipped units of - REST's
+   *  `RawFulfillmentLine.id` (`:439`), read here for the `.id` reference
+   *  mapping to `line_item`, never for identity (see below). */
+  id: string | null
+}
+
+/**
+ * Project one line inside a fulfillment for the `fulfillments[].line_items[]`
+ * fan-out.
+ *
+ * 🛑 IDENTITY IS SYNTHESISED. REST gives a fulfillment line no id of its own:
+ * `RawFulfillmentLine.id` (`:439`) is the ORDER line item's id, so binding it
+ * directly as identity would collide every fulfillment that ships units of
+ * the same order line - exactly the (fulfillment, line) grain this feature
+ * exists to keep. `${fulfillmentId}:${lineItemId}` is unique per dispatch per
+ * line and follows the SAME precedent `projectTaxLine` set for a Shopify tax
+ * line, which also carries no id (`${orderId}:${title}`) - stronger here,
+ * since both halves of this key are real Shopify ids rather than a title
+ * string (money plan 55 §5's "Identity" note).
+ */
+function projectFulfillmentLine(
+  fulfillmentId: string | null,
+  li: RawFulfillmentLine
+): ProjectedFulfillmentLine {
+  const lineItemId = li.id != null ? String(li.id) : null
+  return {
+    shopifyFulfillmentLineId:
+      fulfillmentId != null && lineItemId != null ? `${fulfillmentId}:${lineItemId}` : null,
+    quantity: typeof li.quantity === 'number' ? li.quantity : null,
+    id: lineItemId,
+  }
+}
+
+/**
+ * One `fulfillment` as the `fulfillments[]` fan-out sees it (money plan 55
+ * §5), nested `line_items[]` for the child fan-out beneath it.
+ */
+interface ProjectedFulfillment {
+  shopifyFulfillmentId: string | null
+  name: string | null
+  shippedAt: string | null
+  status: string | null
+  sequence: number
+  cancelledAt: string | null
+  trackingNumber: string | null
+  trackingCompany: string | null
+  trackingUrl: string | null
+  line_items: ProjectedFulfillmentLine[]
+}
+
+/**
+ * Project `order.fulfillments[]` into the fan-out `fulfillments[]` /
+ * `fulfillments[].line_items[]` records the `fulfillment` / `fulfillment_line`
+ * entities are built from (money plan 55 §5). This REPLACES what
+ * `deriveFulfillments` used to throw away: every `(fulfillment, line)` tuple
+ * lands as a record instead of being collapsed into a rollup.
+ *
+ * 🛑 **Cancelled fulfillments are emitted, not filtered** - the opposite of
+ * `deriveFulfillments`, which still excludes them from the order/line rollup
+ * it feeds (that rollup is a summary of what SHIPPED; this is the ledger of
+ * what Shopify reported, full stop). A vanished record is indistinguishable
+ * from one auxx never saw, and [50]'s inventory-relief netting reads
+ * `fulfillment_line_quantity - quantity_relieved` per line: relief has to see
+ * a cancelled fulfillment's lines to reverse against them (55 §5, §9.2).
+ * `fulfillment_status: 'cancelled'` is what tells a reader, and a consumer, apart.
+ *
+ * `sequence` is 1-based, assigned by `created_at` ascending across EVERY
+ * fulfillment INCLUDING cancelled ones - Shopify id ascending breaks a tie on
+ * one timestamp. Numbering is not scoped to `live[]`-only on purpose: the full
+ * fulfillments array is re-read and re-projected on every sync, so folding
+ * cancelled fulfillments into the same ascending counter gives every record a
+ * stable, deterministic sequence with no need to remember what was assigned
+ * last run. Excluding cancelled ones from the count would make a
+ * fulfillment's number depend on which OTHER fulfillments on the order happen
+ * to be cancelled - a worse property for a number the poster's doc numbers
+ * key on (55 §3).
+ */
+function projectFulfillments(o: RawOrder): ProjectedFulfillment[] {
+  const ordered = [...(o.fulfillments ?? [])].sort((a, b) => {
+    const aMs = a.created_at ? Date.parse(a.created_at) : Number.POSITIVE_INFINITY
+    const bMs = b.created_at ? Date.parse(b.created_at) : Number.POSITIVE_INFINITY
+    if (aMs !== bMs) return aMs - bMs
+    return (a.id ?? 0) - (b.id ?? 0)
+  })
+
+  return ordered.map((f, index) => {
+    const fulfillmentId = f.id != null ? String(f.id) : null
+    const cancelled = f.status === 'cancelled'
+    return {
+      shopifyFulfillmentId: fulfillmentId,
+      name: f.name,
+      // The SHIP date, NEVER `updated_at` - `RawFulfillment`'s own docblock
+      // says why: `updated_at` moves on every carrier tracking scan.
+      shippedAt: f.created_at ?? null,
+      status: f.status,
+      sequence: index + 1,
+      // Shopify's Fulfillment resource carries NO `cancelled_at` field at
+      // all - `status` is the only signal it gives. `updated_at` is the best
+      // available proxy: a cancelled fulfillment does not change again after
+      // it is cancelled, so its last mutation IS the cancellation. `created_at`
+      // would be wrong twice over: that is the SHIP date (see `shippedAt`
+      // above), and it necessarily predates the cancellation.
+      cancelledAt: cancelled ? (f.updated_at ?? null) : null,
+      trackingNumber: f.tracking_number ?? null,
+      trackingCompany: f.tracking_company ?? null,
+      // The SINGULAR `tracking_url` field, never REST's `tracking_urls[]`
+      // sibling: an array-shaped source value is silently dropped by the
+      // fan-out (file header). Same discipline for `tracking_number` above
+      // against `tracking_numbers[]`.
+      trackingUrl: f.tracking_url ?? null,
+      line_items: (f.line_items ?? []).map((li) => projectFulfillmentLine(fulfillmentId, li)),
+    }
+  })
+}
+
+/**
  * One money movement on a refund (`refund.transactions[]`). `kind` is
  * `refund | void | sale | authorization | capture`; `status` is
  * `success | pending | failure | error`.
@@ -1012,6 +1147,16 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
           trackingNumber: derivation.tracking_number,
         }
       }),
+      // Raw array: the platform fans each element out per the `fulfillments[]`
+      // mapping into the native `fulfillment` entity, and each element's
+      // nested `line_items[]` out again into `fulfillment_line` beneath it
+      // (money plan 55 §5). Cancelled fulfillments ARE included - see
+      // `projectFulfillments`'s docblock. Re-delivered in full on every sync
+      // and keyed on Shopify's stable `fulfillment.id` (or the synthesised
+      // `${fulfillmentId}:${lineItemId}` for a line), the same idempotency-
+      // for-free shape `refunds[]` below already relies on: nothing here is
+      // append-only, so re-ingest just rewrites the same records.
+      fulfillments: projectFulfillments(o),
       // Raw array: the platform fans each element out per the `refunds[]`
       // mapping into a native channel `credit_memo`, and each element's nested
       // `refund_line_items[]` (the provider's lines plus the synthetic remainder

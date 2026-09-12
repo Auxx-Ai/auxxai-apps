@@ -78,6 +78,24 @@ import { defineFields } from '@auxx/sdk/fields'
  *   is SYNTHETIC (`${refund.id}:adjustment`) because Shopify has no row for it.
  * - `shopifyTaxLineKey` — SYNTHETIC, and the one field here that is not a
  *   provider id.
+ *
+ * Fulfillment / fulfillment-line fields (money plan
+ * `plans/money/tasks/55-shipment-lines.md` §5): the order stream fans
+ * `fulfillments[]` and `fulfillments[].line_items[]` out onto the native
+ * `fulfillment` / `fulfillment_line` entities, replacing the old collapse-to-
+ * summary `deriveFulfillments` rollup (55 §1.1). Every other value on a
+ * fulfillment or fulfillment line is a native system attribute (55 §3), so
+ * identity is the only thing this app owns here too:
+ *
+ * - `shopifyFulfillmentId` - Shopify's own `fulfillment.id`, mirrored to
+ *   `RecordIdentity`. Stable for the life of the order: a fulfillment is
+ *   never deleted at the source, only transitioned to `cancelled`.
+ * - `shopifyFulfillmentLineId` - SYNTHETIC. REST's `fulfillment.line_items[]`
+ *   carries no id of its own (`RawFulfillmentLine.id` is the ORDER line
+ *   item's id, not a per-fulfillment-line id), so the projection composes
+ *   `${fulfillmentId}:${lineItemId}` - the same synthesis
+ *   `shopifyTaxLineKey` uses for a Shopify tax line, which also ships no id
+ *   (55 §5's "Identity" note).
  */
 export const shopifyFields = defineFields([
   {
@@ -445,6 +463,41 @@ export const shopifyFields = defineFields([
     targetEntity: 'tax_line',
     scope: 'connection',
     name: 'Shopify Tax Line Key',
+    identity: true,
+    capabilities: {
+      hidden: true,
+      filterable: true,
+      sortable: false,
+      creatable: false,
+      updatable: false,
+    },
+  },
+
+  // ── fulfillment / fulfillment_line (money plan 55 §5) ─────────────────────
+  // Identity only - see the file header. Kept as Shopify's own names, same
+  // discipline as `shopifyRefundId` / `shopifyRefundLineId` above.
+  {
+    key: 'shopifyFulfillmentId',
+    type: 'TEXT',
+    targetEntity: 'fulfillment',
+    scope: 'connection',
+    name: 'Shopify Fulfillment ID',
+    identity: true,
+    capabilities: {
+      hidden: true,
+      filterable: true,
+      sortable: false,
+      creatable: false,
+      updatable: false,
+    },
+  },
+  // SYNTHETIC - see the file header. `${fulfillmentId}:${lineItemId}`.
+  {
+    key: 'shopifyFulfillmentLineId',
+    type: 'TEXT',
+    targetEntity: 'fulfillment_line',
+    scope: 'connection',
+    name: 'Shopify Fulfillment Line ID',
     identity: true,
     capabilities: {
       hidden: true,
