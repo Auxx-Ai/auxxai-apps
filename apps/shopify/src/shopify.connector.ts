@@ -7,6 +7,11 @@
 //   • `order`    → contributing native `order`, embedded customer → contributing
 //                  `contact`, `line_items[]` → contributing native `line_item`,
 //                  `line_items[].variant_id` → reference to native `part`,
+//                  `fulfillments[]` → contributing native `fulfillment` (money
+//                  plan 55, `plans/money/tasks/55-shipment-lines.md` §5),
+//                  `fulfillments[].line_items[]` → contributing native
+//                  `fulfillment_line`, `fulfillments[].line_items[].id` →
+//                  reference to the native `line_item` it shipped units of,
 //                  `refunds[]` → contributing native `credit_memo` (a
 //                  channel-sourced credit memo, accounting plan 10 §1),
 //                  `refunds[].customerId` → reference to the order's `contact`,
@@ -44,6 +49,13 @@
 // `order_credit_memos` / `order_tax_lines` (on `order`), `credit_memo_lines` /
 // `credit_memo_contact` (on `credit_memo`), `credit_memo_line_line_item` (on
 // `credit_memo_line`).
+//
+// The fulfillment / fulfillment-line edges added by money plan 55 follow the
+// same rule, against `resources/registry/resources/{order,fulfillment,
+// fulfillment-line,line-item}-fields.ts` in the entity migration 55 §4
+// describes: `system:order_fulfillments` (on `order`),
+// `system:fulfillment_lines` (on `fulfillment`),
+// `system:fulfillment_line_line_item` (on `fulfillment_line`).
 //
 // ── `derived.*` fields ────────────────────────────────────────────────────────
 // Some order and line-item fields source paths that DO NOT EXIST in Shopify's
@@ -482,6 +494,92 @@ export const shopifyConnector = defineDataConnector({
           target: { entityKind: 'part' },
         },
 
+        // fulfillments[] -> native fulfillment, child of the order above
+        // (money plan 55, `plans/money/tasks/55-shipment-lines.md` §5).
+        // Structurally identical to the `refunds[]` block below: a stateless
+        // fan-out re-delivered in full on every sync, keyed on Shopify's own
+        // stable id, idempotent for free because nothing here is append-only.
+        //
+        // This REPLACES the collapse `deriveFulfillments` used to perform:
+        // every `(fulfillment.id, created_at, line_item_id, quantity)` tuple
+        // Shopify sends now lands as its own record instead of being reduced
+        // to a first date, a last date, a sum and a count (55 §1.1). The
+        // native trio (`line_item_fulfilled_at` / `_qty` / `_shipment_count`)
+        // and the order/line rollup app fields below are UNTOUCHED - other
+        // code still reads them, and retiring them is its own cleanup, not
+        // this one's (55 §5).
+        //
+        // 🛑 CANCELLED FULFILLMENTS ARE INCLUDED. `deriveFulfillments`
+        // filters `status !== 'cancelled'` for the rollup it feeds; this
+        // fan-out does not, on purpose: a vanished record is indistinguishable
+        // from one auxx never saw, and [50]'s inventory-relief netting must
+        // see a cancelled fulfillment's lines to reverse against them. They
+        // land as ordinary records with `fulfillment_status: 'cancelled'`.
+        //
+        // `fulfillment_shipped_at` is `f.created_at`, NEVER `updated_at` -
+        // `RawFulfillment`'s own docblock says why (that field moves on every
+        // carrier tracking scan, which would drag revenue recognition forward
+        // days after delivery). `fulfillment_sequence` has no Shopify source:
+        // the projection numbers every fulfillment 1-based by `created_at`
+        // ascending, cancelled ones included, precisely so the number stays
+        // stable without needing to remember what a prior sync assigned (see
+        // `projectFulfillments`'s docblock for why cancelled ones share the
+        // one counter rather than getting their own).
+        {
+          rootPath: 'fulfillments[]',
+          relationshipFieldKey: 'system:order_fulfillments',
+          target: { entityKind: 'fulfillment' },
+          fields: [
+            { sourcePath: 'shopifyFulfillmentId', appField: 'shopifyFulfillmentId' }, // identity -> externalId
+            { sourcePath: 'name', target: 'fulfillment_name' },
+            { sourcePath: 'shippedAt', target: 'fulfillment_shipped_at' },
+            { sourcePath: 'status', target: 'fulfillment_status' },
+            { sourcePath: 'sequence', target: 'fulfillment_sequence' },
+            { sourcePath: 'cancelledAt', target: 'fulfillment_cancelled_at' },
+            { sourcePath: 'trackingNumber', target: 'fulfillment_tracking_number' },
+            { sourcePath: 'trackingCompany', target: 'fulfillment_tracking_company' },
+            { sourcePath: 'trackingUrl', target: 'fulfillment_tracking_url' },
+          ],
+        },
+
+        // fulfillments[].line_items[] -> native fulfillment_line, child of
+        // the fulfillment above. Parent derives from the longest boundary
+        // prefix (the `fulfillments[]` mapping above), so no `parentRootPath`
+        // is needed - the same shape `refunds[].refund_line_items[]` uses
+        // below.
+        //
+        // 🛑 IDENTITY IS SYNTHESISED, `${fulfillmentId}:${lineItemId}`: REST's
+        // `fulfillment.line_items[]` carries no id of its own (55 §5's
+        // "Identity" note) - `RawFulfillmentLine.id` is the ORDER line item's
+        // id, which the very next mapping resolves as a reference. Follows
+        // the SAME precedent `tax_lines[]`'s `${orderId}:${title}` sets for a
+        // Shopify record with no id, stronger here since both halves of the
+        // key are real Shopify ids rather than a title string.
+        {
+          rootPath: 'fulfillments[].line_items[]',
+          relationshipFieldKey: 'system:fulfillment_lines',
+          target: { entityKind: 'fulfillment_line' },
+          fields: [
+            { sourcePath: 'shopifyFulfillmentLineId', appField: 'shopifyFulfillmentLineId' }, // identity -> externalId
+            { sourcePath: 'quantity', target: 'fulfillment_line_quantity' },
+          ],
+        },
+
+        // fulfillment line -> the order line it shipped units of, `reference`
+        // mode, the same shape as `line_items[].variant_id` -> part and
+        // `refunds[].refund_line_items[].line_item_id` -> line_item above/
+        // below. Resolves by (connector, line_item def, Shopify line id)
+        // because the `line_items[]` mapping designates `shopifyLineId` as
+        // its external id - this is the SAME order payload, so unlike the
+        // part reference it is not exposed to a dependent stream's backfill
+        // ordering.
+        {
+          rootPath: 'fulfillments[].line_items[].id',
+          linkMode: 'reference',
+          relationshipFieldKey: 'system:fulfillment_line_line_item',
+          target: { entityKind: 'line_item' },
+        },
+
         // refunds[] -> native credit_memo, child of the order above. A Shopify
         // refund is a CHANNEL-SOURCED CREDIT MEMO (accounting plan 10 §1,
         // `plans/accounting/tasks/10-credit-memos.md`): a credit memo that was
@@ -745,6 +843,61 @@ export const shopifyConnector = defineDataConnector({
             fulfilledQuantity: 3,
             shipmentCount: 2,
             trackingNumber: null,
+          },
+        ],
+        // The per-dispatch grain `projectFulfillments` builds (money plan 55
+        // §5), replacing what `deriveFulfillments` used to collapse into the
+        // `firstFulfilledAt` / `lastFulfilledAt` / `shipmentCount` rollup
+        // above - the same split shipment (2 units on the 12th, 1 on the
+        // 15th), PLUS a third dispatch that was voided after creation.
+        fulfillments: [
+          {
+            shopifyFulfillmentId: '909001',
+            name: '#1001-1',
+            shippedAt: '2024-02-12T09:00:00Z',
+            status: 'success',
+            sequence: 1,
+            cancelledAt: null,
+            trackingNumber: '1Z999AA10123456784',
+            trackingCompany: 'UPS',
+            trackingUrl: 'https://wwwapps.ups.com/etracking?trackingNumber=1Z999AA10123456784',
+            line_items: [
+              { shopifyFulfillmentLineId: '909001:11223344', quantity: 2, id: '11223344' },
+            ],
+          },
+          {
+            shopifyFulfillmentId: '909002',
+            name: '#1001-2',
+            shippedAt: '2024-02-15T14:30:00Z',
+            status: 'success',
+            sequence: 2,
+            cancelledAt: null,
+            trackingNumber: '1Z999AA10123456785',
+            trackingCompany: 'UPS',
+            trackingUrl: 'https://wwwapps.ups.com/etracking?trackingNumber=1Z999AA10123456785',
+            line_items: [
+              { shopifyFulfillmentLineId: '909002:11223344', quantity: 1, id: '11223344' },
+            ],
+          },
+          // A dispatch voided after creation. Included ON PURPOSE - a
+          // vanished record is indistinguishable from one never seen, and
+          // [50]'s relief netting has to see this line to reverse against it.
+          {
+            shopifyFulfillmentId: '909003',
+            name: '#1001-3',
+            shippedAt: '2024-02-16T08:00:00Z',
+            status: 'cancelled',
+            sequence: 3,
+            // Shopify's Fulfillment resource has no `cancelled_at` field;
+            // `updated_at` is the best available proxy (see
+            // `projectFulfillments`'s docblock in the server handler).
+            cancelledAt: '2024-02-16T09:15:00Z',
+            trackingNumber: null,
+            trackingCompany: null,
+            trackingUrl: null,
+            line_items: [
+              { shopifyFulfillmentLineId: '909003:11223344', quantity: 1, id: '11223344' },
+            ],
           },
         ],
         // A partial refund with one returned line, arriving as a channel
