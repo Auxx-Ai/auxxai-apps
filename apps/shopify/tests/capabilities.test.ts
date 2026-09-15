@@ -44,26 +44,36 @@ describe('deriveCapabilities — the platform app’s current scopes', () => {
   it('keeps every operation the granted scopes DO cover', () => {
     const { operations } = deriveCapabilities(PLATFORM_SCOPES)
     expect(operations.order).toEqual(
-      expect.arrayContaining(['create', 'update', 'delete', 'get', 'getMany'])
+      expect.arrayContaining(['create', 'update', 'delete', 'get', 'getMany']),
     )
     expect(operations.product).toEqual(expect.arrayContaining(['create', 'update', 'delete']))
     // metafield is `owner-derived` — ungated by design, as it was before.
     expect(operations.metafield).toEqual(
-      expect.arrayContaining(['create', 'update', 'delete', 'get', 'getMany'])
+      expect.arrayContaining(['create', 'update', 'delete', 'get', 'getMany']),
     )
   })
 })
 
 describe('deriveCapabilities — adding scopes unlocks exactly what they grant', () => {
+  it('read_shopify_payments_payouts derives payments:read and unlocks no block resource', () => {
+    const before = deriveCapabilities(PLATFORM_SCOPES)
+    const after = deriveCapabilities(`${PLATFORM_SCOPES} read_shopify_payments_payouts`)
+    expect(before.capabilities.has('payments:read')).toBe(false)
+    expect(after.capabilities.has('payments:read')).toBe(true)
+    // The payout tools are platform-facing, not a block resource.
+    expect(after.resources).toEqual(before.resources)
+    expect(after.operations).toEqual(before.operations)
+  })
+
   it('write_customers surfaces the customer + customerAddress writes and nothing else', () => {
     const before = deriveCapabilities(PLATFORM_SCOPES)
     const after = deriveCapabilities(`${PLATFORM_SCOPES} write_customers`)
 
     expect(after.operations.customer).toEqual(
-      expect.arrayContaining(['create', 'update', 'delete'])
+      expect.arrayContaining(['create', 'update', 'delete']),
     )
     expect(after.operations.customerAddress).toEqual(
-      expect.arrayContaining(['create', 'update', 'delete', 'setDefault'])
+      expect.arrayContaining(['create', 'update', 'delete', 'setDefault']),
     )
     // Untouched elsewhere.
     expect(after.operations.draftOrder).toEqual(before.operations.draftOrder)
@@ -73,18 +83,18 @@ describe('deriveCapabilities — adding scopes unlocks exactly what they grant',
 
   it('price-rule scopes bring the discount resource back', () => {
     const { resources, operations } = deriveCapabilities(
-      `${PLATFORM_SCOPES} read_price_rules write_price_rules`
+      `${PLATFORM_SCOPES} read_price_rules write_price_rules`,
     )
     expect(resources).toContain('discount')
     expect(operations.discount).toEqual(
-      expect.arrayContaining(['create', 'update', 'delete', 'get', 'getMany'])
+      expect.arrayContaining(['create', 'update', 'delete', 'get', 'getMany']),
     )
   })
 
   it('a write scope alone satisfies a read requirement — no implication rule needed', () => {
     const { operations } = deriveCapabilities('write_orders')
     expect(operations.order).toEqual(
-      expect.arrayContaining(['get', 'getMany', 'create', 'update', 'delete'])
+      expect.arrayContaining(['get', 'getMany', 'create', 'update', 'delete']),
     )
   })
 

@@ -10,7 +10,7 @@ import {
   UpstreamServiceError,
 } from '@auxx/sdk/server'
 
-const API_VERSION = '2024-10'
+export const API_VERSION = '2024-10'
 
 const ERROR_MESSAGES: Record<number, string> = {
   400: 'Bad request. Please check your input parameters.',
@@ -23,7 +23,7 @@ const ERROR_MESSAGES: Record<number, string> = {
 
 export function throwConnectionNotFound(): never {
   const err = new Error(
-    'Shopify not connected. Please connect in Settings -> Apps -> Shopify.'
+    'Shopify not connected. Please connect in Settings -> Apps -> Shopify.',
   ) as Error & { code: string; scope: string }
   err.code = 'CONNECTION_NOT_FOUND'
   err.scope = 'organization'
@@ -65,7 +65,7 @@ export function getShopDomain(metadata: Record<string, any> | undefined): string
  * because the token would land under a key nothing here reads.
  */
 export function getShopifyToken(
-  connection: { value?: string; fields?: Record<string, string> } | undefined | null
+  connection: { value?: string; fields?: Record<string, string> } | undefined | null,
 ): string {
   return connection?.value || connection?.fields?.api_key || ''
 }
@@ -74,7 +74,7 @@ export async function shopifyApi<T = unknown>(
   shopDomain: string,
   accessToken: string,
   path: string,
-  options: { method?: string; body?: Record<string, unknown>; qs?: Record<string, string> } = {}
+  options: { method?: string; body?: Record<string, unknown>; qs?: Record<string, string> } = {},
 ): Promise<T> {
   const { method = 'GET', body, qs } = options
 
@@ -135,12 +135,41 @@ export async function shopifyApi<T = unknown>(
   return data as T
 }
 
+/**
+ * Map a non-OK Shopify REST response to the SDK error the platform understands. Shared by
+ * every pager so a page failure is a refusal, never a partial list.
+ */
+export async function throwShopifyResponseError(response: Response): Promise<never> {
+  if (response.status === 401) throw new ConnectionExpiredError('organization')
+  if (response.status === 403) throw new InsufficientPermissionsError('organization')
+  if (response.status === 429) {
+    const ra = Number(response.headers.get('Retry-After'))
+    throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
+  }
+  if (response.status === 404) throw new NotFoundError()
+  if (response.status === 409) throw new ConflictError()
+  if (response.status >= 500) {
+    throw new UpstreamServiceError(`Shopify error ${response.status}`, response.status)
+  }
+  const data = await response.json().catch(() => ({}))
+  if (response.status === 400 || response.status === 422) {
+    throw new InvalidInputError(
+      data?.errors
+        ? typeof data.errors === 'string'
+          ? data.errors
+          : JSON.stringify(data.errors)
+        : `Shopify API error: ${response.status}`,
+    )
+  }
+  throw new Error(data?.errors || `Shopify API error: ${response.status}`)
+}
+
 export async function shopifyApiGetAll<T>(
   shopDomain: string,
   accessToken: string,
   path: string,
   resourceKey: string,
-  qs?: Record<string, string>
+  qs?: Record<string, string>,
 ): Promise<T[]> {
   const items: T[] = []
 
@@ -166,30 +195,7 @@ export async function shopifyApiGetAll<T>(
       throw new UpstreamServiceError(err instanceof Error ? err.message : 'Shopify request failed')
     }
 
-    if (!response.ok) {
-      if (response.status === 401) throw new ConnectionExpiredError('organization')
-      if (response.status === 403) throw new InsufficientPermissionsError('organization')
-      if (response.status === 429) {
-        const ra = Number(response.headers.get('Retry-After'))
-        throw new RateLimitError(Number.isFinite(ra) ? ra : undefined)
-      }
-      if (response.status === 404) throw new NotFoundError()
-      if (response.status === 409) throw new ConflictError()
-      if (response.status >= 500) {
-        throw new UpstreamServiceError(`Shopify error ${response.status}`, response.status)
-      }
-      const data = await response.json().catch(() => ({}))
-      if (response.status === 400 || response.status === 422) {
-        throw new InvalidInputError(
-          data?.errors
-            ? typeof data.errors === 'string'
-              ? data.errors
-              : JSON.stringify(data.errors)
-            : `Shopify API error: ${response.status}`
-        )
-      }
-      throw new Error(data?.errors || `Shopify API error: ${response.status}`)
-    }
+    if (!response.ok) await throwShopifyResponseError(response)
 
     const data = await response.json()
     const batch = data[resourceKey] || []

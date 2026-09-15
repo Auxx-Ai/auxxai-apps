@@ -44,6 +44,15 @@ export const SCOPE_GRANTS = {
   read_assigned_fulfillment_orders: ['fulfillment:read'],
   write_assigned_fulfillment_orders: ['fulfillment:read', 'fulfillment:write'],
 
+  // Shopify Payments payouts and balance transactions (REST `shopify_payments/*`). Backs the
+  // platform-facing `list_shopify_payouts` / `list_shopify_payout_transactions` tools, not a
+  // block resource, so no `RESOURCE_CAPABILITIES` row; the tools check `payments:read`
+  // themselves. Deliberately NOT in `ASSUMED_SCOPES_WHEN_UNKNOWN`: a token minted before this
+  // scope was declared was never granted it. Disputes stay out (accounting brief 27 §5).
+  read_shopify_payments_payouts: ['payments:read'],
+  read_shopify_payments_accounts: ['payments:account-read'],
+  read_shopify_payments: ['payments:read', 'payments:account-read'],
+
   // ⚠️ UNVERIFIED. The connector calls REST `/price_rules*`; Shopify documents both
   // `read_discounts`/`write_discounts` and `read_price_rules`/`write_price_rules`, and which
   // governs that endpoint is not confirmed. Every other row above is derivable without docs.
