@@ -118,12 +118,17 @@ interface FakeResponse {
 }
 
 function mockOrdersFetch(): () => Promise<FakeResponse> {
-  return () =>
+  return (url: string) =>
     Promise.resolve({
       ok: true,
       status: 200,
       headers: { get: () => null },
-      json: () => Promise.resolve({ orders: [RAW_ORDER] }),
+      json: () =>
+        Promise.resolve(
+          url.includes('/graphql.json')
+            ? { data: { nodes: [{ legacyResourceId: String(RAW_ORDER.id), transactions: [] }] } }
+            : { orders: [RAW_ORDER] },
+        ),
     })
 }
 

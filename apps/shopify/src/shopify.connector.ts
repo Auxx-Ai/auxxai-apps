@@ -73,13 +73,19 @@
 
 import { defineDataConnector } from '@auxx/sdk/data-connectors'
 import { z } from '@auxx/sdk/tools'
+import { payoutSourceFields, processorSourceFields } from './financial-source-fields'
+import {
+  customerTransactionFieldMappings,
+  payoutFieldMappings,
+  processorFieldMappings,
+} from './financial-source-mappings'
 import shopifySync from './shopify.connector.server'
 
 export const shopifyConnector = defineDataConnector({
   id: 'shopify',
   label: 'Shopify',
   description:
-    'Sync orders, products, and customers from your Shopify store into your CRM — kept up to date automatically.',
+    'Sync orders, products, customers, payouts, and processor activity from your Shopify store.',
   requiresConnection: true,
   iconKey: 'shopping-bag',
   // Connector-level webhook SIGNAL: deliveries from the app's single Shopify trigger
@@ -87,9 +93,131 @@ export const shopifyConnector = defineDataConnector({
   // multiplexes all topics through this one triggerId — per-stream
   // `webhookTrigger.filter` discriminates on `triggerData.topic`).
   webhookTrigger: { triggerId: 'shopify.shopify-trigger' },
-  // No toggles for v1 — still required by defineDataConnector.
-  config: z.object({}),
+  config: z.object({
+    payoutHistoryStartDate: z
+      .string()
+      .regex(/^(\d{4}-\d{2}-\d{2})?$/)
+      .optional()
+      .describe('Payout history start date (YYYY-MM-DD). Leave blank to import all payouts.'),
+  }),
   streams: [
+    // Normalized financial fields and child records use the standard mapper. Incremental mode
+    // preserves the cursor between slices; the fetch deliberately revisits
+    // historical evidence to detect lifecycle and membership changes.
+    {
+      key: 'payout',
+      syncMode: 'incremental',
+      mappings: [
+        {
+          rootPath: '',
+          target: { entityKind: 'payout' },
+          fields: payoutFieldMappings,
+        },
+        {
+          rootPath: 'processorTransactions[]',
+          target: { entityKind: 'processor_balance_entry' },
+          relationshipFieldKey: 'system:payout_processor_entries',
+          fields: processorFieldMappings,
+        },
+      ],
+      exampleRecord: payoutSourceFields({
+        externalId: '456',
+        acquisition: { id: 'scan:456', startedAt: '2026-09-12T00:00:00Z' },
+        raw: {},
+        rejectionReason: null,
+        sourceAccount: {
+          providerKey: 'shopify_payments',
+          externalAccountId: 'gid://shopify/ShopifyPaymentsAccount/123',
+          environment: 'live',
+        },
+        payout: {
+          id: '456',
+          status: 'paid',
+          amount: '97.00',
+          currency: 'USD',
+          currencyExponent: 2,
+          issuedAt: null,
+          issuedOn: '2026-09-12',
+          destinationExternalId: null,
+          raw: {},
+        },
+        membership: {
+          page: {
+            id: 'scan:456:0',
+            index: 0,
+            requestCursor: null,
+            nextCursor: null,
+            terminal: true,
+          },
+          rawRows: [],
+          rejections: [],
+          complete: true,
+          providerReady: true,
+          reason: null,
+          entries: [
+            {
+              id: '789',
+              type: 'charge',
+              providerType: 'charge',
+              sourceReference: null,
+              gross: '100.00',
+              fee: '3.00',
+              net: '97.00',
+              currency: 'USD',
+              currencyExponent: 2,
+              transactionDate: '2026-09-11T10:00:00Z',
+              payoutId: '456',
+              sourceTransactionId: '1001',
+              sourceOrderId: '1000',
+              sourceId: '1002',
+              sourceType: 'charge',
+              raw: {},
+            },
+          ],
+        },
+      }),
+    },
+    {
+      key: 'balance_transaction',
+      syncMode: 'incremental',
+      mappings: [
+        {
+          rootPath: '',
+          target: { entityKind: 'processor_balance_entry' },
+          fields: processorFieldMappings,
+        },
+      ],
+      exampleRecord: processorSourceFields({
+        externalId: '789',
+        acquisition: { id: 'scan', startedAt: '2026-09-12T00:00:00Z' },
+        page: { id: 'scan:0', index: 0, rowIndex: 0 },
+        raw: {},
+        rejectionReason: null,
+        sourceAccount: {
+          providerKey: 'shopify_payments',
+          externalAccountId: 'gid://shopify/ShopifyPaymentsAccount/123',
+          environment: 'live',
+        },
+        entry: {
+          id: '789',
+          type: 'charge',
+          providerType: 'charge',
+          sourceReference: null,
+          gross: '100.00',
+          fee: '3.00',
+          net: '97.00',
+          currency: 'USD',
+          currencyExponent: 2,
+          transactionDate: '2026-09-11T10:00:00Z',
+          payoutId: null,
+          sourceTransactionId: '1001',
+          sourceOrderId: '1000',
+          sourceId: '1002',
+          sourceType: 'charge',
+          raw: {},
+        },
+      }),
+    },
     // ── customer ────────────────────────────────────────────────────────────────
     // Storefront customers → system `contact` (contributing, merge on email/phone).
     // External id = Shopify customer id; `email` and `phone` are the secondary
@@ -369,11 +497,29 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'financialStatus', target: 'order_financial_status' },
             { sourcePath: 'fulfillmentStatus', target: 'order_fulfillment_status' },
             { sourcePath: 'currency', target: 'order_currency' },
+            { sourcePath: 'paymentSourceProvider', target: 'order_payment_source_provider' },
+            { sourcePath: 'paymentSourceAccount', target: 'order_payment_source_account' },
+            { sourcePath: 'paymentSourceEnvironment', target: 'order_payment_source_environment' },
+            { sourcePath: 'paymentSourceOrderId', target: 'order_payment_source_order_id' },
+            { sourcePath: 'paymentSourceUpdatedAt', target: 'order_payment_source_updated_at' },
+            { sourcePath: 'paymentSourceComplete', target: 'order_payment_source_complete' },
+            { sourcePath: 'paymentSourceCount', target: 'order_payment_source_count' },
             // Deliberately no predefined `options` on this source field: the
             // live gateway handle set is what has to be discovered empirically
             // (see the server projection), and TAGS never rejects a value the
             // way a bounded SINGLE_SELECT would.
             { sourcePath: 'paymentGateways', target: 'order_payment_gateways' },
+            // The paid instant and the gateway that actually took the money
+            // (accounting plan 29 §3.1): `processed_at` and `gateway` of the
+            // order's SUCCESSFUL sale/capture transaction, resolved by the
+            // server projection (its "order payment" section has the rule).
+            // `paymentGateways` above also lists FAILED attempts, which is
+            // what `paidGateway` exists to disambiguate. Types come from the
+            // native targets: `order_paid_at` is DATETIME, `order_paid_gateway`
+            // is TEXT. Both stay empty on an unpaid (terms, `pending`) order
+            // and are filled by the sync that first sees it `paid`.
+            { sourcePath: 'paidAt', target: 'order_paid_at' },
+            { sourcePath: 'paidGateway', target: 'order_paid_gateway' },
             { sourcePath: 'tags', target: 'category' },
             { sourcePath: 'shippingAddress', target: 'order_shipping_address' },
             // `fill_blank`: a note typed in auxx survives a resync (§10.1).
@@ -405,6 +551,12 @@ export const shopifyConnector = defineDataConnector({
         // Embedded customer -> contact, unchanged in shape, retargeted edge
         // (system:order_contact instead of the old owned-def relationship).
         {
+          rootPath: 'paymentTransactions[]',
+          target: { entityKind: 'customer_transaction' },
+          relationshipFieldKey: 'system:order_payment_transactions',
+          fields: customerTransactionFieldMappings,
+        },
+        {
           rootPath: 'customer',
           relationshipFieldKey: 'system:order_contact',
           target: { entityKind: 'contact' },
@@ -433,10 +585,16 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'variantTitle', target: 'line_item_description' },
             { sourcePath: 'quantity', target: 'line_item_qty' },
             { sourcePath: 'price', target: 'line_item_unit_price' },
-            // Transcribed (§6.2): price × qty − Σ this line's discount
-            // allocations. The finalize pass's line arm stands down for a
+            // Transcribed (§6.2), GROSS: price × qty, what Shopify's admin
+            // shows per line. The finalize pass's line arm stands down for a
             // connector-managed line.
             { sourcePath: 'lineTotal', target: 'line_item_line_total' },
+            // Line total after discount (accounting plan 29 §2.3): price × qty
+            // − Σ this line's discount allocations, the value `lineTotal`
+            // carried until this mapping. The ledger posts from it, falling
+            // back to `line_item_line_total` for an org not yet remapped. The
+            // native target is a CURRENCY field; type comes from it.
+            { sourcePath: 'netTotal', target: 'line_item_net_total' },
             { sourcePath: 'index', target: 'line_item_sort_order' },
             // Tax, per line (money plan 48 §4.2 / §4.3). `line_item_taxable`
             // has been in the registry since money plan 37 and unbound until
@@ -784,6 +942,11 @@ export const shopifyConnector = defineDataConnector({
         // shape `normalizeFieldValue` splits. An array here would be silently
         // dropped.
         paymentGateways: 'shopify_payments',
+        // Paid at checkout with one gateway: `paidAt` IS `processedAt` and
+        // `paidGateway` IS the one listed gateway (the server projection's
+        // rule 1). Included so the source schema types them (DATETIME, TEXT).
+        paidAt: '2024-02-11T10:01:00Z',
+        paidGateway: 'shopify_payments',
         tags: 'vip, gift',
         note: 'Leave at front door',
         createdAt: '2024-02-11T10:00:00Z',
@@ -828,7 +991,10 @@ export const shopifyConnector = defineDataConnector({
             quantity: 3,
             fulfillableQuantity: 0,
             price: 1999,
+            // Gross, 3 × 1999. `netTotal` equals it because this example line
+            // carries no discount allocation (see `raw.discount_allocations`).
             lineTotal: 5997,
+            netTotal: 5997,
             index: 0,
             taxable: true,
             // Minor units, from `total_tax_set.shop_money.amount` (48 §8.1).

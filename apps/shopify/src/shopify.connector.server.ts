@@ -55,6 +55,14 @@
 // carries NO id, so its identity is SYNTHESISED as `${orderId}:${title}`
 // (`projectTaxLine`).
 //
+// The `order` projection also binds the PAID instant and the PAYING gateway
+// (`paidAt` / `paidGateway`, accounting plan 29 §3.1) from the order's
+// successful sale/capture transaction. `/orders.json` does not embed
+// `transactions[]`, so `fetchShopifyPage` grew a page-level `supplement` hook:
+// the order stream fetches transaction evidence for every order, including
+// multiple captures and individual refunds, before projecting
+// the page. The rule and the call budget are at the "order payment" section.
+//
 // ── Field naming ─────────────────────────────────────────────────────────────
 // Every projected key here is exactly the `sourcePath` (relative to its
 // mapping's `rootPath`) a `shopify.connector.ts` mapping field reads — there is
@@ -74,9 +82,12 @@ import type {
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
+import { orderPaymentSourceFields } from './financial-source-fields'
+import { fetchPaymentsStream } from './payments.connector.server'
 
 const API_VERSION = '2024-10'
 const PAGE_SIZE = 250
+const ORDER_PAGE_SIZE = 10
 
 /** Extract the `page_info` token of the `rel="next"` link from a Link header. */
 function nextPageInfo(linkHeader: string | null): string | undefined {
@@ -90,7 +101,7 @@ function nextPageInfo(linkHeader: string | null): string | undefined {
  */
 function maxUpdatedAt<Raw extends { updated_at: string }>(
   rows: Raw[],
-  fallback: unknown
+  fallback: unknown,
 ): string | undefined {
   const base = typeof fallback === 'string' ? fallback : undefined
   let best = base
@@ -105,21 +116,47 @@ function maxUpdatedAt<Raw extends { updated_at: string }>(
   return best
 }
 
+/** Shop endpoint and auth headers, shared by a page fetch and its supplement. */
+interface ShopifyHttp {
+  shopDomain: string
+  headers: Record<string, string>
+}
+
+/** Result of a page-level side lookup: its value, or a throttle to retry the page on. */
+type PageSupplement<Extra> = { ok: true; value: Extra } | { ok: false; retryAfterMs?: number }
+
+/** `Retry-After` in ms, or undefined when Shopify sent none (never 0 for a missing header). */
+function retryAfterMs(res: {
+  headers: { get: (name: string) => string | null }
+}): number | undefined {
+  const header = res.headers.get('Retry-After')
+  const seconds = header === null ? Number.NaN : Number(header)
+  return Number.isFinite(seconds) ? seconds * 1000 : undefined
+}
+
 /**
  * Fetch ONE page of a Shopify REST collection and project it into source-shaped
  * records. Shared by every stream: same page_info cursor, same incremental
  * `updated_at` watermark, same 429 → `rateLimited` handling. `toRecord` projects one
  * raw row; `firstPageParams` are filters that ride page 1 only (Shopify forbids any
  * other filter once `page_info` is set — the token encodes them).
+ *
+ * `supplement` is an optional side lookup run over the page's rows BEFORE
+ * projection, for data the collection endpoint does not embed (the order
+ * stream's payment transactions). Its value is handed to every `toRecord` call;
+ * a throttle inside it retries the whole page from the same cursor, exactly
+ * like a 429 on the page itself.
  */
-async function fetchShopifyPage<Raw extends { updated_at: string }>(
+async function fetchShopifyPage<Raw extends { updated_at: string }, Extra = undefined>(
   args: ConnectorExecuteArgs,
   opts: {
     resource: 'customers' | 'orders' | 'products'
     rootKey: 'customers' | 'orders' | 'products'
-    toRecord: (raw: Raw) => ConnectorRecord
+    toRecord: (raw: Raw, extra: Extra) => ConnectorRecord
     firstPageParams?: Record<string, string>
-  }
+    pageSize?: number
+    supplement?: (rows: Raw[], http: ShopifyHttp) => Promise<PageSupplement<Extra>>
+  },
 ): Promise<ConnectorFetchResult> {
   const { mode, state, connection } = args
   const token = getShopifyToken(connection)
@@ -130,8 +167,12 @@ async function fetchShopifyPage<Raw extends { updated_at: string }>(
   if (!shopDomain) {
     throw new Error('shopify: connection metadata is missing the shop domain')
   }
+  const http: ShopifyHttp = {
+    shopDomain,
+    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+  }
 
-  const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+  const params = new URLSearchParams({ limit: String(opts.pageSize ?? PAGE_SIZE) })
   if (state.cursor) {
     params.set('page_info', String(state.cursor))
   } else {
@@ -145,16 +186,15 @@ async function fetchShopifyPage<Raw extends { updated_at: string }>(
 
   const res = await fetch(
     `https://${shopDomain}/admin/api/${API_VERSION}/${opts.resource}.json?${params}`,
-    { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
+    { headers: http.headers },
   )
 
   // Throttled — pause + retry THIS page from the same cursor (don't burn the budget).
   if (res.status === 429) {
-    const retryAfter = Number(res.headers.get('Retry-After'))
     return {
       records: [],
       nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
-      rateLimited: { retryAfterMs: Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined },
+      rateLimited: { retryAfterMs: retryAfterMs(res) },
     }
   }
   if (!res.ok) {
@@ -163,6 +203,20 @@ async function fetchShopifyPage<Raw extends { updated_at: string }>(
 
   const rows = ((await res.json()) as Record<string, Raw[] | undefined>)[opts.rootKey] ?? []
   const next = nextPageInfo(res.headers.get('Link'))
+
+  let extra = undefined as Extra
+  if (opts.supplement) {
+    const supplement = await opts.supplement(rows, http)
+    if (!supplement.ok) {
+      // Same shape as the 429 above: the page is re-fetched later from this cursor.
+      return {
+        records: [],
+        nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
+        rateLimited: { retryAfterMs: supplement.retryAfterMs },
+      }
+    }
+    extra = supplement.value
+  }
   // High-water mark of `updated_at` so the next incremental run resumes from it.
   //
   // Take the MAX across the page, never `rows[rows.length - 1]`. Shopify's REST
@@ -179,7 +233,7 @@ async function fetchShopifyPage<Raw extends { updated_at: string }>(
   const lastUpdated = maxUpdatedAt(rows, state.updatedSince)
 
   return {
-    records: rows.map(opts.toRecord),
+    records: rows.map((row) => opts.toRecord(row, extra)),
     nextState: next
       ? // More pages in this chain — keep the page cursor, hold the watermark.
         { cursor: next, updatedSince: state.updatedSince }
@@ -407,7 +461,7 @@ function lineTaxTotal(taxLines: RawTaxLine[] | null | undefined): number | null 
   if (!taxLines) return null
   return taxLines.reduce(
     (sum, tl) => sum + (decimalToMinorUnits(tl.price_set?.shop_money?.amount ?? null) ?? 0),
-    0
+    0,
   )
 }
 
@@ -435,9 +489,9 @@ interface RawLineItem {
    *  fanned out. */
   tax_lines: RawTaxLine[] | null
   /** Per-line discount allocation — how much of which order-level discount
-   *  landed on THIS line. Feeds `lineTotal` (price × qty − Σ amounts) and is
-   *  also folded into the order's `raw.discount_allocations` (money plan 37
-   *  §6/§8) since `line_item` gets no `raw` field of its own. */
+   *  landed on THIS line. Feeds `netTotal` (price × qty − Σ amounts; accounting
+   *  plan 29 §2.3) and is also folded into the order's `raw.discount_allocations`
+   *  (money plan 37 §6/§8) since `line_item` gets no `raw` field of its own. */
   discount_allocations: Array<{ amount: string | null }> | null
 }
 
@@ -598,7 +652,7 @@ interface ProjectedFulfillmentLine {
  */
 function projectFulfillmentLine(
   fulfillmentId: string | null,
-  li: RawFulfillmentLine
+  li: RawFulfillmentLine,
 ): ProjectedFulfillmentLine {
   const lineItemId = li.id != null ? String(li.id) : null
   return {
@@ -697,6 +751,7 @@ function projectFulfillments(o: RawOrder): ProjectedFulfillment[] {
  * `success | pending | failure | error`.
  */
 interface RawRefundTransaction {
+  id?: number | string | null
   kind?: string | null
   status?: string | null
   amount?: string | null
@@ -799,7 +854,7 @@ function lineDisposition(restockType: string | null | undefined): CreditMemoLine
  * settled yet") and must stay distinguishable from "not supplied".
  */
 function refundAmountRefunded(
-  transactions: RawRefundTransaction[] | null | undefined
+  transactions: RawRefundTransaction[] | null | undefined,
 ): number | null {
   if (!transactions) return null
   return transactions
@@ -816,7 +871,7 @@ function refundAmountRefunded(
  * a resync does not put it back.
  */
 function creditMemoReason(
-  dispositions: ReadonlyArray<CreditMemoLineDisposition | null>
+  dispositions: ReadonlyArray<CreditMemoLineDisposition | null>,
 ): ChannelCreditMemoReason {
   return dispositions.length > 0 && dispositions.every((d) => d === 'cancelled')
     ? 'cancellation'
@@ -901,7 +956,7 @@ function projectRefundLine(rl: RawRefundLineItem, sortOrder: number): ProjectedC
 function adjustmentLine(
   refundId: string,
   amountRefunded: number | null,
-  lines: ReadonlyArray<ProjectedCreditMemoLine>
+  lines: ReadonlyArray<ProjectedCreditMemoLine>,
 ): ProjectedCreditMemoLine | null {
   if (amountRefunded == null) return null
   const credited = lines.reduce((sum, l) => sum + (l.subtotal ?? 0) + (l.taxTotal ?? 0), 0)
@@ -963,6 +1018,197 @@ function projectRefund(r: RawRefund, contactExternalId: string | null) {
   }
 }
 
+// ── order payment ─────────────────────────────────────────────────────────────
+//
+// `paidAt` / `paidGateway` (accounting plan 29 §3.1, bound to `order_paid_at` /
+// `order_paid_gateway`): the `processed_at` and `gateway` of the order's
+// SUCCESSFUL `sale` or `capture` transaction. `/orders.json` does not embed
+// `transactions[]` and its `fields=` filter cannot ask for them, so the rule is:
+//
+//   1. Paid at checkout with ONE listed gateway (the overwhelming case): the
+//      order's `processed_at` IS the paid instant, which is also what Shopify
+//      itself dates the sale by, and the one listed gateway IS the paying one.
+//      No extra call.
+//   2. More than one gateway, or an order carrying `payment_terms`: look the
+//      transactions up. `payment_gateway_names` includes FAILED attempts (a
+//      declined Affirm, then a card, reads `['affirm','shopify_payments']`),
+//      and a terms order pays days or weeks after `processed_at`.
+//   3. Not paid yet (`pending`, `authorized`, `partially_paid`, `voided`, ...):
+//      both empty. Paying bumps `updated_at`, so the next incremental sync
+//      sees the flip to `paid` and fills them then.
+//
+// The source fetches actual capture/refund evidence for every order. Each
+// GraphQL request is bounded to one order and 250 transactions. An array at
+// the limit remains explicitly incomplete; missing nodes refuse the page.
+// `read_orders` covers `Order.transactions`.
+//
+// Known residual, documented rather than special-cased: a MANUAL payment
+// method (COD, bank deposit, "mark as paid") lists one gateway and carries no
+// `payment_terms`, but is marked paid AFTER checkout, so rule 1 dates it at
+// `processed_at`. The gateway is right, and that date is exactly what the
+// platform's fork used before this binding existed (`order_placed_at`), so
+// nothing regresses; the manual handles are merchant-named and not enumerable.
+
+/**
+ * One order transaction as either the REST (`sale` / `success`) or the GraphQL
+ * (`SALE` / `SUCCESS`) API spells it. `resolvePaidTransaction` compares
+ * case-insensitively so the same helper reads both.
+ */
+export interface OrderTransactionLike {
+  id?: string | null
+  amountSet?: { presentmentMoney?: { amount: string; currencyCode: string } | null } | null
+  settlementCurrency?: string | null
+  parentTransaction?: { id: string } | null
+  paymentId?: string | null
+  test?: boolean
+  kind?: string | null
+  status?: string | null
+  gateway?: string | null
+  processedAt?: string | null
+}
+
+export interface OrderPayment {
+  /** `processed_at` of the successful sale/capture transaction, ISO string. */
+  paidAt: string | null
+  /** Its gateway handle, e.g. `shopify_payments`. */
+  paidGateway: string | null
+}
+
+const UNPAID: OrderPayment = { paidAt: null, paidGateway: null }
+
+/** `financial_status` values under which the order has been paid in full. */
+const PAID_FINANCIAL_STATUSES = new Set(['paid', 'partially_refunded', 'refunded'])
+
+function isPaid(o: Pick<RawOrder, 'financial_status'>): boolean {
+  return PAID_FINANCIAL_STATUSES.has(o.financial_status ?? '')
+}
+
+/**
+ * Whether the paid instant has to come from the order's transactions (rule 2
+ * above) instead of being read off the order itself (rule 1). Never true for
+ * an unpaid order: there is nothing to look up yet.
+ */
+export function needsPaidTransactionLookup(
+  o: Pick<RawOrder, 'financial_status' | 'payment_gateway_names' | 'payment_terms'>,
+): boolean {
+  if (!isPaid(o)) return false
+  return (o.payment_gateway_names ?? []).length > 1 || o.payment_terms != null
+}
+
+/**
+ * The LATEST successful `sale` or `capture` among an order's transactions. For a
+ * paid order that is the instant it became fully paid (a second capture on a
+ * partially captured authorization, a terms order paying its last schedule).
+ * Null when there is none; a failed or pending attempt never qualifies.
+ */
+export function resolvePaidTransaction(transactions: OrderTransactionLike[]): OrderPayment | null {
+  const processedMs = (tx: OrderTransactionLike): number => {
+    const ms = Date.parse(tx.processedAt ?? '')
+    return Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms
+  }
+  let best: OrderTransactionLike | undefined
+  for (const tx of transactions) {
+    const kind = tx.kind?.toLowerCase()
+    if (kind !== 'sale' && kind !== 'capture') continue
+    if (tx.status?.toLowerCase() !== 'success') continue
+    if (!best || processedMs(tx) > processedMs(best)) best = tx
+  }
+  if (!best) return null
+  return { paidAt: best.processedAt ?? null, paidGateway: best.gateway ?? null }
+}
+
+/**
+ * `paidAt` / `paidGateway` for one order. `transactionsByOrderId` holds the
+ * looked-up transactions for the orders on this page that needed them; an order
+ * that needed a lookup and got none (deleted between the two calls, or outside
+ * the 60-day order window) stays EMPTY rather than guessed, and the platform's
+ * fork falls back to its own single-gateway rule.
+ */
+export function resolveOrderPayment(
+  o: Pick<
+    RawOrder,
+    'id' | 'financial_status' | 'payment_gateway_names' | 'payment_terms' | 'processed_at'
+  >,
+  transactionsByOrderId: ReadonlyMap<string, OrderTransactionLike[]>,
+): OrderPayment {
+  if (!isPaid(o)) return UNPAID
+  if (needsPaidTransactionLookup(o)) {
+    const transactions = transactionsByOrderId.get(String(o.id))
+    return (transactions && resolvePaidTransaction(transactions)) ?? UNPAID
+  }
+  // Rule 1: paid at checkout. A $0 / fully-discounted order lists no gateway at
+  // all and is still `paid` at `processed_at`; its gateway is null, not ''.
+  return { paidAt: o.processed_at, paidGateway: o.payment_gateway_names?.[0] ?? null }
+}
+
+/** Keep full financial transaction payloads bounded to one order per request. */
+const PAID_TRANSACTIONS_BATCH = 1
+
+const PAID_TRANSACTIONS_QUERY = `query PaidTransactions($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Order {
+      legacyResourceId
+      transactions(first: 250) { id kind status gateway processedAt amountSet { presentmentMoney { amount currencyCode } } settlementCurrency parentTransaction { id } paymentId test }
+    }
+  }
+}`
+
+interface PaidTransactionsResponse {
+  data?: {
+    nodes?: Array<{
+      legacyResourceId?: string | null
+      transactions?: OrderTransactionLike[] | null
+    } | null>
+  }
+  errors?: Array<{ message?: string; extensions?: { code?: string } }>
+}
+
+/**
+ * The `fetchShopifyPage` supplement for the order stream: transactions for the
+ * every order on this page, keyed by order id; legacy payment summaries reuse the data.
+ * Throttling (HTTP 429, or a 200 carrying a `THROTTLED` error, which is how the
+ * GraphQL API reports it) surfaces as `{ ok: false }` so the page is retried from
+ * the same cursor; any other error throws, like a failed REST page does.
+ */
+async function fetchPaidTransactions(
+  rows: RawOrder[],
+  http: ShopifyHttp,
+): Promise<PageSupplement<ReadonlyMap<string, OrderTransactionLike[]>>> {
+  const byOrderId = new Map<string, OrderTransactionLike[]>()
+  const ids = rows.map((o) => `gid://shopify/Order/${o.id}`)
+  for (let i = 0; i < ids.length; i += PAID_TRANSACTIONS_BATCH) {
+    const res = await fetch(`https://${http.shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
+      method: 'POST',
+      headers: http.headers,
+      body: JSON.stringify({
+        query: PAID_TRANSACTIONS_QUERY,
+        variables: { ids: ids.slice(i, i + PAID_TRANSACTIONS_BATCH) },
+      }),
+    })
+    if (res.status === 429) {
+      return { ok: false, retryAfterMs: retryAfterMs(res) }
+    }
+    if (!res.ok) {
+      throw new Error(`shopify: GraphQL order transactions lookup responded ${res.status}`)
+    }
+    const body = (await res.json()) as PaidTransactionsResponse
+    if (body.errors?.some((e) => e.extensions?.code === 'THROTTLED')) {
+      return { ok: false }
+    }
+    if (body.errors?.length) {
+      const messages = body.errors.map((e) => e.message ?? 'unknown error').join('; ')
+      throw new Error(`shopify: GraphQL order transactions lookup failed: ${messages}`)
+    }
+    for (const node of body.data?.nodes ?? []) {
+      if (!node?.legacyResourceId || !Array.isArray(node.transactions))
+        throw new Error('shopify: incomplete order transaction response')
+      byOrderId.set(node.legacyResourceId, node.transactions)
+    }
+  }
+  if (byOrderId.size !== rows.length) throw new Error('shopify: missing order transaction coverage')
+  return { ok: true, value: byOrderId }
+}
+
 interface RawOrder {
   id: number
   name: string | null
@@ -985,10 +1231,18 @@ interface RawOrder {
    * checkout debit. `order.gateway` and `order.processing_method` are both deprecated;
    * this is the current field. ⚠️ It includes gateways from FAILED transactions, so a
    * declined-Affirm-then-paid-by-card order reads `['affirm','shopify_payments']` and a
-   * naive `includes('affirm')` mis-routes. Resolve a multi-value order against
-   * `/orders/{id}/transactions.json` before trusting it.
+   * naive `includes('affirm')` mis-routes. A multi-value order is resolved against
+   * its transactions (`fetchPaidTransactions`) into `paidGateway`; this list stays
+   * the unresolved projection.
    */
   payment_gateway_names: string[] | null
+  /**
+   * Present on a Plus B2B / deferred-payment order, `null` on a checkout-paid
+   * one. Read here ONLY as the "paid later than `processed_at`" signal that
+   * routes the order to the transaction lookup (see the order payment section);
+   * the terms themselves are not projected (gap-0 §4.4 owns that).
+   */
+  payment_terms?: { payment_terms_name?: string | null } | null
   tags: string | null
   note: string | null
   created_at: string
@@ -1024,9 +1278,16 @@ interface RawOrder {
 }
 
 /** Project one REST order into a SOURCE-shaped record (fields keyed by sourcePath,
- *  relative to the mapping's rootPath — see the file header). */
-function toOrderRecord(o: RawOrder): ConnectorRecord {
+ *  relative to the mapping's rootPath, see the file header). `transactionsByOrderId`
+ *  is the page's `fetchPaidTransactions` result; only the orders that needed a lookup
+ *  are in it (see the order payment section). */
+function toOrderRecord(
+  o: RawOrder,
+  transactionsByOrderId: ReadonlyMap<string, OrderTransactionLike[]> = new Map(),
+  sourceShopDomain: string,
+): ConnectorRecord {
   const fulfilled = deriveFulfillments(o)
+  const payment = resolveOrderPayment(o, transactionsByOrderId)
   // The contact's external id, shared by the embedded `customer` branch and the
   // credit memos' contact reference so both edges land on the same contact.
   const customerId = o.customer?.id != null ? String(o.customer.id) : null
@@ -1036,6 +1297,55 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
     displayName: o.name ?? `#${o.order_number ?? o.id}`,
     fields: {
       shopify_id: String(o.id),
+      ...orderPaymentSourceFields({
+        sourceAccount: {
+          providerKey: 'shopify',
+          externalAccountId: sourceShopDomain,
+          environment: 'live',
+        },
+        orderExternalId: String(o.id),
+        sourceUpdatedAt: o.updated_at ?? null,
+        complete:
+          transactionsByOrderId.has(String(o.id)) &&
+          (transactionsByOrderId.get(String(o.id))?.length ?? 0) < 250,
+        transactions: (transactionsByOrderId.get(String(o.id)) ?? []).map((transaction) => ({
+          id: transaction.id?.split('/').slice(-1)[0] ?? '',
+          version: 2,
+          raw: transaction,
+          kind:
+            (
+              {
+                SALE: 'receipt',
+                CAPTURE: 'receipt',
+                REFUND: 'refund',
+                AUTHORIZATION: 'authorization',
+                VOID: 'void',
+              } as Record<string, string>
+            )[transaction.kind?.toUpperCase() ?? ''] ?? 'unknown',
+          status:
+            transaction.status?.toUpperCase() === 'SUCCESS'
+              ? 'confirmed'
+              : ['FAILURE', 'ERROR'].includes(transaction.status?.toUpperCase() ?? '')
+                ? 'failed'
+                : 'pending',
+          amount: transaction.amountSet?.presentmentMoney?.amount ?? '',
+          currency: transaction.amountSet?.presentmentMoney?.currencyCode ?? '',
+          processedAt: transaction.processedAt ?? null,
+          gateway: transaction.gateway ?? null,
+          settlementCurrency: transaction.settlementCurrency ?? null,
+          parentTransactionId: transaction.parentTransaction?.id.split('/').slice(-1)[0] ?? null,
+          creditMemoExternalId:
+            (o.refunds ?? [])
+              .find((refund) =>
+                (refund.transactions ?? []).some(
+                  (leg) => String(leg.id) === transaction.id?.split('/').slice(-1)[0],
+                ),
+              )
+              ?.id?.toString() ?? null,
+          paymentId: transaction.paymentId ?? null,
+          test: transaction.test === true,
+        })),
+      }),
       name: o.name,
       email: o.email,
       currency: o.currency,
@@ -1056,6 +1366,12 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
       // array-shaped source values outright. `''` (not null) for an order with no
       // gateway — a $0 / fully-discounted order is legitimately empty, not unknown.
       paymentGateways: (o.payment_gateway_names ?? []).join(','),
+      // The paid instant and the gateway that actually took the money
+      // (`order_paid_at` / `order_paid_gateway`, accounting plan 29 §3.1).
+      // Both null until the order is paid; see the order payment section for
+      // when they come from `processed_at` and when from a transaction lookup.
+      paidAt: payment.paidAt,
+      paidGateway: payment.paidGateway,
       tags: toTagString(o.tags),
       note: o.note,
       createdAt: o.created_at,
@@ -1092,7 +1408,7 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
         const quantity = typeof li.quantity === 'number' ? li.quantity : 0
         const discountMinor = (li.discount_allocations ?? []).reduce(
           (sum, allocation) => sum + (decimalToMinorUnits(allocation.amount) ?? 0),
-          0
+          0,
         )
         // Per-line fulfillment rollup. A line never touched by a live
         // fulfillment gets an explicit zeroed shape rather than a missing
@@ -1119,9 +1435,18 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
           fulfillableQuantity:
             typeof li.fulfillable_quantity === 'number' ? li.fulfillable_quantity : null,
           price: decimalToMinorUnits(li.price),
-          // Transcribed line total (§6.2): price × qty − Σ this line's discount
-          // allocations, all in integer minor units to avoid float drift.
-          lineTotal: unitPriceMinor * quantity - discountMinor,
+          // Transcribed line total (money plan 37 §6.2), GROSS: price × qty,
+          // in integer minor units to avoid float drift. Until accounting plan
+          // 29 §2.3 this deducted the line's discount allocations; it no longer
+          // does, because the line total a customer sees here must match what
+          // Shopify's admin shows per line, and that is the pre-discount amount.
+          lineTotal: unitPriceMinor * quantity,
+          // The allocated NET the ledger posts from (accounting plan 29 §2.3):
+          // price × qty − Σ this line's discount allocations, which is what
+          // `lineTotal` used to carry. Equal to `lineTotal` on an undiscounted
+          // line. Σ over the order's lines is Shopify's `subtotal_price`; the
+          // gross sum is not whenever a discount applied.
+          netTotal: unitPriceMinor * quantity - discountMinor,
           // Position within the order — line_item_sort_order.
           index,
           fulfillmentStatus: fulfillmentStatus(li.fulfillment_status),
@@ -1196,7 +1521,7 @@ function toOrderRecord(o: RawOrder): ConnectorRecord {
           (li.discount_allocations ?? []).map((allocation) => ({
             line_item_id: li.id != null ? String(li.id) : null,
             amount: allocation.amount,
-          }))
+          })),
         ),
       },
     },
@@ -1312,7 +1637,7 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
  */
 async function fetchSteeredProduct(
   args: ConnectorExecuteArgs,
-  inventoryItemId: string
+  inventoryItemId: string,
 ): Promise<ConnectorFetchResult> {
   const { connection } = args
   const token = getShopifyToken(connection)
@@ -1353,7 +1678,7 @@ async function fetchSteeredProduct(
 
   const res = await fetch(
     `https://${shopDomain}/admin/api/${API_VERSION}/products/${productId}.json`,
-    { headers }
+    { headers },
   )
   if (res.status === 404) {
     return { records: [], nextState: { backfillComplete: true } }
@@ -1366,7 +1691,7 @@ async function fetchSteeredProduct(
 }
 
 export default async function shopifySync(
-  args: ConnectorExecuteArgs
+  args: ConnectorExecuteArgs,
 ): Promise<ConnectorFetchResult> {
   // Webhook-steered partial fetch (inventory_levels/update → product stream): the
   // platform passes the delivery's declared paths as triggerContext — fetch ONLY the
@@ -1375,6 +1700,9 @@ export default async function shopifySync(
     return fetchSteeredProduct(args, args.triggerContext.resourceId)
   }
   switch (args.streamKey) {
+    case 'payout':
+    case 'balance_transaction':
+      return fetchPaymentsStream(args)
     case 'customer':
       return fetchShopifyPage<RawCustomer>(args, {
         resource: 'customers',
@@ -1382,12 +1710,16 @@ export default async function shopifySync(
         toRecord: toCustomerRecord,
       })
     case 'order':
-      return fetchShopifyPage<RawOrder>(args, {
+      return fetchShopifyPage<RawOrder, ReadonlyMap<string, OrderTransactionLike[]>>(args, {
         resource: 'orders',
         rootKey: 'orders',
-        toRecord: toOrderRecord,
+        toRecord: (order, transactions) =>
+          toOrderRecord(order, transactions, getShopDomain(args.connection?.metadata)!),
+        pageSize: ORDER_PAGE_SIZE,
         // `status=any` so cancelled/archived orders backfill too.
         firstPageParams: { status: 'any' },
+        // Actual transaction evidence for each order, with explicit incomplete coverage at the cap.
+        supplement: fetchPaidTransactions,
       })
     case 'product':
       return fetchShopifyPage<RawProduct>(args, {
