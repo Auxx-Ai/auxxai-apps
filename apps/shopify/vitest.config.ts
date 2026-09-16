@@ -28,6 +28,12 @@ export default defineConfig({
         './node_modules/@auxx/sdk/lib/root/tools/index.js',
         import.meta.url,
       ).pathname,
+      // The shared financial-source contract (projection helpers + field mappings) lives in
+      // the SDK, and both the manifest and the connector server import it at runtime.
+      '@auxx/sdk/financial-source': new URL(
+        './node_modules/@auxx/sdk/lib/root/financial-source/index.js',
+        import.meta.url,
+      ).pathname,
       // `@auxx/sdk`'s "." export is types-only — at build time both the client and server
       // builds externalize it to the injected `AUXX_ROOT_SDK` global, so it never needs a
       // runtime entry. Tests have no such injection, so point at the built implementation.
