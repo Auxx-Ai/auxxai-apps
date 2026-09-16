@@ -26,6 +26,7 @@ export const createQuickbooksCustomerTool = defineTool({
       })
       .optional(),
     taxable: z.boolean().optional(),
+    requestId: z.string().min(1).max(50).optional(),
     notes: z
       .string()
       .optional()

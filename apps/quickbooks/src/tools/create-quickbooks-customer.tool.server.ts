@@ -25,6 +25,7 @@ interface CreateQuickbooksCustomerInput {
   }
   taxable?: boolean
   notes?: string
+  requestId?: string
 }
 
 interface CreateQuickbooksCustomerOutput {
@@ -68,6 +69,7 @@ export default async function createQuickbooksCustomer(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await quickbooksApi<any>(realmId, '/customer', credential, {
     method: 'POST',
+    requestId: input.requestId,
     body,
     sandbox,
   })

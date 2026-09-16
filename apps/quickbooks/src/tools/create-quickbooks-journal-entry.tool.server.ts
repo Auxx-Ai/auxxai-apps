@@ -16,6 +16,7 @@ interface CreateJournalEntryInput {
   privateNote?: string
   adjustment?: boolean
   requestId?: string
+  currency?: string
 }
 
 interface CreateJournalEntryOutput {
@@ -31,6 +32,9 @@ export default async function createQuickbooksJournalEntry(
   // Validate and convert before touching the network: every one of these would
   // come back as an opaque 400 otherwise.
   const Line = buildJournalLines(input.lines)
+  if (input.currency && !/^[A-Z]{3}$/.test(input.currency)) {
+    throw new InvalidInputError('currency must be a three-letter ISO code.')
+  }
 
   if (input.docNumber && input.docNumber.length > DOC_NUMBER_MAX_LENGTH) {
     throw new InvalidInputError(
@@ -57,6 +61,7 @@ export default async function createQuickbooksJournalEntry(
     requestId: input.requestId,
     body: {
       Line,
+      ...(input.currency && { CurrencyRef: { value: input.currency } }),
       ...(input.txnDate && { TxnDate: input.txnDate }),
       ...(input.docNumber && { DocNumber: input.docNumber }),
       ...(input.privateNote && { PrivateNote: input.privateNote }),
