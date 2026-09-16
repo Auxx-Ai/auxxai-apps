@@ -81,8 +81,8 @@ import type {
   ConnectorFetchResult,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
+import { orderPaymentSourceFields } from '@auxx/sdk/financial-source'
 import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
-import { orderPaymentSourceFields } from './financial-source-fields'
 import { fetchPaymentsStream } from './payments.connector.server'
 
 const API_VERSION = '2024-10'

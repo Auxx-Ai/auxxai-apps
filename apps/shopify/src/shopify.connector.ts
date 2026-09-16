@@ -72,13 +72,14 @@
 // are therefore delivered as COMMA STRINGS.
 
 import { defineDataConnector } from '@auxx/sdk/data-connectors'
-import { z } from '@auxx/sdk/tools'
-import { payoutSourceFields, processorSourceFields } from './financial-source-fields'
 import {
   customerTransactionFieldMappings,
   payoutFieldMappings,
+  payoutSourceFields,
   processorFieldMappings,
-} from './financial-source-mappings'
+  processorSourceFields,
+} from '@auxx/sdk/financial-source'
+import { z } from '@auxx/sdk/tools'
 import shopifySync from './shopify.connector.server'
 
 export const shopifyConnector = defineDataConnector({

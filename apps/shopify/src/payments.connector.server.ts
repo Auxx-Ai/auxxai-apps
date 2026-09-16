@@ -5,6 +5,7 @@ import type {
   ConnectorFetchResult,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
+import { payoutSourceFields, processorSourceFields } from '@auxx/sdk/financial-source'
 import { InsufficientPermissionsError } from '@auxx/sdk/server'
 import type { RawBalanceTransaction, RawPayout } from './blocks/shopify/shared/payments-api'
 import {
@@ -13,7 +14,6 @@ import {
   payoutEvidence,
 } from './blocks/shopify/shared/payments-evidence'
 import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
-import { payoutSourceFields, processorSourceFields } from './financial-source-fields'
 
 // Pinned supported version. Existing order/product streams retain their independent version.
 const PAYMENTS_API_VERSION = '2026-04'
