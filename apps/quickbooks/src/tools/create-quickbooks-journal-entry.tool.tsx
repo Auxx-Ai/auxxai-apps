@@ -65,6 +65,10 @@ export const createQuickbooksJournalEntryTool = defineTool({
       .optional()
       .describe('Internal memo. NOT filterable — use docNumber if you need to query it back.'),
     adjustment: z.boolean().optional(),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
     requestId: z
       .string()
       .max(50)
