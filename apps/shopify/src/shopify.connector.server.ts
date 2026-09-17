@@ -1118,6 +1118,22 @@ export function resolvePaidTransaction(transactions: OrderTransactionLike[]): Or
 }
 
 /**
+ * Every distinct gateway with a successful `sale` or `capture` (58 §7, D12): a
+ * declined attempt names a gateway too but never sold anything, so it is
+ * dropped rather than carried onto `paymentGateways`.
+ */
+export function resolveSuccessfulGateways(transactions: OrderTransactionLike[]): string[] {
+  const gateways: string[] = []
+  for (const tx of transactions) {
+    const kind = tx.kind?.toLowerCase()
+    if (kind !== 'sale' && kind !== 'capture') continue
+    if (tx.status?.toLowerCase() !== 'success') continue
+    if (tx.gateway && !gateways.includes(tx.gateway)) gateways.push(tx.gateway)
+  }
+  return gateways
+}
+
+/**
  * `paidAt` / `paidGateway` for one order. `transactionsByOrderId` holds the
  * looked-up transactions for the orders on this page that needed them; an order
  * that needed a lookup and got none (deleted between the two calls, or outside
@@ -1229,11 +1245,11 @@ interface RawOrder {
   /**
    * Gateways across ALL of the order's transactions — the routing key for the
    * checkout debit. `order.gateway` and `order.processing_method` are both deprecated;
-   * this is the current field. ⚠️ It includes gateways from FAILED transactions, so a
+   * this is the current field. It includes gateways from FAILED transactions, so a
    * declined-Affirm-then-paid-by-card order reads `['affirm','shopify_payments']` and a
-   * naive `includes('affirm')` mis-routes. A multi-value order is resolved against
-   * its transactions (`fetchPaidTransactions`) into `paidGateway`; this list stays
-   * the unresolved projection.
+   * naive `includes('affirm')` mis-routes. This raw list is never mutated; a
+   * multi-value order resolves `paidGateway` AND the projected `paymentGateways`
+   * (58 §7, D12) against `fetchPaidTransactions`, dropping the failed names.
    */
   payment_gateway_names: string[] | null
   /**
@@ -1365,7 +1381,14 @@ function toOrderRecord(
       // Joined to a COMMA STRING, never emitted as an array: the fan-out drops
       // array-shaped source values outright. `''` (not null) for an order with no
       // gateway — a $0 / fully-discounted order is legitimately empty, not unknown.
-      paymentGateways: (o.payment_gateway_names ?? []).join(','),
+      // Rule 1's single gateway has nothing to filter; a rule-2 lookup projects
+      // only its successful transactions' gateways (58 §7, D12), dropping a
+      // declined attempt's name.
+      paymentGateways: (
+        needsPaidTransactionLookup(o)
+          ? resolveSuccessfulGateways(transactionsByOrderId.get(String(o.id)) ?? [])
+          : (o.payment_gateway_names ?? [])
+      ).join(','),
       // The paid instant and the gateway that actually took the money
       // (`order_paid_at` / `order_paid_gateway`, accounting plan 29 §3.1).
       // Both null until the order is paid; see the order payment section for
