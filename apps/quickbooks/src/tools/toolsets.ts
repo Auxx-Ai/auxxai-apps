@@ -101,7 +101,7 @@ export const quickbooksToolsets: Toolset[] = [
     id: 'quickbooks.ledger.write',
     name: 'QuickBooks general ledger (write)',
     description:
-      'Post summary journal entries to the general ledger. High blast radius — entries hit the financial statements directly, with no invoice or payment to review them against.',
-    tools: ['create_quickbooks_journal_entry'],
+      'Post summary journal entries to the general ledger, and remove ones auxx put there. High blast radius — entries hit the financial statements directly, with no invoice or payment to review them against.',
+    tools: ['create_quickbooks_journal_entry', 'delete_quickbooks_journal_entry'],
   },
 ]

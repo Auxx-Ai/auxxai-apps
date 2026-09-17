@@ -64,6 +64,7 @@ import { quickbooksVendorGetManyTool } from './tools/internal/vendor-get-many.to
 import { quickbooksVendorUpdateTool } from './tools/internal/vendor-update.tool'
 import { listQuickbooksAccountsTool } from './tools/list-quickbooks-accounts.tool'
 import { createQuickbooksJournalEntryTool } from './tools/create-quickbooks-journal-entry.tool'
+import { deleteQuickbooksJournalEntryTool } from './tools/delete-quickbooks-journal-entry.tool'
 import { findQuickbooksJournalEntryTool } from './tools/find-quickbooks-journal-entry.tool'
 import { resolveQuickbooksAccountTool } from './tools/resolve-quickbooks-account.tool'
 import { listQuickbooksItemsTool } from './tools/list-quickbooks-items.tool'
@@ -106,6 +107,7 @@ export const app = {
     listQuickbooksAccountsTool,
     resolveQuickbooksAccountTool,
     createQuickbooksJournalEntryTool,
+    deleteQuickbooksJournalEntryTool,
     findQuickbooksJournalEntryTool,
     listQuickbooksItemsTool,
     findQuickbooksCustomerTool,
