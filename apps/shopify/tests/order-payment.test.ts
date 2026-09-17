@@ -124,7 +124,7 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
     expect(calls[0]!.url).toContain('/orders.json')
   })
 
-  it('two gateways (declined Affirm, then card) resolve to the successful transaction', async () => {
+  it('two gateways (declined Affirm, then card): the successful transaction wins paidGateway, and the declined one drops off paymentGateways (58 §7, D12)', async () => {
     const order = {
       ...BASE_ORDER,
       payment_gateway_names: ['affirm', 'shopify_payments'],
@@ -159,7 +159,8 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
     expect(fields.paidGateway).toBe('shopify_payments')
     // The transaction's own instant, not the order's `processed_at`.
     expect(fields.paidAt).toBe('2024-02-11T10:03:00Z')
-    expect(fields.paymentGateways).toBe('affirm,shopify_payments')
+    // One gateway, not two: the declined Affirm attempt never sold anything.
+    expect(fields.paymentGateways).toBe('shopify_payments')
 
     // Exactly one extra call, to GraphQL, asking for this one order.
     expect(calls).toHaveLength(2)
