@@ -30,6 +30,10 @@ export interface MappedAccount {
   accountSubType: string | null
   classification: AccountClassification
   active: boolean
+  /** QuickBooks `ParentRef.value` when `SubAccount` is true, else null. */
+  parentId: string | null
+  /** QuickBooks' own flag — true when this account has a parent. */
+  subAccount: boolean
 }
 
 function normalizeClassification(c: unknown): AccountClassification {
@@ -39,6 +43,7 @@ function normalizeClassification(c: unknown): AccountClassification {
 }
 
 export function mapAccount(a: any): MappedAccount {
+  const subAccount = Boolean(a.SubAccount)
   return {
     id: String(a.Id ?? ''),
     name: a.Name ?? '',
@@ -48,5 +53,9 @@ export function mapAccount(a: any): MappedAccount {
     accountSubType: a.AccountSubType ?? null,
     classification: normalizeClassification(a.Classification),
     active: a.Active !== false,
+    // Only trust ParentRef when SubAccount is true — Intuit can leave a stale
+    // ParentRef on a record that was promoted back to top-level.
+    parentId: subAccount && a.ParentRef?.value ? String(a.ParentRef.value) : null,
+    subAccount,
   }
 }
