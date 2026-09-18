@@ -4,19 +4,42 @@ import { TextBlock } from '@auxx/sdk/client'
 import { quickbooksBlock } from './blocks/quickbooks/quickbooks.workflow'
 import { quickbooksFields } from './fields'
 import { createQuickbooksAccountTool } from './tools/create-quickbooks-account.tool'
+import { createQuickbooksBillTool } from './tools/create-quickbooks-bill.tool'
+import { createQuickbooksCreditMemoTool } from './tools/create-quickbooks-credit-memo.tool'
 import { createQuickbooksCustomerTool } from './tools/create-quickbooks-customer.tool'
+import { createQuickbooksDepositTool } from './tools/create-quickbooks-deposit.tool'
 import { createQuickbooksEstimateTool } from './tools/create-quickbooks-estimate.tool'
 import { createQuickbooksInvoiceTool } from './tools/create-quickbooks-invoice.tool'
 import { createQuickbooksItemTool } from './tools/create-quickbooks-item.tool'
 import { createQuickbooksPaymentTool } from './tools/create-quickbooks-payment.tool'
+import { createQuickbooksRefundReceiptTool } from './tools/create-quickbooks-refund-receipt.tool'
+import { createQuickbooksSalesReceiptTool } from './tools/create-quickbooks-sales-receipt.tool'
 import { createQuickbooksVendorTool } from './tools/create-quickbooks-vendor.tool'
+import { deleteQuickbooksBillTool } from './tools/delete-quickbooks-bill.tool'
+import { deleteQuickbooksCreditMemoTool } from './tools/delete-quickbooks-credit-memo.tool'
+import { deleteQuickbooksDepositTool } from './tools/delete-quickbooks-deposit.tool'
+import { deleteQuickbooksInvoiceTool } from './tools/delete-quickbooks-invoice.tool'
+import { deleteQuickbooksPaymentTool } from './tools/delete-quickbooks-payment.tool'
+import { deleteQuickbooksRefundReceiptTool } from './tools/delete-quickbooks-refund-receipt.tool'
+import { deleteQuickbooksSalesReceiptTool } from './tools/delete-quickbooks-sales-receipt.tool'
+import { findQuickbooksBillTool } from './tools/find-quickbooks-bill.tool'
+import { findQuickbooksCreditMemoTool } from './tools/find-quickbooks-credit-memo.tool'
 import { findQuickbooksCustomerTool } from './tools/find-quickbooks-customer.tool'
+import { findQuickbooksInvoiceTool } from './tools/find-quickbooks-invoice.tool'
+import { findQuickbooksItemTool } from './tools/find-quickbooks-item.tool'
+import { findQuickbooksRefundReceiptTool } from './tools/find-quickbooks-refund-receipt.tool'
+import { findQuickbooksSalesReceiptTool } from './tools/find-quickbooks-sales-receipt.tool'
 import { findQuickbooksVendorTool } from './tools/find-quickbooks-vendor.tool'
+import { getQuickbooksBillTool } from './tools/get-quickbooks-bill.tool'
+import { getQuickbooksCreditMemoTool } from './tools/get-quickbooks-credit-memo.tool'
 import { getQuickbooksCustomerTool } from './tools/get-quickbooks-customer.tool'
+import { getQuickbooksDepositTool } from './tools/get-quickbooks-deposit.tool'
 import { getQuickbooksEstimateTool } from './tools/get-quickbooks-estimate.tool'
 import { getQuickbooksInvoiceTool } from './tools/get-quickbooks-invoice.tool'
 import { getQuickbooksItemTool } from './tools/get-quickbooks-item.tool'
 import { getQuickbooksPaymentTool } from './tools/get-quickbooks-payment.tool'
+import { getQuickbooksRefundReceiptTool } from './tools/get-quickbooks-refund-receipt.tool'
+import { getQuickbooksSalesReceiptTool } from './tools/get-quickbooks-sales-receipt.tool'
 import { getQuickbooksBalanceSheetTool } from './tools/get-quickbooks-balance-sheet.tool'
 import { getQuickbooksGeneralLedgerTool } from './tools/get-quickbooks-general-ledger.tool'
 import { getQuickbooksVendorTool } from './tools/get-quickbooks-vendor.tool'
@@ -64,6 +87,7 @@ import { quickbooksVendorGetManyTool } from './tools/internal/vendor-get-many.to
 import { quickbooksVendorUpdateTool } from './tools/internal/vendor-update.tool'
 import { listQuickbooksAccountsTool } from './tools/list-quickbooks-accounts.tool'
 import { createQuickbooksJournalEntryTool } from './tools/create-quickbooks-journal-entry.tool'
+import { deleteQuickbooksJournalEntryTool } from './tools/delete-quickbooks-journal-entry.tool'
 import { findQuickbooksJournalEntryTool } from './tools/find-quickbooks-journal-entry.tool'
 import { resolveQuickbooksAccountTool } from './tools/resolve-quickbooks-account.tool'
 import { listQuickbooksItemsTool } from './tools/list-quickbooks-items.tool'
@@ -106,6 +130,7 @@ export const app = {
     listQuickbooksAccountsTool,
     resolveQuickbooksAccountTool,
     createQuickbooksJournalEntryTool,
+    deleteQuickbooksJournalEntryTool,
     findQuickbooksJournalEntryTool,
     listQuickbooksItemsTool,
     findQuickbooksCustomerTool,
@@ -138,6 +163,32 @@ export const app = {
     getQuickbooksBalanceSheetTool,
     getQuickbooksGeneralLedgerTool,
     createQuickbooksAccountTool,
+    // Native provider objects for the accounting export (plans/accounting/tasks/67).
+    // Durable, platform-called — no `agent` key, in no toolset. See toolsets.ts's
+    // header for why.
+    createQuickbooksSalesReceiptTool,
+    getQuickbooksSalesReceiptTool,
+    deleteQuickbooksSalesReceiptTool,
+    findQuickbooksSalesReceiptTool,
+    createQuickbooksCreditMemoTool,
+    getQuickbooksCreditMemoTool,
+    deleteQuickbooksCreditMemoTool,
+    findQuickbooksCreditMemoTool,
+    createQuickbooksRefundReceiptTool,
+    getQuickbooksRefundReceiptTool,
+    deleteQuickbooksRefundReceiptTool,
+    findQuickbooksRefundReceiptTool,
+    createQuickbooksDepositTool,
+    getQuickbooksDepositTool,
+    deleteQuickbooksDepositTool,
+    createQuickbooksBillTool,
+    getQuickbooksBillTool,
+    deleteQuickbooksBillTool,
+    findQuickbooksBillTool,
+    deleteQuickbooksInvoiceTool,
+    findQuickbooksInvoiceTool,
+    deleteQuickbooksPaymentTool,
+    findQuickbooksItemTool,
     // Internal-only tools (no `agent` / `action` keys) — invoked via the
     // QuickBooks workflow block dispatcher (toolMap).
     quickbooksBillCreateTool,
