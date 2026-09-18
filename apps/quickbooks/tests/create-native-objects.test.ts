@@ -139,7 +139,7 @@ describe('create_quickbooks_deposit', () => {
             }),
             expect.objectContaining({
               Amount: -3.5,
-              Memo: 'processor fee',
+              Description: 'processor fee',
               DepositLineDetail: { AccountRef: { value: '91' } },
             }),
           ],

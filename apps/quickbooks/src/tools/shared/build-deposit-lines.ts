@@ -31,7 +31,7 @@ export function buildDepositLines(lines: DepositLineInput[]): Record<string, unk
     return {
       Amount: toMajorUnits(line.amountMinor),
       DetailType: 'DepositLineDetail' as const,
-      ...(line.memo && { Memo: line.memo }),
+      ...(line.memo && { Description: line.memo }),
       DepositLineDetail: {
         AccountRef: { value: line.accountId },
       },
