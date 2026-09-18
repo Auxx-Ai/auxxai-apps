@@ -12,14 +12,47 @@ export const createQuickbooksPaymentTool = defineTool({
   icon: quickbooksIcon,
   inputs: z.object({
     customerId: z.string().describe('QuickBooks Customer.Id who made the payment.'),
-    totalAmt: z.number().positive().describe('Payment amount.'),
+    totalAmt: z
+      .number()
+      .positive()
+      .optional()
+      .describe('Payment amount, major-unit dollars. Ignored when amountMinor is also given.'),
+    amountMinor: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        'Amount in MINOR UNITS (cents). 4999 means $49.99. Wins over `totalAmt` when both are given.'
+      ),
     txnDate: z.string().optional().describe('ISO date (YYYY-MM-DD); defaults to today.'),
     paymentRefNum: z.string().optional().describe('Reference number (check #, txn id).'),
-    privateNote: z.string().optional(),
+    privateNote: z.string().max(4000).optional().describe('Internal memo. NOT filterable.'),
+    depositToAccountId: z
+      .string()
+      .optional()
+      .describe(
+        'QuickBooks AccountRef.Id the payment is deposited to (bank or Undeposited Funds).'
+      ),
     linkedInvoiceIds: z
       .array(z.string())
       .optional()
-      .describe('Invoice ids to apply this payment to. Omit for unapplied credit.'),
+      .describe(
+        'Invoice ids to split this payment across evenly. Omit for unapplied credit. Mutually exclusive with invoiceId.'
+      ),
+    invoiceId: z
+      .string()
+      .optional()
+      .describe(
+        'Apply the FULL payment amount to this one invoice. Mutually exclusive with linkedInvoiceIds.'
+      ),
+    requestId: z
+      .string()
+      .max(50)
+      .optional()
+      .describe(
+        'Idempotency key, max 50 chars. A repeat request with the same key returns the original payment instead of posting again.'
+      ),
   }),
   outputs: z.object({
     paymentId: z.string(),

@@ -52,7 +52,7 @@ const DESCRIPTION_MAX_LENGTH = 4000
  * low before it was caught. Division by 100 on an integer is exact for every
  * value in range; the rounding guards against a non-integer sneaking in.
  */
-function toMajorUnits(amountMinor: number): number {
+export function toMajorUnits(amountMinor: number): number {
   return Math.round(amountMinor) / 100
 }
 
