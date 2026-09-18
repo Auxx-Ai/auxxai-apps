@@ -34,6 +34,13 @@ export const listQuickbooksAccountsTool = defineTool({
           ),
         classification: z.enum(['Asset', 'Liability', 'Equity', 'Revenue', 'Expense']),
         active: z.boolean(),
+        parentId: z
+          .string()
+          .nullable()
+          .describe(
+            "QuickBooks ParentRef id when this is a sub-account, else null. Reflects Intuit's SubAccount flag."
+          ),
+        subAccount: z.boolean().describe('True when this account has a parent (parentId is set).'),
       })
     ),
   }),
@@ -48,6 +55,8 @@ export const listQuickbooksAccountsTool = defineTool({
         accountSubType: 'SalesOfProductIncome',
         classification: 'Revenue',
         active: true,
+        parentId: '81',
+        subAccount: true,
       },
       {
         id: '35',
@@ -58,6 +67,8 @@ export const listQuickbooksAccountsTool = defineTool({
         accountSubType: 'AccountsReceivable',
         classification: 'Asset',
         active: true,
+        parentId: null,
+        subAccount: false,
       },
     ],
   },

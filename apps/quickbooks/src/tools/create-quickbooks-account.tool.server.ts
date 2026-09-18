@@ -10,6 +10,8 @@ interface CreateQuickbooksAccountInput {
   accountType?: string
   accountSubType?: string
   description?: string
+  /** Creates this as a sub-account of the named QuickBooks account id. */
+  parentId?: string
   /**
    * Return the existing account instead of failing when one already carries
    * this name or number. Defaults to true.
@@ -78,6 +80,16 @@ function norm(value: string | null | undefined): string {
  * allowlist in this file would refuse accounts the API would have taken. An
  * unrecognised value comes back as a QuickBooks fault naming the field, which
  * is a better error than one this tool could write.
+ *
+ * ## `parentId`
+ *
+ * Fetched and checked before the create call: must exist, be active, and
+ * carry the same `AccountType` as requested — QuickBooks requires a
+ * sub-account to share its parent's type, and a mismatch left to Intuit comes
+ * back as an opaque fault. `accountType` (not just `accountSubType`) is
+ * required alongside `parentId` so there is something concrete to check.
+ * The reuse-before-create match is scoped to the same parent in this case —
+ * see `norm`'s caller below.
  */
 export default async function createQuickbooksAccount(
   input: CreateQuickbooksAccountInput
@@ -92,7 +104,40 @@ export default async function createQuickbooksAccount(
     invalidInput('accountType or accountSubType is required — QuickBooks needs at least one.')
   }
 
+  const parentId = input.parentId?.trim() || undefined
+  if (parentId && !accountType) {
+    invalidInput(
+      "accountType is required alongside parentId — QuickBooks requires a sub-account to share its parent's AccountType, and accountSubType alone is not enough to check that before creating."
+    )
+  }
+
   const { credential, realmId, sandbox } = await getQuickbooksConnection()
+
+  let parent: MappedAccount | undefined
+  if (parentId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let parentRaw: any
+    try {
+      const result = await quickbooksApi<any>(realmId, `/account/${parentId}`, credential, {
+        sandbox,
+      })
+      parentRaw = result.Account
+    } catch {
+      invalidInput(`Parent account "${parentId}" does not exist in QuickBooks.`)
+    }
+    parent = mapAccount(parentRaw)
+
+    if (!parent.active) {
+      invalidInput(
+        `Parent account "${parent.fullyQualifiedName}" (id ${parent.id}) is inactive. Choose an active parent account.`
+      )
+    }
+    if (parent.accountType !== accountType) {
+      invalidInput(
+        `Parent account "${parent.fullyQualifiedName}" is a ${parent.accountType} account (classification ${parent.classification}); a sub-account must share its parent's AccountType. Pass accountType: "${parent.accountType}".`
+      )
+    }
+  }
 
   if (input.reuseExisting !== false) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,9 +157,30 @@ export default async function createQuickbooksAccount(
       }
     }
 
-    const byName = existing.filter(
-      (a) => norm(a.name) === norm(name) || norm(a.fullyQualifiedName) === norm(name)
-    )
+    // With a parentId, a same-named account under a DIFFERENT parent is not a
+    // match — QuickBooks allows the same leaf name at different places in the
+    // hierarchy, so the scope narrows to this parent (by ParentRef or the
+    // resulting FullyQualifiedName) instead of the plain name compare below.
+    let byName: MappedAccount[]
+    if (parentId && parent) {
+      const expectedFQN = norm(`${parent.fullyQualifiedName}:${name}`)
+      byName = existing.filter(
+        (a) =>
+          norm(a.fullyQualifiedName) === expectedFQN ||
+          (a.parentId === parentId && norm(a.name) === norm(name))
+      )
+    } else {
+      byName = existing.filter(
+        (a) => norm(a.name) === norm(name) || norm(a.fullyQualifiedName) === norm(name)
+      )
+      // Several same-named hits with no parent requested: prefer the one
+      // top-level account over any sub-accounts sharing the leaf name, rather
+      // than refusing an otherwise unambiguous create-at-the-top intent.
+      if (byName.length > 1) {
+        const topLevel = byName.filter((a) => !a.subAccount)
+        if (topLevel.length === 1) byName = topLevel
+      }
+    }
     if (byName.length === 1) {
       return { account: byName[0]!, outcome: 'existing', matchedOn: 'name', acctNumDropped: false }
     }
@@ -143,6 +209,7 @@ export default async function createQuickbooksAccount(
     ...(accountType && { AccountType: accountType }),
     ...(accountSubType && { AccountSubType: accountSubType }),
     ...(input.description?.trim() && { Description: input.description.trim() }),
+    ...(parentId && { ParentRef: { value: parentId }, SubAccount: true }),
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

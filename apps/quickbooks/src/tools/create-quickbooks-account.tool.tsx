@@ -19,6 +19,11 @@ const accountShape = z.object({
     .describe("QuickBooks' detail type, e.g. 'OtherCurrentAssets'."),
   classification: z.enum(['Asset', 'Liability', 'Equity', 'Revenue', 'Expense']),
   active: z.boolean(),
+  parentId: z
+    .string()
+    .nullable()
+    .describe('QuickBooks ParentRef id when this is a sub-account, else null.'),
+  subAccount: z.boolean().describe('True when this account has a parent (parentId is set).'),
 })
 
 /**
@@ -56,6 +61,12 @@ export const createQuickbooksAccountTool = defineTool({
         "QuickBooks' detail type, e.g. 'OtherCurrentAssets', 'Checking'. Given alone, Intuit infers accountType from it."
       ),
     description: z.string().optional(),
+    parentId: z
+      .string()
+      .optional()
+      .describe(
+        "QuickBooks id of the parent account, to create this as a sub-account (sends ParentRef and SubAccount: true). QuickBooks requires a sub-account to share its parent's AccountType, so pass accountType explicitly — it is checked against the parent before creating and the call is refused on a mismatch, an inactive parent, or a parent id that does not exist."
+      ),
     reuseExisting: z
       .boolean()
       .optional()
@@ -85,6 +96,8 @@ export const createQuickbooksAccountTool = defineTool({
       accountSubType: 'OtherCurrentAssets',
       classification: 'Asset',
       active: true,
+      parentId: null,
+      subAccount: false,
     },
     outcome: 'created',
     matchedOn: null,
