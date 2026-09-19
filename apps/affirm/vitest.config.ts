@@ -21,13 +21,13 @@ export default defineConfig({
       // platform repo so the tests run the PLATFORM's own `assessPayoutMembership` and zod
       // schemas rather than a copy that could drift away from them.
       '@auxx/lib/money/payouts/evidence-contracts': platform(
-        'packages/lib/src/money/payouts/evidence-contracts.ts'
+        'packages/lib/src/accounting/money/customer-money/evidence-contracts.ts'
       ),
       // The CONNECTOR path validates against these, not against the evidence
       // contracts above: `processorRecordEntrySchema` is where `providerType` is
       // actually declared, which is why the connector emits it.
       '@auxx/lib/money/payouts/record-contracts': platform(
-        'packages/lib/src/money/payouts/record-contracts.ts'
+        'packages/lib/src/accounting/money/customer-money/record-contracts.ts'
       ),
       // ...which needs one leaf helper from the platform's utils package.
       '@auxx/utils/currency': platform('packages/utils/src/currency.ts'),
