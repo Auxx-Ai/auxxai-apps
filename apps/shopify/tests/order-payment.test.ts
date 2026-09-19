@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import shopifySync, {
+  gatewayTransactionIdOf,
   needsPaidTransactionLookup,
   resolveOrderPayment,
   resolvePaidTransaction,
@@ -405,5 +406,62 @@ describe('42C actual transaction source projection', () => {
     const { fetchMock } = mockFetch([BASE_ORDER], [])
     vi.stubGlobal('fetch', fetchMock)
     await expect(syncOrders()).rejects.toThrow('missing order transaction coverage')
+  })
+})
+
+/**
+ * authorize-net plan §6A: the gateway's own two ids ride out on each projected
+ * transaction, so a settled Authorize.net batch member can be joined back to the
+ * order it paid for.
+ */
+describe('the gateway ids on a projected transaction', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('reads transaction_id off the receipt and keeps the authorization code', async () => {
+    const { fetchMock } = mockFetch(
+      [BASE_ORDER],
+      [
+        {
+          legacyResourceId: String(BASE_ORDER.id),
+          transactions: [
+            {
+              id: 'gid://shopify/OrderTransaction/1',
+              kind: 'SALE',
+              status: 'SUCCESS',
+              gateway: 'authorize_net',
+              processedAt: '2026-05-19T01:30:00Z',
+              amountSet: { presentmentMoney: { amount: '49.99', currencyCode: 'USD' } },
+              authorizationCode: 'A1B2C3',
+              receiptJson: { transaction_id: 60000012345, response_code: '1' },
+            },
+          ],
+        },
+      ],
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await syncOrders()
+    const transactions = (result.records[0]!.fields as { paymentTransactions: unknown[] })
+      .paymentTransactions
+    expect(transactions[0]).toMatchObject({
+      authorizationCode: 'A1B2C3',
+      gatewayTransactionId: '60000012345',
+    })
+  })
+
+  it('never throws on a receipt it cannot read', () => {
+    expect(gatewayTransactionIdOf({ transaction_id: '60000012345' })).toBe('60000012345')
+    expect(gatewayTransactionIdOf({ transaction_id: 60000012345 })).toBe('60000012345')
+    for (const receipt of [
+      null,
+      undefined,
+      '{"transaction_id":"1"}',
+      [{ transaction_id: '1' }],
+      {},
+      { transaction_id: '' },
+      { transaction_id: null },
+      { transaction_id: { id: 1 } },
+      { transaction_id: Number.NaN },
+    ])
+      expect(gatewayTransactionIdOf(receipt)).toBeNull()
   })
 })

@@ -1065,6 +1065,26 @@ export interface OrderTransactionLike {
   status?: string | null
   gateway?: string | null
   processedAt?: string | null
+  /** The gateway's authorisation code — typed and stable. */
+  authorizationCode?: string | null
+  /** The gateway's raw receipt. Shopify documents it as gateway-specific and NOT a
+   *  stable contract, so `gatewayTransactionIdOf` is the only reader. */
+  receiptJson?: unknown
+}
+
+/**
+ * The gateway's own transaction id off `receiptJson` — Authorize.net's `transId`
+ * on this merchant (authorize-net plan §6A), which is what joins a settled batch
+ * member back to this order.
+ *
+ * The ONLY place `receiptJson` is parsed, and it never throws: an absent or
+ * oddly-shaped receipt is an unrecognised item, not a failed transaction.
+ */
+export function gatewayTransactionIdOf(receiptJson: unknown): string | null {
+  if (!receiptJson || typeof receiptJson !== 'object' || Array.isArray(receiptJson)) return null
+  const id = (receiptJson as { transaction_id?: unknown }).transaction_id
+  if (typeof id === 'number' && Number.isFinite(id)) return String(id)
+  return typeof id === 'string' && id.length > 0 ? id : null
 }
 
 export interface OrderPayment {
@@ -1164,7 +1184,7 @@ const PAID_TRANSACTIONS_QUERY = `query PaidTransactions($ids: [ID!]!) {
   nodes(ids: $ids) {
     ... on Order {
       legacyResourceId
-      transactions(first: 250) { id kind status gateway processedAt amountSet { presentmentMoney { amount currencyCode } } settlementCurrency parentTransaction { id } paymentId test }
+      transactions(first: 250) { id kind status gateway processedAt amountSet { presentmentMoney { amount currencyCode } } settlementCurrency parentTransaction { id } paymentId test authorizationCode receiptJson }
     }
   }
 }`
@@ -1359,6 +1379,8 @@ function toOrderRecord(
               )
               ?.id?.toString() ?? null,
           paymentId: transaction.paymentId ?? null,
+          authorizationCode: transaction.authorizationCode ?? null,
+          gatewayTransactionId: gatewayTransactionIdOf(transaction.receiptJson),
           test: transaction.test === true,
         })),
       }),
