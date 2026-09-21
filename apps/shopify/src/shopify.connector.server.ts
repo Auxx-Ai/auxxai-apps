@@ -417,11 +417,11 @@ function toRate(rate: number | string | null | undefined): number | null {
  * Project one order-level tax line for the `tax_lines[]` fan-out.
  *
  * 🛑 A Shopify tax line carries NO `id`, so there is no natural external id to key
- * the record on and one has to be synthesised. `${orderId}:${title}` is a natural
- * key on (order, jurisdiction), which is what a tax line actually is — the title
- * IS the jurisdiction ("Texas State Tax", "Dallas Mta Transit"). Two tax lines on
- * one order sharing a title would collide onto a single record; no such order has
- * been observed, but nothing in the payload prevents it.
+ * the record on and one has to be synthesised. `${orderId}:${title}:${rate}` is
+ * the grain Shopify aggregates order-level tax lines on. Title alone is not enough:
+ * Tennessee charges 7% on the full price and a separate 2.75% single-article tax
+ * on the $1,600–$3,200 slice, both titled "Tennessee State Tax", and keying on
+ * title collapsed them onto one record and lost the larger line (76 §1.2).
  *
  * `channelLiable` is a POSTING INPUT, not decoration: only a `false` line credits
  * `2200 Sales Tax Payable`, because a `true` line is remitted by the marketplace
@@ -431,10 +431,11 @@ function toRate(rate: number | string | null | undefined): number | null {
  */
 function projectTaxLine(orderId: string, tl: RawTaxLine) {
   const title = tl.title ?? null
+  const rate = toRate(tl.rate)
   return {
-    taxLineKey: title != null ? `${orderId}:${title}` : null,
+    taxLineKey: title != null ? `${orderId}:${title}:${rate ?? ''}` : null,
     title,
-    rate: toRate(tl.rate),
+    rate,
     // The `_set` STRING form, never the bare `price` number — see `RawTaxLine`.
     price: decimalToMinorUnits(tl.price_set?.shop_money?.amount ?? null),
     channelLiable: typeof tl.channel_liable === 'boolean' ? tl.channel_liable : null,

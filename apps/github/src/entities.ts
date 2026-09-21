@@ -14,7 +14,8 @@ export const issues = defineEntity({
   plural: 'GitHub Issues',
   primaryDisplayField: 'title',
   fields: [
-    { key: 'githubId', type: 'TEXT', name: 'GitHub Issue ID', identity: true },
+    // The source ships the page URL itself, so the link is just that field.
+    { key: 'githubId', type: 'TEXT', name: 'GitHub Issue ID', identity: true, link: '{field.url}' },
     { key: 'number', type: 'NUMBER', name: 'Number' },
     { key: 'title', type: 'TEXT', name: 'Title' },
     { key: 'state', type: 'TEXT', name: 'State' },

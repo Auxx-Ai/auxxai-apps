@@ -1119,14 +1119,14 @@ export const shopifyConnector = defineDataConnector({
         // order measured, and more than one line is the norm (48 §1, §2).
         tax_lines: [
           {
-            taxLineKey: '1234567890:CA State Tax',
+            taxLineKey: '1234567890:CA State Tax:0.06',
             title: 'CA State Tax',
             rate: 0.06,
             price: 276,
             channelLiable: false,
           },
           {
-            taxLineKey: '1234567890:Ventura County Tax',
+            taxLineKey: '1234567890:Ventura County Tax:0.0275',
             title: 'Ventura County Tax',
             rate: 0.0275,
             price: 124,
