@@ -38,6 +38,8 @@ export const quickbooksFields = defineFields([
     name: 'QuickBooks customer ID',
     description: 'The QuickBooks Online Customer.Id this contact is mapped to.',
     identity: true,
+    // The URL carries no realm: it opens in whichever company the user is signed into.
+    link: 'https://app.qbo.intuit.com/app/customerdetail?nameId={externalId}',
     capabilities: {
       hidden: true,
       filterable: true,
@@ -54,6 +56,7 @@ export const quickbooksFields = defineFields([
     name: 'QuickBooks vendor ID',
     description: 'The QuickBooks Online Vendor.Id this company is mapped to.',
     identity: true,
+    link: 'https://app.qbo.intuit.com/app/vendordetail?nameId={externalId}',
     capabilities: {
       hidden: true,
       filterable: true,
@@ -84,6 +87,7 @@ export const quickbooksFields = defineFields([
     name: 'QuickBooks account ID',
     description: 'The QuickBooks Online Account.Id this Auxx GL account is mapped to.',
     identity: true,
+    link: 'https://app.qbo.intuit.com/app/register?accountId={externalId}',
     capabilities: {
       hidden: true,
       filterable: true,

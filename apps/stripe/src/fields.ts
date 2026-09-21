@@ -24,6 +24,8 @@ export const stripeFields = defineFields([
     scope: 'connection',
     name: 'Stripe customer ID',
     identity: true,
+    // Assumes a live-mode account; a test-mode dashboard needs a `/test` segment.
+    link: 'https://dashboard.stripe.com/{connection.identity}/customers/{externalId}',
     capabilities: {
       hidden: true,
       filterable: true,

@@ -105,6 +105,7 @@ export const shopifyFields = defineFields([
     scope: 'connection',
     name: 'Shopify customer ID',
     identity: true,
+    link: 'https://{connection.identity}/admin/customers/{externalId}',
     capabilities: {
       hidden: true,
       filterable: true,
@@ -134,6 +135,8 @@ export const shopifyFields = defineFields([
     scope: 'connection',
     name: 'Shopify variant ID',
     identity: true,
+    // A variant has no page of its own; it lives under its product (one hop).
+    link: 'https://{connection.identity}/admin/products/{via.part_product.productId}/variants/{externalId}',
     capabilities: {
       hidden: true,
       filterable: true,
@@ -179,6 +182,7 @@ export const shopifyFields = defineFields([
     scope: 'connection',
     name: 'Shopify product ID',
     identity: true,
+    link: 'https://{connection.identity}/admin/products/{externalId}',
     capabilities: {
       hidden: true,
       filterable: true,
@@ -196,6 +200,7 @@ export const shopifyFields = defineFields([
     scope: 'connection',
     name: 'Shopify Order ID',
     identity: true,
+    link: 'https://{connection.identity}/admin/orders/{externalId}',
     capabilities: {
       hidden: true,
       filterable: true,
@@ -415,6 +420,8 @@ export const shopifyFields = defineFields([
     scope: 'connection',
     name: 'Shopify Refund ID',
     identity: true,
+    // A refund has no page of its own; it is shown on its order (one hop).
+    link: 'https://{connection.identity}/admin/orders/{via.credit_memo_order.shopifyOrderId}',
     capabilities: {
       hidden: true,
       filterable: true,
@@ -446,15 +453,15 @@ export const shopifyFields = defineFields([
   // identifying. A future reader will go looking for the provider id, so it is
   // said here plainly: there is not one.
   //
-  // The projection synthesises `${orderId}:${title}` instead, which is a
-  // NATURAL key on (order, jurisdiction) - an order carries at most one tax
-  // line per jurisdiction, and the jurisdiction title is what a
-  // tax-by-jurisdiction report groups by anyway. Consequences worth knowing:
+  // The projection synthesises `${orderId}:${title}:${rate}` instead, the
+  // grain Shopify aggregates order-level tax lines on. Title alone is not a
+  // key: Tennessee emits two "Tennessee State Tax" lines at 7% and 2.75% on
+  // one order (see `projectTaxLine`). Consequences worth knowing:
   //
-  // - It is stable across resyncs as long as Shopify keeps naming the
-  //   jurisdiction the same way. A RENAMED jurisdiction ("Ventura Co Local Tax
-  //   Sl" becoming anything else) reads as a new tax line rather than an edit,
-  //   which the reconciliation sweep then has to retire.
+  // - It is stable across resyncs as long as Shopify keeps naming and rating
+  //   the jurisdiction the same way. A RENAMED jurisdiction or a changed rate
+  //   reads as a new tax line rather than an edit, which the reconciliation
+  //   sweep then has to retire.
   // - It is scoped by the order id, so it stays unique per store the way every
   //   other `scope: 'connection'` identity here does.
   {
@@ -483,6 +490,8 @@ export const shopifyFields = defineFields([
     scope: 'connection',
     name: 'Shopify Fulfillment ID',
     identity: true,
+    // A fulfillment has no page of its own; it is shown on its order (one hop).
+    link: 'https://{connection.identity}/admin/orders/{via.fulfillment_order.shopifyOrderId}',
     capabilities: {
       hidden: true,
       filterable: true,
