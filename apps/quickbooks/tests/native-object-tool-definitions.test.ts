@@ -6,6 +6,7 @@
 // before it ever reached a deploy. Also checks the brief 67 §3 wiring rule:
 // every native-object tool carries no `agent` key and sits in no toolset.
 import { describe, expect, it } from 'vitest'
+import { batchQuickbooksOperationsTool } from '../src/tools/batch-quickbooks-operations.tool'
 import { createQuickbooksBillTool } from '../src/tools/create-quickbooks-bill.tool'
 import { createQuickbooksCreditMemoTool } from '../src/tools/create-quickbooks-credit-memo.tool'
 import { createQuickbooksDepositTool } from '../src/tools/create-quickbooks-deposit.tool'
@@ -55,11 +56,12 @@ const nativeObjectTools = [
   findQuickbooksInvoiceTool,
   deleteQuickbooksPaymentTool,
   findQuickbooksItemTool,
+  batchQuickbooksOperationsTool,
 ]
 
 describe('brief 67 native-object tool definitions', () => {
   it('constructs every tool (exampleOutput satisfies its own outputs schema)', () => {
-    expect(nativeObjectTools).toHaveLength(23)
+    expect(nativeObjectTools).toHaveLength(24)
   })
 
   it('carries no `agent` key — platform-called, not chat-agent tools', () => {

@@ -4,6 +4,7 @@ import { InvalidInputError } from '@auxx/sdk/server'
 import { quickbooksQuery } from '../blocks/quickbooks/shared/quickbooks-api'
 import { getQuickbooksConnection } from './shared/connection'
 import { mapJournalEntry, type MappedJournalEntry } from './shared/map-journal-entry'
+import { quoteQqlStringBackslash as quote } from './shared/qql-builder'
 
 interface FindJournalEntryInput {
   docNumber?: string
@@ -13,15 +14,6 @@ interface FindJournalEntryInput {
 
 interface FindJournalEntryOutput {
   journalEntries: MappedJournalEntry[]
-}
-
-/**
- * Escape a value for a QBO query string literal. QBO uses SQL-ish single quotes,
- * so an apostrophe in a doc number would otherwise break the query — or worse,
- * change what it means.
- */
-function quote(value: string): string {
-  return `'${value.replace(/'/g, "\\'")}'`
 }
 
 /**

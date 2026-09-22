@@ -20,6 +20,11 @@ export function quoteQqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
+/** The journal find's backslash escaping, kept apart from {@link quoteQqlString} so its queries stay byte-identical. */
+export function quoteQqlStringBackslash(value: string): string {
+  return `'${value.replace(/'/g, "\\'")}'`
+}
+
 export function validateQbId(value: string, field: string): string {
   if (!/^\d+$/.test(value))
     invalidInput(`${field} must be a numeric QuickBooks id, got "${value}".`)
