@@ -18,6 +18,35 @@ const lineSchema = z.object({
     .describe('Set on the sales-tax line so automated sales tax does not recompute it.'),
 })
 
+export const createQuickbooksRefundReceiptInputs = z.object({
+  customerId: z.string().describe('QuickBooks Customer.Id.'),
+  lines: z
+    .array(lineSchema)
+    .min(1)
+    .describe('At least one line, mirroring the sale being refunded.'),
+  paidFromAccountId: z
+    .string()
+    .describe('QuickBooks AccountRef.Id the refund is paid from (bank or Undeposited Funds).'),
+  txnDate: z.string().optional().describe('YYYY-MM-DD. Defaults to the QuickBooks server date.'),
+  docNumber: z
+    .string()
+    .max(21)
+    .optional()
+    .describe('Document number, max 21 chars. Filterable — doubles as a duplicate-detection key.'),
+  privateNote: z.string().max(4000).optional().describe('Internal memo. NOT filterable.'),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
+  requestId: z
+    .string()
+    .max(50)
+    .optional()
+    .describe(
+      'Idempotency key, max 50 chars. A repeat request with the same key returns the original refund instead of posting again.'
+    ),
+})
+
 /** Platform-called, not a chat-agent tool: no `agent` key — the export pipeline is the only caller. */
 export const createQuickbooksRefundReceiptTool = defineTool({
   id: 'create_quickbooks_refund_receipt',
@@ -25,36 +54,7 @@ export const createQuickbooksRefundReceiptTool = defineTool({
   description:
     'Post a cash refund to a customer in QuickBooks as a Refund Receipt. Amounts are in minor units (cents).',
   icon: quickbooksIcon,
-  inputs: z.object({
-    customerId: z.string().describe('QuickBooks Customer.Id.'),
-    lines: z
-      .array(lineSchema)
-      .min(1)
-      .describe('At least one line, mirroring the sale being refunded.'),
-    paidFromAccountId: z
-      .string()
-      .describe('QuickBooks AccountRef.Id the refund is paid from (bank or Undeposited Funds).'),
-    txnDate: z.string().optional().describe('YYYY-MM-DD. Defaults to the QuickBooks server date.'),
-    docNumber: z
-      .string()
-      .max(21)
-      .optional()
-      .describe(
-        'Document number, max 21 chars. Filterable — doubles as a duplicate-detection key.'
-      ),
-    privateNote: z.string().max(4000).optional().describe('Internal memo. NOT filterable.'),
-    currency: z
-      .string()
-      .regex(/^[A-Z]{3}$/)
-      .optional(),
-    requestId: z
-      .string()
-      .max(50)
-      .optional()
-      .describe(
-        'Idempotency key, max 50 chars. A repeat request with the same key returns the original refund instead of posting again.'
-      ),
-  }),
+  inputs: createQuickbooksRefundReceiptInputs,
   outputs: z.object({
     refundReceiptId: z.string(),
     docNumber: z.string().nullable(),

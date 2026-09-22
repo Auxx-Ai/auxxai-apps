@@ -35,48 +35,50 @@ const lineSchema = z.object({
     ),
 })
 
+export const createQuickbooksJournalEntryInputs = z.object({
+  lines: z
+    .array(lineSchema)
+    .min(2)
+    .describe('At least one debit and one credit. Debits must equal credits exactly.'),
+  txnDate: z
+    .string()
+    .optional()
+    .describe(
+      'YYYY-MM-DD. Defaults to the QuickBooks server date if omitted — always set it explicitly for a period-scoped posting.'
+    ),
+  docNumber: z
+    .string()
+    .max(21)
+    .optional()
+    .describe(
+      'Document number, max 21 chars. Filterable, so it doubles as a natural key for duplicate detection.'
+    ),
+  privateNote: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe('Internal memo. NOT filterable — use docNumber if you need to query it back.'),
+  adjustment: z.boolean().optional(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
+  requestId: z
+    .string()
+    .max(50)
+    .optional()
+    .describe(
+      'Idempotency key, max 50 chars. Must be deterministic from the posting identity — a random value guarantees nothing. A repeat request with the same key returns the original entry instead of posting again.'
+    ),
+})
+
 export const createQuickbooksJournalEntryTool = defineTool({
   id: 'create_quickbooks_journal_entry',
   name: 'Create QuickBooks journal entry',
   description:
     'Post a journal entry to the QuickBooks general ledger. Needs at least two lines whose debits equal their credits exactly. High blast radius — entries hit the financial statements directly. Amounts are in minor units (cents). Check find_quickbooks_journal_entry first if the entry might already exist.',
   icon: quickbooksIcon,
-  inputs: z.object({
-    lines: z
-      .array(lineSchema)
-      .min(2)
-      .describe('At least one debit and one credit. Debits must equal credits exactly.'),
-    txnDate: z
-      .string()
-      .optional()
-      .describe(
-        'YYYY-MM-DD. Defaults to the QuickBooks server date if omitted — always set it explicitly for a period-scoped posting.'
-      ),
-    docNumber: z
-      .string()
-      .max(21)
-      .optional()
-      .describe(
-        'Document number, max 21 chars. Filterable, so it doubles as a natural key for duplicate detection.'
-      ),
-    privateNote: z
-      .string()
-      .max(4000)
-      .optional()
-      .describe('Internal memo. NOT filterable — use docNumber if you need to query it back.'),
-    adjustment: z.boolean().optional(),
-    currency: z
-      .string()
-      .regex(/^[A-Z]{3}$/)
-      .optional(),
-    requestId: z
-      .string()
-      .max(50)
-      .optional()
-      .describe(
-        'Idempotency key, max 50 chars. Must be deterministic from the posting identity — a random value guarantees nothing. A repeat request with the same key returns the original entry instead of posting again.'
-      ),
-  }),
+  inputs: createQuickbooksJournalEntryInputs,
   outputs: z.object({
     journalEntry: z.object({
       journalEntryId: z.string(),

@@ -16,6 +16,26 @@ const lineSchema = z.object({
   memo: z.string().optional(),
 })
 
+export const createQuickbooksDepositInputs = z.object({
+  depositToAccountId: z
+    .string()
+    .describe('QuickBooks AccountRef.Id the funds land in (a bank account).'),
+  lines: z.array(lineSchema).min(1).describe('At least one line. A negative line is a fee.'),
+  txnDate: z.string().optional().describe('YYYY-MM-DD. Defaults to the QuickBooks server date.'),
+  privateNote: z.string().max(4000).optional().describe('Internal memo. NOT filterable.'),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
+  requestId: z
+    .string()
+    .max(50)
+    .optional()
+    .describe(
+      'Idempotency key, max 50 chars. A repeat request with the same key returns the original deposit instead of posting again.'
+    ),
+})
+
 /** Platform-called, not a chat-agent tool: no `agent` key — the export pipeline is the only caller. */
 export const createQuickbooksDepositTool = defineTool({
   id: 'create_quickbooks_deposit',
@@ -23,25 +43,7 @@ export const createQuickbooksDepositTool = defineTool({
   description:
     'Post a bank deposit to QuickBooks — a payout or a bank deposit document. Each line is signed; a processor fee is a negative line. Amounts are in minor units (cents).',
   icon: quickbooksIcon,
-  inputs: z.object({
-    depositToAccountId: z
-      .string()
-      .describe('QuickBooks AccountRef.Id the funds land in (a bank account).'),
-    lines: z.array(lineSchema).min(1).describe('At least one line. A negative line is a fee.'),
-    txnDate: z.string().optional().describe('YYYY-MM-DD. Defaults to the QuickBooks server date.'),
-    privateNote: z.string().max(4000).optional().describe('Internal memo. NOT filterable.'),
-    currency: z
-      .string()
-      .regex(/^[A-Z]{3}$/)
-      .optional(),
-    requestId: z
-      .string()
-      .max(50)
-      .optional()
-      .describe(
-        'Idempotency key, max 50 chars. A repeat request with the same key returns the original deposit instead of posting again.'
-      ),
-  }),
+  inputs: createQuickbooksDepositInputs,
   outputs: z.object({
     depositId: z.string(),
     txnDate: z.string().nullable(),

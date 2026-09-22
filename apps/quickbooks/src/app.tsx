@@ -3,6 +3,7 @@
 import { TextBlock } from '@auxx/sdk/client'
 import { quickbooksBlock } from './blocks/quickbooks/quickbooks.workflow'
 import { quickbooksFields } from './fields'
+import { batchQuickbooksOperationsTool } from './tools/batch-quickbooks-operations.tool'
 import { createQuickbooksAccountTool } from './tools/create-quickbooks-account.tool'
 import { createQuickbooksBillTool } from './tools/create-quickbooks-bill.tool'
 import { createQuickbooksCreditMemoTool } from './tools/create-quickbooks-credit-memo.tool'
@@ -189,6 +190,7 @@ export const app = {
     findQuickbooksInvoiceTool,
     deleteQuickbooksPaymentTool,
     findQuickbooksItemTool,
+    batchQuickbooksOperationsTool,
     // Internal-only tools (no `agent` / `action` keys) — invoked via the
     // QuickBooks workflow block dispatcher (toolMap).
     quickbooksBillCreateTool,
