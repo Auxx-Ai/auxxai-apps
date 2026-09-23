@@ -864,6 +864,14 @@ function refundAmountRefunded(
 }
 
 /**
+ * Whether any refund transaction is still `pending`: the memo's `amountRefunded` is then
+ * short of what will go back, so the platform holds the memo back from issuing (101 E9).
+ */
+function refundMoneyPending(transactions: RawRefundTransaction[] | null | undefined): boolean {
+  return (transactions ?? []).some((t) => t.kind === 'refund' && t.status === 'pending')
+}
+
+/**
  * The reason a channel credit memo carries (accounting plan 10 §2.1):
  * `cancellation` when every refunded line was cancelled (goods that never
  * shipped), else `allowance`. A refund with no lines at all is a concession, a
@@ -1014,6 +1022,7 @@ function projectRefund(r: RawRefund, contactExternalId: string | null) {
     issuedAt: r.created_at ?? null,
     note: r.note ?? null,
     amountRefunded,
+    moneyPending: refundMoneyPending(r.transactions),
     customerId: contactExternalId,
     refund_line_items: adjustment ? [...lines, adjustment] : lines,
   }

@@ -803,6 +803,13 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'issuedAt', target: 'credit_memo_issued_at' },
             { sourcePath: 'note', target: 'credit_memo_note', mergeStrategy: 'fill_blank' },
             { sourcePath: 'amountRefunded', target: 'credit_memo_amount_refunded' },
+            // Overwrite, not fill_blank: the next sync that sees the money settle clears it,
+            // and that write is what wakes the memo's parked issue (101 E9).
+            {
+              sourcePath: 'moneyPending',
+              target: 'credit_memo_money_pending',
+              mergeStrategy: 'overwrite',
+            },
           ],
         },
 
@@ -1088,6 +1095,8 @@ export const shopifyConnector = defineDataConnector({
             // Sum of successful refund transactions, NOT a Shopify field (47
             // §2.1). 2132 credited on the line + 500 shipping refunded back.
             amountRefunded: 2632,
+            // No refund transaction is still pending.
+            moneyPending: false,
             // The order's customer id: the contact reference above.
             customerId: '207119551',
             refund_line_items: [
