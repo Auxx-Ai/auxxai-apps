@@ -26,8 +26,10 @@ import { findQuickbooksItemTool } from '../src/tools/find-quickbooks-item.tool'
 import { findQuickbooksRefundReceiptTool } from '../src/tools/find-quickbooks-refund-receipt.tool'
 import { findQuickbooksSalesReceiptTool } from '../src/tools/find-quickbooks-sales-receipt.tool'
 import { getQuickbooksBillTool } from '../src/tools/get-quickbooks-bill.tool'
+import { getQuickbooksBillPaymentTool } from '../src/tools/get-quickbooks-bill-payment.tool'
 import { getQuickbooksCreditMemoTool } from '../src/tools/get-quickbooks-credit-memo.tool'
 import { getQuickbooksDepositTool } from '../src/tools/get-quickbooks-deposit.tool'
+import { getQuickbooksPurchaseTool } from '../src/tools/get-quickbooks-purchase.tool'
 import { getQuickbooksRefundReceiptTool } from '../src/tools/get-quickbooks-refund-receipt.tool'
 import { getQuickbooksSalesReceiptTool } from '../src/tools/get-quickbooks-sales-receipt.tool'
 import { quickbooksToolsets } from '../src/tools/toolsets'
@@ -52,6 +54,8 @@ const nativeObjectTools = [
   getQuickbooksBillTool,
   deleteQuickbooksBillTool,
   findQuickbooksBillTool,
+  getQuickbooksBillPaymentTool,
+  getQuickbooksPurchaseTool,
   deleteQuickbooksInvoiceTool,
   findQuickbooksInvoiceTool,
   deleteQuickbooksPaymentTool,
@@ -61,7 +65,7 @@ const nativeObjectTools = [
 
 describe('brief 67 native-object tool definitions', () => {
   it('constructs every tool (exampleOutput satisfies its own outputs schema)', () => {
-    expect(nativeObjectTools).toHaveLength(24)
+    expect(nativeObjectTools).toHaveLength(26)
   })
 
   it('carries no `agent` key — platform-called, not chat-agent tools', () => {
