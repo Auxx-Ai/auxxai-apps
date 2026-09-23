@@ -158,3 +158,38 @@ describe('line item gross and net totals (accounting plan 29 §2.3)', () => {
     expect(example.line_items[0]).toMatchObject({ lineTotal: 5997, netTotal: 5997 })
   })
 })
+
+describe('line item name', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('qualifies the product title with the variant, as the part title does', async () => {
+    vi.stubGlobal('fetch', mockOrdersFetch([BASE_ORDER]))
+
+    const [line] = await syncLineItems(BASE_ORDER)
+
+    expect(line!.name).toBe('Red T-Shirt - Medium')
+  })
+
+  it.each([null, 'Default Title'])(
+    'is the product title alone when the variant is %s',
+    async (variantTitle) => {
+      const order = { ...BASE_ORDER, line_items: [{ ...BASE_LINE, variant_title: variantTitle }] }
+      vi.stubGlobal('fetch', mockOrdersFetch([order]))
+
+      const [line] = await syncLineItems(order)
+
+      expect(line!.name).toBe('Red T-Shirt')
+    },
+  )
+
+  it('binds name to line_item_name and nothing to line_item_description', () => {
+    const orderStream = shopifyConnector.streams.find((stream) => stream.key === 'order')
+    const lineMapping = orderStream?.mappings.find((mapping) => mapping.rootPath === 'line_items[]')
+    const fields = lineMapping?.fields ?? []
+
+    expect(fields).toContainEqual({ sourcePath: 'name', target: 'line_item_name' })
+    expect(fields.some((f) => 'target' in f && f.target === 'line_item_description')).toBe(false)
+  })
+})

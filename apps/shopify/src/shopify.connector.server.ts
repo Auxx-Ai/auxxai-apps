@@ -1482,6 +1482,7 @@ function toOrderRecord(
           // The line item's own Shopify id — its declared identity, a stable
           // per-line id that replaces the positional `{orderId}:{index}` fallback.
           shopifyId: li.id != null ? String(li.id) : null,
+          name: productQualifiedTitle(li.title ?? String(li.id), li.variant_title),
           title: li.title,
           variantTitle: li.variant_title,
           sku: li.sku,
@@ -1628,15 +1629,19 @@ interface RawProduct {
  * part identically.
  */
 function variantDisplayTitle(p: RawProduct, v: RawVariant): string {
-  const productTitle = p.title ?? String(p.id)
   // Prefer Shopify's pre-joined title; re-join option1–3 ourselves if it's absent.
   // "Default Title" is the placeholder option value on no-option products — never a
   // real option — so it's dropped from the join and caught below when it IS the title.
   const optionsTitle =
     v.title ??
     [v.option1, v.option2, v.option3].filter((o) => o && o !== 'Default Title').join(' / ')
-  if (!optionsTitle || optionsTitle === 'Default Title') return productTitle
-  return `${productTitle} - ${optionsTitle}`
+  return productQualifiedTitle(p.title ?? String(p.id), optionsTitle)
+}
+
+/** "Product - Variant", or the product alone when the variant is Shopify's "Default Title". */
+function productQualifiedTitle(productTitle: string, variantTitle: string | null): string {
+  if (!variantTitle || variantTitle === 'Default Title') return productTitle
+  return `${productTitle} - ${variantTitle}`
 }
 
 /**
