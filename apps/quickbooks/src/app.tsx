@@ -44,6 +44,7 @@ import { getQuickbooksPurchaseTool } from './tools/get-quickbooks-purchase.tool'
 import { getQuickbooksRefundReceiptTool } from './tools/get-quickbooks-refund-receipt.tool'
 import { getQuickbooksSalesReceiptTool } from './tools/get-quickbooks-sales-receipt.tool'
 import { getQuickbooksBalanceSheetTool } from './tools/get-quickbooks-balance-sheet.tool'
+import { getQuickbooksCompanySettingsTool } from './tools/get-quickbooks-company-settings.tool'
 import { getQuickbooksGeneralLedgerTool } from './tools/get-quickbooks-general-ledger.tool'
 import { getQuickbooksVendorTool } from './tools/get-quickbooks-vendor.tool'
 import { quickbooksBillCreateTool } from './tools/internal/bill-create.tool'
@@ -164,6 +165,7 @@ export const app = {
     updateQuickbooksPaymentTool,
     // Platform-called tools, not chat-agent tools - see toolsets.ts.
     getQuickbooksBalanceSheetTool,
+    getQuickbooksCompanySettingsTool,
     getQuickbooksGeneralLedgerTool,
     createQuickbooksAccountTool,
     // Native provider objects for the accounting export (plans/accounting/tasks/67).
