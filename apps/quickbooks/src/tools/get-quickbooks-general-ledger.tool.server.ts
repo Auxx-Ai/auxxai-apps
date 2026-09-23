@@ -22,7 +22,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
  * and removes any dependence on knowing each account's classification.
  */
 const GENERAL_LEDGER_COLUMNS =
-  'tx_date,txn_type,doc_num,name,memo,split_acc,debt_amt,credit_amt' as const
+  'tx_date,txn_type,doc_num,name,cust_name,vend_name,memo,split_acc,is_cleared,debt_amt,credit_amt' as const
 
 interface GetQuickbooksGeneralLedgerInput {
   from: string

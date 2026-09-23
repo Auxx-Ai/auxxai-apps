@@ -43,6 +43,12 @@ export interface ProviderLedgerLine {
   creditMinor: number
   docNumber: string | null
   memo: string | null
+  /** The `cust_name` cell's id: the QuickBooks Customer on this line, when there is one. */
+  customerId: string | null
+  /** The `vend_name` cell's id: the QuickBooks Vendor on this line, when there is one. */
+  vendorId: string | null
+  /** The `is_cleared` cell verbatim (`R` reconciled, `C` cleared, null otherwise). Bank lines only. */
+  cleared: string | null
 }
 
 /** One chunk of a QuickBooks general ledger, mapped. */
@@ -75,7 +81,7 @@ export interface ProviderLedger {
  * liability side inverted.
  */
 const REQUIRED_COLUMNS = ['tx_date', 'txn_type', 'debt_amt', 'credit_amt'] as const
-const OPTIONAL_COLUMNS = ['doc_num', 'memo'] as const
+const OPTIONAL_COLUMNS = ['doc_num', 'memo', 'cust_name', 'vend_name', 'is_cleared'] as const
 
 type RequiredColumn = (typeof REQUIRED_COLUMNS)[number]
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number]
@@ -102,7 +108,7 @@ function resolveColumns(report: any): ColumnIndex {
     throw new InvalidInputError(
       `General ledger response is missing required column(s) ${missing.join(', ')}. ` +
         `Got [${[...byKey.keys()].join(', ')}]. The report must be requested with ` +
-        `columns=tx_date,txn_type,doc_num,name,memo,split_acc,debt_amt,credit_amt - the default ` +
+        `columns=tx_date,txn_type,doc_num,name,cust_name,vend_name,memo,split_acc,is_cleared,debt_amt,credit_amt - the default ` +
         `subt_nat_amount column is signed in each account's natural direction, not debit-positive.`
     )
   }
@@ -120,6 +126,13 @@ function cellValue(row: any, at: number | undefined): string {
   if (at === undefined) return ''
   const value = row?.ColData?.[at]?.value
   return typeof value === 'string' ? value : ''
+}
+
+/** A name cell's entity id; the report renders an absent party as `{ value: '', id: '' }`. */
+function cellIdOrNull(row: any, at: number | undefined): string | null {
+  if (at === undefined) return null
+  const id = row?.ColData?.[at]?.id
+  return typeof id === 'string' && id !== '' ? id : null
 }
 
 function textOrNull(value: string): string | null {
@@ -244,6 +257,9 @@ function emitDataRow(
     creditMinor,
     docNumber: textOrNull(cellValue(row, columns.doc_num)),
     memo: textOrNull(cellValue(row, columns.memo)),
+    customerId: cellIdOrNull(row, columns.cust_name),
+    vendorId: cellIdOrNull(row, columns.vend_name),
+    cleared: textOrNull(cellValue(row, columns.is_cleared)),
   })
 }
 
