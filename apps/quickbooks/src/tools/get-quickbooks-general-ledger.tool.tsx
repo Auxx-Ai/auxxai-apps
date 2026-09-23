@@ -56,6 +56,12 @@ export const getQuickbooksGeneralLedgerTool = defineTool({
         creditMinor: z.number().int().describe('Integer minor units.'),
         docNumber: z.string().nullable(),
         memo: z.string().nullable(),
+        customerId: z.string().nullable().describe('QuickBooks Customer.Id on this line, if any.'),
+        vendorId: z.string().nullable().describe('QuickBooks Vendor.Id on this line, if any.'),
+        cleared: z
+          .string()
+          .nullable()
+          .describe("The report's cleared status verbatim: R reconciled, C cleared, else null."),
       })
     ),
   }),
@@ -79,6 +85,9 @@ export const getQuickbooksGeneralLedgerTool = defineTool({
         creditMinor: 90000,
         docNumber: null,
         memo: null,
+        customerId: null,
+        vendorId: null,
+        cleared: null,
       },
       {
         txnType: 'Credit Card Credit',
@@ -90,6 +99,9 @@ export const getQuickbooksGeneralLedgerTool = defineTool({
         creditMinor: 0,
         docNumber: null,
         memo: 'Monthly Payment',
+        customerId: null,
+        vendorId: null,
+        cleared: null,
       },
     ],
   },

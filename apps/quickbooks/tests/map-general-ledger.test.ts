@@ -93,6 +93,10 @@ describe('mapGeneralLedger - sandbox fixture', () => {
       creditMinor: 0,
       docNumber: null,
       memo: 'Opening Balance',
+      // The fixture predates the party and cleared columns.
+      customerId: null,
+      vendorId: null,
+      cleared: null,
     })
     expect(mapped.lines.some((l) => l.providerAccountName === 'Truck')).toBe(false)
   })
@@ -331,5 +335,77 @@ describe('mapGeneralLedger - refusals', () => {
     } finally {
       warn.mockRestore()
     }
+  })
+})
+
+describe('mapGeneralLedger - party and cleared columns', () => {
+  const col = (key: string) => ({ ColTitle: key, MetaData: [{ Name: 'ColKey', Value: key }] })
+  const KEYS = [
+    'tx_date',
+    'txn_type',
+    'doc_num',
+    'cust_name',
+    'vend_name',
+    'is_cleared',
+    'debt_amt',
+    'credit_amt',
+  ]
+  const row = (cells: Array<{ value: string; id?: string }>) => ({ type: 'Data', ColData: cells })
+  const report = {
+    Header: { StartPeriod: '2026-09-22', EndPeriod: '2026-09-22', Currency: 'USD', Option: [] },
+    Columns: { Column: KEYS.map(col) },
+    Rows: {
+      Row: [
+        {
+          Header: { ColData: [{ value: 'Accounts Receivable', id: '1150040045' }] },
+          Rows: {
+            Row: [
+              row([
+                { value: '2026-09-22' },
+                { value: 'Payment', id: '401' },
+                { value: 'PROBE-102-A' },
+                { value: 'Probe 102 Customer', id: '100000001' },
+                { value: '', id: '' },
+                { value: '' },
+                { value: '' },
+                { value: '100.00' },
+              ]),
+            ],
+          },
+        },
+        {
+          Header: { ColData: [{ value: 'Cash', id: '1150040044' }] },
+          Rows: {
+            Row: [
+              row([
+                { value: '2026-09-22' },
+                { value: 'Deposit', id: '403' },
+                { value: '' },
+                { value: '', id: '' },
+                { value: '', id: '' },
+                { value: 'R' },
+                { value: '250.00' },
+                { value: '' },
+              ]),
+            ],
+          },
+        },
+      ],
+    },
+  }
+  const mapped = mapGeneralLedger(report, { from: '2026-09-22', to: '2026-09-22' })
+
+  it('carries the customer id off the cust_name cell', () => {
+    const payment = mapped.lines.find((l) => l.txnId === '401')!
+    expect(payment.customerId).toBe('100000001')
+    expect(payment.vendorId).toBeNull()
+    expect(payment.cleared).toBeNull()
+  })
+
+  it('reads an empty party cell as null and keeps the cleared status verbatim', () => {
+    const deposit = mapped.lines.find((l) => l.txnId === '403')!
+    expect(deposit.customerId).toBeNull()
+    expect(deposit.vendorId).toBeNull()
+    expect(deposit.cleared).toBe('R')
   })
 })

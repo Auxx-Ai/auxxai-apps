@@ -20,6 +20,19 @@ export const getQuickbooksDepositTool = defineTool({
       txnDate: z.string().nullable(),
       totalAmt: z.number(),
       syncToken: z.string(),
+      depositToAccountId: z.string().nullable().describe('The bank account it landed in.'),
+      lines: z.array(
+        z.object({
+          amount: z.number(),
+          accountId: z
+            .string()
+            .nullable()
+            .describe('The account a coded line credits; null on a line that deposits a payment.'),
+          linkedTxns: z
+            .array(z.object({ txnId: z.string(), txnType: z.string() }))
+            .describe('What the line deposits, e.g. a Payment or Sales Receipt.'),
+        })
+      ),
     }),
     z.object({ status: z.literal('NotFound') }),
   ]),
@@ -29,6 +42,8 @@ export const getQuickbooksDepositTool = defineTool({
     txnDate: '2026-08-18',
     totalAmt: 998.5,
     syncToken: '0',
+    depositToAccountId: '35',
+    lines: [{ amount: 998.5, accountId: null, linkedTxns: [{ txnId: '71', txnType: 'Payment' }] }],
   },
   config: {
     requiresConnection: true,
