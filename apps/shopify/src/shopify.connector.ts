@@ -231,6 +231,10 @@ export const shopifyConnector = defineDataConnector({
     {
       key: 'customer',
       syncMode: 'incremental',
+      // Only customers who have ordered: a storefront account that never bought is
+      // not a contact anyone works, and the order stream's embedded customer brings
+      // a first-time buyer in on its own.
+      recordFilter: [{ fieldId: 'orders_count', operator: '>', value: 0 }],
       mappings: [
         {
           rootPath: '',
