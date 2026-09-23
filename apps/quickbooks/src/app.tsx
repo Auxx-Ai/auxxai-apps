@@ -32,6 +32,7 @@ import { findQuickbooksRefundReceiptTool } from './tools/find-quickbooks-refund-
 import { findQuickbooksSalesReceiptTool } from './tools/find-quickbooks-sales-receipt.tool'
 import { findQuickbooksVendorTool } from './tools/find-quickbooks-vendor.tool'
 import { getQuickbooksBillTool } from './tools/get-quickbooks-bill.tool'
+import { getQuickbooksBillPaymentTool } from './tools/get-quickbooks-bill-payment.tool'
 import { getQuickbooksCreditMemoTool } from './tools/get-quickbooks-credit-memo.tool'
 import { getQuickbooksCustomerTool } from './tools/get-quickbooks-customer.tool'
 import { getQuickbooksDepositTool } from './tools/get-quickbooks-deposit.tool'
@@ -39,6 +40,7 @@ import { getQuickbooksEstimateTool } from './tools/get-quickbooks-estimate.tool'
 import { getQuickbooksInvoiceTool } from './tools/get-quickbooks-invoice.tool'
 import { getQuickbooksItemTool } from './tools/get-quickbooks-item.tool'
 import { getQuickbooksPaymentTool } from './tools/get-quickbooks-payment.tool'
+import { getQuickbooksPurchaseTool } from './tools/get-quickbooks-purchase.tool'
 import { getQuickbooksRefundReceiptTool } from './tools/get-quickbooks-refund-receipt.tool'
 import { getQuickbooksSalesReceiptTool } from './tools/get-quickbooks-sales-receipt.tool'
 import { getQuickbooksBalanceSheetTool } from './tools/get-quickbooks-balance-sheet.tool'
@@ -186,6 +188,8 @@ export const app = {
     getQuickbooksBillTool,
     deleteQuickbooksBillTool,
     findQuickbooksBillTool,
+    getQuickbooksBillPaymentTool,
+    getQuickbooksPurchaseTool,
     deleteQuickbooksInvoiceTool,
     findQuickbooksInvoiceTool,
     deleteQuickbooksPaymentTool,
