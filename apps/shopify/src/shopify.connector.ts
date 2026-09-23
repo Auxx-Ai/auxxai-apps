@@ -586,8 +586,9 @@ export const shopifyConnector = defineDataConnector({
           target: { entityKind: 'line_item' },
           fields: [
             { sourcePath: 'shopifyId', appField: 'shopifyLineId' }, // identity -> externalId
-            { sourcePath: 'title', target: 'line_item_name' },
-            { sourcePath: 'variantTitle', target: 'line_item_description' },
+            // "Product - Variant", the same name the variant's part carries.
+            // The description is left to the merchant rather than repeating it.
+            { sourcePath: 'name', target: 'line_item_name' },
             { sourcePath: 'quantity', target: 'line_item_qty' },
             { sourcePath: 'price', target: 'line_item_unit_price' },
             // Transcribed (§6.2), GROSS: price × qty, what Shopify's admin
@@ -996,6 +997,7 @@ export const shopifyConnector = defineDataConnector({
         line_items: [
           {
             shopifyId: '11223344',
+            name: 'Red T-Shirt - Medium',
             title: 'Red T-Shirt',
             variantTitle: 'Medium',
             sku: 'TSHIRT-RED-M',
