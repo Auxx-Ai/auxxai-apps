@@ -460,8 +460,8 @@ export const shopifyFields = defineFields([
   //
   // - It is stable across resyncs as long as Shopify keeps naming and rating
   //   the jurisdiction the same way. A RENAMED jurisdiction or a changed rate
-  //   reads as a new tax line rather than an edit, which the reconciliation
-  //   sweep then has to retire.
+  //   reads as a new tax line rather than an edit; the order's next sync
+  //   retires the old one (`orphanBehavior: 'archive'` on the `tax_lines[]` mapping).
   // - It is scoped by the order id, so it stays unique per store the way every
   //   other `scope: 'connection'` identity here does.
   {

@@ -916,6 +916,9 @@ export const shopifyConnector = defineDataConnector({
           rootPath: 'tax_lines[]',
           relationshipFieldKey: 'system:order_tax_lines',
           target: { entityKind: 'tax_line' },
+          // The order payload carries every tax line, and the synthetic key changes with
+          // the title or rate, so a line the order no longer lists is retired on its sync.
+          orphanBehavior: 'archive',
           fields: [
             // ⚠️ SYNTHETIC identity - Shopify tax lines carry no id at all. See
             // `shopifyTaxLineKey` in fields.ts for what the key is made of.
