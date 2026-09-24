@@ -1655,11 +1655,60 @@ function productQualifiedTitle(productTitle: string, variantTitle: string | null
   return `${productTitle} - ${variantTitle}`
 }
 
+/** `/inventory_items.json?ids=` accepts at most 100 ids per call. */
+const INVENTORY_ITEM_BATCH = 100
+
+/**
+ * The product stream's supplement: each variant's "cost per item", keyed by inventory
+ * item id. The REST variant does not carry it; a 429 retries the page like the orders one.
+ */
+async function fetchInventoryItemCosts(
+  rows: RawProduct[],
+  http: ShopifyHttp,
+): Promise<PageSupplement<ReadonlyMap<string, string | null>>> {
+  const costs = new Map<string, string | null>()
+  const ids = [
+    ...new Set(
+      rows.flatMap((p) =>
+        (p.variants ?? []).flatMap((v) =>
+          v.inventory_item_id != null ? [String(v.inventory_item_id)] : [],
+        ),
+      ),
+    ),
+  ]
+  for (let i = 0; i < ids.length; i += INVENTORY_ITEM_BATCH) {
+    const params = new URLSearchParams({
+      ids: ids.slice(i, i + INVENTORY_ITEM_BATCH).join(','),
+      limit: String(INVENTORY_ITEM_BATCH),
+    })
+    const res = await fetch(
+      `https://${http.shopDomain}/admin/api/${API_VERSION}/inventory_items.json?${params}`,
+      { headers: http.headers },
+    )
+    if (res.status === 429) {
+      return { ok: false, retryAfterMs: retryAfterMs(res) }
+    }
+    if (!res.ok) {
+      throw new Error(`shopify: Admin API responded ${res.status} for inventory_items`)
+    }
+    const body = (await res.json()) as {
+      inventory_items?: Array<{ id: number; cost: string | null }>
+    }
+    for (const item of body.inventory_items ?? []) {
+      costs.set(String(item.id), item.cost ?? null)
+    }
+  }
+  return { ok: true, value: costs }
+}
+
 /**
  * Project one REST product into a SOURCE-shaped record. `externalId` is the numeric
- * product id stringified.
+ * product id stringified; `costs` is the page's inventory item id → cost map.
  */
-function toProductRecord(p: RawProduct): ConnectorRecord {
+function toProductRecord(
+  p: RawProduct,
+  costs: ReadonlyMap<string, string | null>,
+): ConnectorRecord {
   // Image URLs pass through verbatim: the CDN's `?v=` changes when an image is
   // replaced, and the platform compares the URL exactly to skip re-downloads.
   const imageSrcById = new Map((p.images ?? []).map((img) => [img.id, img.src]))
@@ -1689,6 +1738,10 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
         sku: v.sku,
         title: variantDisplayTitle(p, v),
         price: decimalToMinorUnits(v.price),
+        unitCost:
+          v.inventory_item_id != null
+            ? decimalToMinorUnits(costs.get(String(v.inventory_item_id)))
+            : null,
         inventoryQuantity: typeof v.inventory_quantity === 'number' ? v.inventory_quantity : null,
         inventoryItemId: v.inventory_item_id != null ? String(v.inventory_item_id) : null,
         position: typeof v.position === 'number' ? v.position : null,
@@ -1768,7 +1821,14 @@ async function fetchSteeredProduct(
     throw new Error(`shopify: Admin API responded ${res.status} for products/${productId}`)
   }
   const { product } = (await res.json()) as { product: RawProduct }
-  return { records: [toProductRecord(product)], nextState: { backfillComplete: true } }
+  const costs = await fetchInventoryItemCosts([product], { shopDomain, headers })
+  if (!costs.ok) {
+    return { records: [], nextState: {}, rateLimited: { retryAfterMs: costs.retryAfterMs } }
+  }
+  return {
+    records: [toProductRecord(product, costs.value)],
+    nextState: { backfillComplete: true },
+  }
 }
 
 export default async function shopifySync(
@@ -1803,10 +1863,11 @@ export default async function shopifySync(
         supplement: fetchPaidTransactions,
       })
     case 'product':
-      return fetchShopifyPage<RawProduct>(args, {
+      return fetchShopifyPage<RawProduct, ReadonlyMap<string, string | null>>(args, {
         resource: 'products',
         rootKey: 'products',
         toRecord: toProductRecord,
+        supplement: fetchInventoryItemCosts,
         // ⚠️ EXPLICITLY UNFILTERED, and it has to stay that way. This stream is
         // `syncMode: 'snapshot'`, so the platform treats a product ABSENT from the
         // crawl as deleted and archives it. Anything that narrows this query turns

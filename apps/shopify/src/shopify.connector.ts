@@ -403,6 +403,8 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'price', appField: 'price' },
             // Overwrite: Shopify owns a connector-bound part's price (107-D11).
             { sourcePath: 'price', target: 'part_sell_price' },
+            // Overwrite: mirrors Shopify's cost per item; the platform seeds a provisional standard.
+            { sourcePath: 'unitCost', target: 'part_channel_cost' },
             // `service` when the variant does not ship, else `finished_good`; a person's kind wins.
             { sourcePath: 'partKind', target: 'part_kind', mergeStrategy: 'fill_blank' },
             { sourcePath: 'sellable', target: 'part_sellable', mergeStrategy: 'fill_blank' },
@@ -432,6 +434,7 @@ export const shopifyConnector = defineDataConnector({
             title: 'Red T-Shirt - Medium',
             sku: 'TSHIRT-RED-M',
             price: 1999,
+            unitCost: 850,
             inventoryQuantity: 42,
             inventoryItemId: '99887766',
             position: 1,
