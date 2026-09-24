@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import shopifySync from '../src/shopify.connector.server'
+import { ordersPageBody } from './rest-order-as-graphql'
 
 /**
  * Money plan 55 (`plans/money/tasks/55-shipment-lines.md` §5): the order
@@ -118,17 +119,12 @@ interface FakeResponse {
 }
 
 function mockOrdersFetch(): () => Promise<FakeResponse> {
-  return (url: string) =>
+  return () =>
     Promise.resolve({
       ok: true,
       status: 200,
       headers: { get: () => null },
-      json: () =>
-        Promise.resolve(
-          url.includes('/graphql.json')
-            ? { data: { nodes: [{ legacyResourceId: String(RAW_ORDER.id), transactions: [] }] } }
-            : { orders: [RAW_ORDER] },
-        ),
+      json: () => Promise.resolve(ordersPageBody([RAW_ORDER])),
     })
 }
 
