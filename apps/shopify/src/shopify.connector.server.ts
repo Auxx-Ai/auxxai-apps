@@ -8,7 +8,7 @@
 //                  (money plan 37 §6/§7.2 — the retarget off the old owned
 //                  `shopify_orders` / `shopify_line_items` defs).
 //   • `product`  → REST /products.json, contributes into the native `product` /
-//                  `part` / `catalog_item` entities (money plan 37 §7.1).
+//                  `part` entities (money plan 37 §7.1).
 //
 // All three share the same "one page + page_info cursor" contract
 // (`fetchShopifyPage`): return ONE page of records plus a flat cursor, and the
@@ -1603,6 +1603,8 @@ interface RawVariant {
   option2: string | null
   option3: string | null
   image_id: number | null
+  /** `false` marks a non-shipping variant (warranty, installation): a service. */
+  requires_shipping?: boolean | null
   updated_at: string
 }
 
@@ -1679,7 +1681,7 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
       updatedAt: p.updated_at,
       imageUrl: p.image?.src ?? null,
       // Raw array — the platform fans each element out per the `variants[]`
-      // mapping into the native `part` (+ `catalog_item`). `shopifyId` is the
+      // mapping into the native `part`. `shopifyId` is the
       // variant's identity and `inventoryItemId` the webhook join key; both
       // stringified — same discipline as the line-item fan-out.
       variants: (p.variants ?? []).map((v) => ({
@@ -1695,6 +1697,10 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
         option3: v.option3,
         imageUrl:
           (v.image_id != null ? imageSrcById.get(v.image_id) : undefined) ?? p.image?.src ?? null,
+        requiresShipping: typeof v.requires_shipping === 'boolean' ? v.requires_shipping : null,
+        // Option VALUES of `part_kind`; only an explicit `false` is a service.
+        partKind: v.requires_shipping === false ? 'service' : 'finished_good',
+        sellable: true,
       })),
     },
   }

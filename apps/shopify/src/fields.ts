@@ -26,8 +26,7 @@ import { defineFields } from '@auxx/sdk/fields'
  * - `externalQuantity` — Shopify's inventory count, kept for drift comparison
  *   against the movement-ledger-owned `part_quantity_on_hand` (never written
  *   into it).
- * - `price` — the raw storefront price. PROVENANCE ONLY: the working sell
- *   price is `catalog_item_default_unit_price` under the follow model.
+ * - `price` — the raw storefront price, provenance; the working price is `part_sell_price`.
  * - `productId` — the product's primary identity per store (1:1).
  *
  * Order / line-item fields (money plan `plans/money/tasks/37-shopify-native-retarget.md`
@@ -159,8 +158,7 @@ export const shopifyFields = defineFields([
       updatable: false,
     },
   },
-  // Provenance only — the WORKING price is catalog_item_default_unit_price
-  // (plans/products/02-shopify-mapping.md §5.1's follow model).
+  // Provenance only — the connector also writes the working price, `part_sell_price`.
   {
     key: 'price',
     type: 'CURRENCY',
