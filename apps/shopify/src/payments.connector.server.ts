@@ -6,7 +6,7 @@ import type {
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { payoutSourceFields, processorSourceFields } from '@auxx/sdk/financial-source'
-import { InsufficientPermissionsError } from '@auxx/sdk/server'
+import { ConnectionExpiredError, InsufficientPermissionsError } from '@auxx/sdk/server'
 import type { RawBalanceTransaction, RawPayout } from './blocks/shopify/shared/payments-api'
 import {
   balanceEvidence,
@@ -14,10 +14,19 @@ import {
   payoutEvidence,
 } from './blocks/shopify/shared/payments-evidence'
 import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
-
-// Pinned supported version. Existing order/product streams retain their independent version.
-const PAYMENTS_API_VERSION = '2026-04'
-const BALANCE_PATH = '/shopify_payments/balance/transactions.json'
+import { type ShopifyHttp, shopifyGraphql, shopifyHttp } from './graphql/client'
+import type { GraphqlConnection } from './graphql/paged'
+import {
+  BALANCE_TRANSACTIONS_QUERY,
+  type GqlBalanceTransaction,
+  type GqlPayout,
+  type PaymentsAccountData,
+  PAYOUT_HEADERS_QUERY,
+  PAYOUT_MEMBERS_QUERY,
+  payoutMembersQuery,
+  toRawBalanceTransaction,
+  toRawPayout,
+} from './graphql/payments'
 
 class PaymentsThrottle extends Error {
   constructor(readonly retryAfterMs?: number) {
@@ -25,81 +34,69 @@ class PaymentsThrottle extends Error {
   }
 }
 
-interface PaymentsHttp {
-  origin: string
-  headers: Record<string, string>
-}
+/** Identity failures stop the scan; they never become a diagnostic membership record. */
+class PaymentsAccountError extends Error {}
 
-async function readResponse(
-  http: PaymentsHttp,
-  path: string,
-  init?: RequestInit,
-): Promise<Response> {
-  const response = await fetch(`${http.origin}${path}`, {
-    ...init,
-    headers: http.headers,
-    signal: AbortSignal.timeout(10_000),
-  })
-  if (response.status === 429) {
-    const retry = response.headers.get('Retry-After')
-    throw new PaymentsThrottle(retry === null ? undefined : Number(retry) * 1000)
-  }
-  if (!response.ok) throw new Error(`Shopify Payments API responded ${response.status}`)
-  return response
-}
+const fatal = (error: unknown) =>
+  error instanceof PaymentsThrottle ||
+  error instanceof PaymentsAccountError ||
+  error instanceof InsufficientPermissionsError ||
+  error instanceof ConnectionExpiredError
 
-/** Read only the page token, never forward the token-bearing auth header to a Link URL. */
-function nextPage(response: Response): string | undefined {
-  const link = response.headers.get('Link')
-  if (!link || !/rel="next"/.test(link)) return undefined
-  const match = link.match(/<([^>]+)>;\s*rel="next"/)
-  const cursor = match ? new URL(match[1]!).searchParams.get('page_info') : null
-  if (!cursor) throw new Error('Shopify Payments returned an invalid next page link')
-  return cursor
-}
+type Key = 'payouts' | 'balanceTransactions'
 
-async function page<T>(http: PaymentsHttp, path: string, root: string, params: URLSearchParams) {
-  const response = await readResponse(http, `${path}?${params}`)
-  const body = (await response.json()) as Record<string, unknown>
-  if (!Array.isArray(body[root]))
-    throw new Error(`Shopify Payments response has no ${root} collection`)
-  return { rows: body[root] as T[], next: nextPage(response) }
-}
-
-async function processorAccountId(http: PaymentsHttp): Promise<string> {
-  const response = await readResponse(http, '/graphql.json', {
-    method: 'POST',
-    body: JSON.stringify({
-      query: 'query ShopifySettlementIdentity { shopifyPaymentsAccount { id } }',
-    }),
-  })
-  const body = (await response.json()) as {
-    errors?: { message: string; extensions?: { code?: string } }[]
-    data?: { shopifyPaymentsAccount?: { id?: string } | null }
-  }
-  if (body.errors?.some((error) => error.extensions?.code === 'THROTTLED')) {
-    throw new PaymentsThrottle()
-  }
-  if (body.errors?.length)
-    throw new Error(
-      `Shopify Payments account lookup: ${body.errors.map((error) => error.message).join('; ')}`,
-    )
-  const id = body.data?.shopifyPaymentsAccount?.id
-  if (!id?.startsWith('gid://shopify/ShopifyPaymentsAccount/')) {
-    throw new Error(
+async function accountPage<K extends Key, Node>(
+  http: ShopifyHttp,
+  query: string,
+  key: K,
+  variables: Record<string, unknown>,
+) {
+  const page = await shopifyGraphql<PaymentsAccountData<K, Node>>(http, query, variables)
+  if (!page.ok) throw new PaymentsThrottle(page.retryAfterMs)
+  const account = page.data.shopifyPaymentsAccount
+  if (!account?.id?.startsWith('gid://shopify/ShopifyPaymentsAccount/'))
+    throw new PaymentsAccountError(
       'Shopify Payments account identity is unavailable; verify the connected account and permissions',
     )
-  }
-  return id
+  return { accountId: account.id, connection: account[key] }
+}
+
+/** The page's nodes and the next endCursor, or undefined on the last page. */
+function pageOf<Node>(connection: GraphqlConnection<Node> | undefined, key: Key) {
+  if (!connection || !Array.isArray(connection.nodes))
+    throw new Error(`Shopify Payments response has no ${key} collection`)
+  if (!connection.pageInfo?.hasNextPage) return { rows: connection.nodes, next: undefined }
+  const next = connection.pageInfo.endCursor
+  if (!next) throw new Error('Shopify Payments returned an invalid next page cursor')
+  return { rows: connection.nodes, next }
+}
+
+/** A non-object node stays as it arrived, so evidence rejects it with the raw body. */
+function adaptRows(nodes: unknown[]): unknown[] {
+  return nodes.map((node) =>
+    node && typeof node === 'object'
+      ? toRawBalanceTransaction(node as GqlBalanceTransaction)
+      : node,
+  )
+}
+
+function bindAccount(cursor: PaymentsCursor, accountId: string): PaymentsCursor {
+  if (cursor.accountId && cursor.accountId !== accountId)
+    throw new PaymentsAccountError(
+      'Shopify Payments merchant changed during acquisition; restart the scan',
+    )
+  return { ...cursor, accountId }
 }
 
 interface PaymentsCursor {
-  version: 2
+  version: 3
   streamKey: string
   scanId: string
   startedAt: string
   phase: 'headers' | 'members' | 'balance'
   accountId?: string
+  /** The payouts search string, fixed for the scan because GraphQL cursors do not carry it. */
+  headerQuery?: string
   outerCursor?: string
   memberCursor?: string
   pageIndex: number
@@ -107,10 +104,9 @@ interface PaymentsCursor {
   payout?: RawPayout
 }
 
+/** A v2 REST cursor, or any other legacy value, restarts the scan (plan D11). */
 function resumeCursor(value: unknown, streamKey: string): PaymentsCursor | null {
-  if (value == null) return null
-  if (typeof value !== 'object' || (value as PaymentsCursor).version !== 2)
-    throw new Error('Restart the Shopify Payments scan to replace its legacy cursor')
+  if (!value || typeof value !== 'object' || (value as PaymentsCursor).version !== 3) return null
   const cursor = value as PaymentsCursor
   if (
     cursor.streamKey !== streamKey ||
@@ -122,6 +118,13 @@ function resumeCursor(value: unknown, streamKey: string): PaymentsCursor | null 
   )
     throw new Error('Invalid Shopify Payments acquisition cursor')
   return cursor
+}
+
+function historyQuery(config: ConnectorExecuteArgs['config']): string | undefined {
+  if (!config?.payoutHistoryStartDate) return undefined
+  const start = String(config.payoutHistoryStartDate)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error('Payout history start must be YYYY-MM-DD')
+  return `issued_at:>=${start}`
 }
 
 function continuation(cursor: PaymentsCursor, outerCursor?: string) {
@@ -189,7 +192,8 @@ function projectRows(rows: unknown[], shop: string, payoutId?: string) {
   return { entries, rejections, rawRows: rows }
 }
 
-function headerProjection(raw: RawPayout) {
+function headerProjection(raw: RawPayout, adaptError?: string) {
+  if (adaptError) return { payout: null, rejectionReason: adaptError }
   try {
     return { payout: payoutEvidence(raw), rejectionReason: null }
   } catch (error) {
@@ -204,10 +208,12 @@ function payoutRecord(
   cursor: PaymentsCursor,
   externalAccountId: string,
   membership: Record<string, unknown>,
+  adaptError?: string,
 ): ConnectorRecord {
   const raw = cursor.payout!
   let id: string
   try {
+    if (adaptError) throw new Error(adaptError)
     id = evidenceId(raw?.id)
   } catch {
     id = `rejected:${cursor.scanId}:header:${cursor.headerIndex}`
@@ -220,7 +226,7 @@ function payoutRecord(
       externalId: id,
       sourceAccount: { providerKey: 'shopify_payments', externalAccountId, environment: 'live' },
       acquisition: { id: `${cursor.scanId}:${id}`, startedAt: cursor.startedAt },
-      ...headerProjection(raw),
+      ...headerProjection(raw, adaptError),
       raw,
       membership: { providerReady: raw?.status === 'paid', ...membership },
     }),
@@ -231,9 +237,8 @@ function payoutRecord(
 export async function fetchPaymentsStream(
   args: ConnectorExecuteArgs,
 ): Promise<ConnectorFetchResult> {
-  const token = getShopifyToken(args.connection)
-  const shop = getShopDomain(args.connection?.metadata)
-  if (!token || !shop) throw new Error('Shopify Payments requires a connected Shopify store')
+  if (!getShopifyToken(args.connection) || !getShopDomain(args.connection?.metadata))
+    throw new Error('Shopify Payments requires a connected Shopify store')
   const scopes = args.connection?.metadata?.scope
   if (typeof scopes === 'string' && scopes.trim()) {
     const granted = new Set(scopes.split(/[ ,]+/))
@@ -245,37 +250,39 @@ export async function fetchPaymentsStream(
   const cursor = resumeCursor(args.state.cursor, args.streamKey)
   // Commit the acquisition identity BEFORE reading any financial facts. Retries use
   // the same identity; this timestamp is diagnostic, never a provider version.
-  if (!cursor)
+  if (!cursor) {
+    const payout = args.streamKey === 'payout'
     return {
       records: [],
       nextState: {
         cursor: {
-          version: 2,
+          version: 3,
           streamKey: args.streamKey,
           scanId: crypto.randomUUID(),
           startedAt: new Date().toISOString(),
-          phase: args.streamKey === 'payout' ? 'headers' : 'balance',
+          phase: payout ? 'headers' : 'balance',
+          ...(payout ? { headerQuery: historyQuery(args.config) } : {}),
           pageIndex: 0,
           headerIndex: 0,
-        },
+        } satisfies PaymentsCursor,
       },
     }
-  const http: PaymentsHttp = {
-    origin: `https://${shop}/admin/api/${PAYMENTS_API_VERSION}`,
-    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
   }
+  const http = shopifyHttp(args.connection)
+  const shop = http.shopDomain
   try {
-    const externalAccountId = await processorAccountId(http)
-    if (cursor.accountId && cursor.accountId !== externalAccountId)
-      throw new Error('Shopify Payments merchant changed during acquisition; restart the scan')
-    const bound = { ...cursor, accountId: externalAccountId }
     // No updatedSince: provider processing dates are not update timestamps.
     if (cursor.phase === 'balance') {
-      const params = new URLSearchParams({ limit: '250' })
-      if (cursor.outerCursor) params.set('page_info', cursor.outerCursor)
-      const result = await page<unknown>(http, BALANCE_PATH, 'transactions', params)
+      const { accountId, connection } = await accountPage<'balanceTransactions', unknown>(
+        http,
+        BALANCE_TRANSACTIONS_QUERY,
+        'balanceTransactions',
+        { after: cursor.outerCursor ?? null },
+      )
+      const bound = bindAccount(cursor, accountId)
+      const result = pageOf(connection, 'balanceTransactions')
       const pageId = `${cursor.scanId}:${cursor.pageIndex}`
-      const records = result.rows.map((raw, index) => {
+      const records = adaptRows(result.rows).map((raw, index) => {
         const projected = projectRows([raw], shop)
         const entry = projected.entries[0] ?? null
         const environment =
@@ -286,7 +293,11 @@ export async function fetchPaymentsStream(
           displayName: `Shopify balance transaction ${entry?.id ?? 'unresolved'}`,
           fields: processorSourceFields({
             externalId: entry?.id ?? `rejected:${pageId}:${index}`,
-            sourceAccount: { providerKey: 'shopify_payments', externalAccountId, environment },
+            sourceAccount: {
+              providerKey: 'shopify_payments',
+              externalAccountId: accountId,
+              environment,
+            },
             acquisition: { id: cursor.scanId, startedAt: cursor.startedAt },
             page: { id: pageId, index: cursor.pageIndex, rowIndex: index },
             entry,
@@ -300,46 +311,42 @@ export async function fetchPaymentsStream(
       return {
         records,
         nextState: result.next
-          ? {
-              cursor: {
-                ...bound,
-                outerCursor: result.next,
-                pageIndex: cursor.pageIndex + 1,
-              },
-            }
+          ? { cursor: { ...bound, outerCursor: result.next, pageIndex: cursor.pageIndex + 1 } }
           : { backfillComplete: true },
       }
     }
     if (cursor.phase === 'headers') {
-      const params = new URLSearchParams({ limit: '1' })
-      if (cursor.outerCursor) params.set('page_info', cursor.outerCursor)
-      else if (args.config?.payoutHistoryStartDate) {
-        const start = String(args.config.payoutHistoryStartDate)
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(start))
-          throw new Error('Payout history start must be YYYY-MM-DD')
-        params.set('date_min', start)
-      }
-      const result = await page<RawPayout>(
+      const { accountId, connection } = await accountPage<'payouts', GqlPayout>(
         http,
-        '/shopify_payments/payouts.json',
+        PAYOUT_HEADERS_QUERY,
         'payouts',
-        params,
+        { after: cursor.outerCursor ?? null, query: cursor.headerQuery ?? null },
       )
+      const bound = bindAccount(cursor, accountId)
+      const result = pageOf(connection, 'payouts')
       if (result.rows.length > 1)
         throw new Error('Shopify Payments exceeded the requested payout page size')
       if (result.next && result.next === cursor.outerCursor)
         throw new Error('Shopify Payments repeated a payout page cursor')
-      const raw = result.rows[0]
-      if (!result.rows.length) return { records: [], nextState: continuation(bound, result.next) }
+      const node = result.rows[0]
+      if (!node) return { records: [], nextState: continuation(bound, result.next) }
+      let raw: RawPayout
+      let adaptError: string | undefined
+      try {
+        raw = toRawPayout(node)
+      } catch (error) {
+        raw = node as unknown as RawPayout
+        adaptError = error instanceof Error ? error.message : 'Invalid payout'
+      }
       const next: PaymentsCursor = {
         ...bound,
         phase: 'members',
-        payout: raw!,
+        payout: raw,
         outerCursor: result.next,
         memberCursor: undefined,
         pageIndex: 0,
       }
-      let hasSourceIdentity = true
+      let hasSourceIdentity = !adaptError
       try {
         evidenceId(raw?.id)
       } catch {
@@ -347,26 +354,36 @@ export async function fetchPaymentsStream(
       }
       return {
         records: [
-          payoutRecord(next, externalAccountId, {
-            complete: false,
-            page: null,
-            entries: [],
-            rejections: [],
-            rawRows: [],
-            reason: 'Payout membership acquisition is pending',
-          }),
+          payoutRecord(
+            next,
+            accountId,
+            {
+              complete: false,
+              page: null,
+              entries: [],
+              rejections: [],
+              rawRows: [],
+              reason: 'Payout membership acquisition is pending',
+            },
+            adaptError,
+          ),
         ],
         nextState: hasSourceIdentity ? { cursor: next } : continuation(bound, result.next),
       }
     }
     if (!cursor.payout) throw new Error('Payout membership cursor has no payout header')
+    if (!cursor.accountId) throw new Error('Payout membership cursor has no processor account')
     const payoutId = evidenceId(cursor.payout.id)
     try {
-      const params = new URLSearchParams({ limit: '250' })
-      if (cursor.memberCursor) params.set('page_info', cursor.memberCursor)
-      else params.set('payout_id', payoutId)
-      const result = await page<unknown>(http, BALANCE_PATH, 'transactions', params)
-      const projected = projectRows(result.rows, shop, payoutId)
+      const { accountId, connection } = await accountPage<'balanceTransactions', unknown>(
+        http,
+        PAYOUT_MEMBERS_QUERY,
+        'balanceTransactions',
+        { after: cursor.memberCursor ?? null, query: payoutMembersQuery(payoutId) },
+      )
+      const bound = bindAccount(cursor, accountId)
+      const result = pageOf(connection, 'balanceTransactions')
+      const projected = projectRows(adaptRows(result.rows), shop, payoutId)
       const repeated = !!result.next && result.next === cursor.memberCursor
       const reason = repeated
         ? 'Shopify Payments repeated a membership page cursor'
@@ -375,7 +392,7 @@ export async function fetchPaymentsStream(
           : null
       return {
         records: [
-          payoutRecord(bound, externalAccountId, {
+          payoutRecord(bound, accountId, {
             // Terminal traversal is only a candidate; the domain verifies the full stored chain.
             complete: !result.next && !reason,
             reason,
@@ -395,10 +412,10 @@ export async function fetchPaymentsStream(
             : continuation(bound, cursor.outerCursor),
       }
     } catch (error) {
-      if (error instanceof PaymentsThrottle) throw error
+      if (fatal(error)) throw error
       return {
         records: [
-          payoutRecord(bound, externalAccountId, {
+          payoutRecord(cursor, cursor.accountId, {
             complete: false,
             page: null,
             entries: [],
@@ -408,7 +425,7 @@ export async function fetchPaymentsStream(
           }),
         ],
         // A failed or expired traversal stays incomplete. A later scan starts a new acquisition.
-        nextState: continuation(bound, cursor.outerCursor),
+        nextState: continuation(cursor, cursor.outerCursor),
       }
     }
   } catch (error) {

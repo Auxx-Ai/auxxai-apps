@@ -8,15 +8,15 @@ import {
   evidenceCurrencyExponent,
   exactEvidenceAmount,
 } from '../src/blocks/shopify/shared/payments-evidence'
+import type { GqlBalanceTransaction, GqlPayout } from '../src/graphql/payments'
 import { fetchPaymentsStream } from '../src/payments.connector.server'
 import { shopifyConnector } from '../src/shopify.connector'
 
-const payout = {
-  id: 10,
-  status: 'paid',
-  amount: '97.00',
-  currency: 'USD',
-  date: '2026-09-12',
+const payoutNode: GqlPayout = {
+  legacyResourceId: '10',
+  status: 'PAID',
+  issuedAt: '2026-09-12T08:00:00Z',
+  net: { amount: '97.00', currencyCode: 'USD' },
   summary: {},
 }
 const transaction = {
@@ -35,22 +35,51 @@ const transaction = {
   source_order_transaction_id: 51,
   processed_at: '2026-09-11T10:00:00Z',
 }
+/** The GraphQL node `toRawBalanceTransaction` turns into `transaction` above. */
+const transactionNode: GqlBalanceTransaction = {
+  id: 'gid://shopify/ShopifyPaymentsBalanceTransaction/21',
+  type: 'CHARGE',
+  test: false,
+  associatedPayout: { id: 'gid://shopify/ShopifyPaymentsPayout/10', status: 'PAID' },
+  amount: { amount: '100.00', currencyCode: 'USD' },
+  fee: { amount: '3.00' },
+  net: { amount: '97.00' },
+  sourceId: '31',
+  sourceType: 'CHARGE',
+  associatedOrder: { id: 'gid://shopify/Order/41' },
+  sourceOrderTransactionId: '51',
+  transactionDate: '2026-09-11T10:00:00Z',
+}
+const txId = (id: number | string | null) =>
+  id === null ? null : `gid://shopify/ShopifyPaymentsBalanceTransaction/${id}`
+const ACCOUNT = 'gid://shopify/ShopifyPaymentsAccount/777'
+type Kind = 'payouts' | 'balanceTransactions'
+type Page = { nodes: unknown[]; next?: string } | Response
 function response(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...headers },
   })
 }
-function setup(handler: (url: URL) => Response) {
-  const fetch = vi.fn(async (url: string) =>
-    url.endsWith('/graphql.json')
-      ? response({
-          data: { shopifyPaymentsAccount: { id: 'gid://shopify/ShopifyPaymentsAccount/777' } },
-        })
-      : handler(new URL(url)),
-  )
+function accountResponse(kind: Kind, nodes: unknown[], next?: string, id = ACCOUNT) {
+  const pageInfo = { hasNextPage: next !== undefined, endCursor: next ?? null }
+  return response({ data: { shopifyPaymentsAccount: { id, [kind]: { nodes, pageInfo } } } })
+}
+/** Routes each Admin GraphQL call by the connection it asks for. */
+function setup(handler: (kind: Kind, variables: Record<string, unknown>) => Page) {
+  const fetch = vi.fn(async (_url: string, init: RequestInit) => {
+    const { query, variables } = JSON.parse(String(init.body))
+    const kind: Kind = query.includes('payouts(') ? 'payouts' : 'balanceTransactions'
+    const page = handler(kind, variables)
+    return page instanceof Response ? page : accountResponse(kind, page.nodes, page.next)
+  })
   vi.stubGlobal('fetch', fetch)
   return fetch
+}
+function request(fetch: ReturnType<typeof setup>, index: number) {
+  const [url, init] = fetch.mock.calls.at(index)!
+  const body = JSON.parse(String(init.body))
+  return { url, query: body.query as string, variables: body.variables }
 }
 function sync(streamKey = 'payout', overrides: Partial<ConnectorExecuteArgs> = {}) {
   return fetchPaymentsStream({
@@ -123,42 +152,41 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('checkpoints stable acquisition identity before fetching source data', async () => {
-    const fetch = setup(() => response({ payouts: [] }))
+    const fetch = setup(() => ({ nodes: [] }))
     const first = await sync()
     expect(first.records).toEqual([])
     expect(fetch).not.toHaveBeenCalled()
-    expect(first.nextState.cursor).toMatchObject({ version: 2, phase: 'headers', pageIndex: 0 })
+    expect(first.nextState.cursor).toMatchObject({ version: 3, phase: 'headers', pageIndex: 0 })
   })
 
   it('returns separate header and one member page per call with stable retry identity', async () => {
-    const fetch = setup((url) => {
-      if (url.pathname.endsWith('/payouts.json'))
-        return response({ payouts: [{ ...payout, amount: '96.00' }] })
-      if (url.searchParams.has('page_info'))
-        return response({
-          transactions: [
+    const fetch = setup((kind, variables) => {
+      if (kind === 'payouts')
+        return { nodes: [{ ...payoutNode, net: { amount: '96.00', currencyCode: 'USD' } }] }
+      if (variables.after === 'second')
+        return {
+          nodes: [
             {
-              ...transaction,
-              id: 22,
-              type: 'payout',
-              amount: '-97.00',
-              fee: '0.00',
-              net: '-97.00',
+              ...transactionNode,
+              id: txId(22),
+              type: 'TRANSFER',
+              amount: { amount: '-97.00', currencyCode: 'USD' },
+              fee: { amount: '0.00' },
+              net: { amount: '-97.00' },
             },
           ],
-        })
-      return response({ transactions: [transaction] }, 200, {
-        Link: '<https://test-shop.myshopify.com/x?page_info=second>; rel="next"',
-      })
+        }
+      return { nodes: [transactionNode], next: 'second' }
     })
     const header = await seeded()
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(1)
     expect(evidence(header)).toMatchObject({
       payout: { amount: '96.00', issuedAt: null, issuedOn: '2026-09-12', currencyExponent: 2 },
       membership: { page: null, complete: false },
     })
     const first = await sync('payout', { state: header.nextState })
-    expect(fetch).toHaveBeenCalledTimes(4)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(request(fetch, -1).variables).toEqual({ after: null, query: 'payments_transfer_id:10' })
     expect(evidence(first).membership).toMatchObject({
       complete: false,
       page: { index: 0, terminal: false },
@@ -174,25 +202,30 @@ describe('bounded Shopify Payments source acquisition', () => {
       page: { index: 1, terminal: true },
       entries: [{ type: 'outgoing_transfer', providerType: 'payout', net: '-97.00' }],
     })
-    expect(fetch.mock.calls.at(-1)![0]).not.toContain('payout_id=')
+    expect(request(fetch, -1).variables).toEqual({
+      after: 'second',
+      query: 'payments_transfer_id:10',
+    })
     expect(final.nextState.backfillComplete).toBe(true)
   })
 
   it('retains malformed raw rows and exact successful rows on the same page', async () => {
     const malformed = { ...transaction, id: 22, amount: 100 }
-    setup((url) =>
-      response(
-        url.pathname.endsWith('/payouts.json')
-          ? { payouts: [payout] }
-          : {
-              transactions: [
-                transaction,
-                malformed,
-                null,
-                { ...transaction, id: 23, payout_id: 99 },
-              ],
-            },
-      ),
+    setup((kind) =>
+      kind === 'payouts'
+        ? { nodes: [payoutNode] }
+        : {
+            nodes: [
+              transactionNode,
+              { ...transactionNode, id: txId(22), amount: { amount: 100, currencyCode: 'USD' } },
+              null,
+              {
+                ...transactionNode,
+                id: txId(23),
+                associatedPayout: { id: 'gid://shopify/ShopifyPaymentsPayout/99', status: 'PAID' },
+              },
+            ],
+          },
     )
     const result = evidence(await memberPage())
     expect(result.membership).toMatchObject({ complete: false, page: { terminal: true } })
@@ -203,12 +236,10 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('retains invalid independent payout amount without inventing a replacement', async () => {
-    setup((url) =>
-      response(
-        url.pathname.endsWith('/payouts.json')
-          ? { payouts: [{ ...payout, amount: 97 }] }
-          : { transactions: [] },
-      ),
+    setup((kind) =>
+      kind === 'payouts'
+        ? { nodes: [{ ...payoutNode, net: { amount: 97, currencyCode: 'USD' } }] }
+        : { nodes: [] },
     )
     expect(evidence(await seeded())).toMatchObject({
       payout: null,
@@ -218,7 +249,7 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('retains a malformed payout source identity as a diagnostic record', async () => {
-    setup(() => response({ payouts: [{ ...payout, id: Number.MAX_SAFE_INTEGER + 1 }] }))
+    setup(() => ({ nodes: [{ ...payoutNode, legacyResourceId: Number.MAX_SAFE_INTEGER + 1 }] }))
     const result = await seeded()
     expect(evidence(result)).toMatchObject({
       payout: null,
@@ -230,9 +261,7 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('never seals a failed or expired membership request as complete', async () => {
-    setup((url) =>
-      url.pathname.endsWith('/payouts.json') ? response({ payouts: [payout] }) : response({}, 400),
-    )
+    setup((kind) => (kind === 'payouts' ? { nodes: [payoutNode] } : response({}, 400)))
     const result = await memberPage()
     expect(evidence(result).membership).toMatchObject({
       complete: false,
@@ -243,10 +272,8 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('retries a throttled page using the already checkpointed cursor', async () => {
-    setup((url) =>
-      url.pathname.endsWith('/payouts.json')
-        ? response({ payouts: [payout] })
-        : response({}, 429, { 'Retry-After': '4' }),
+    setup((kind) =>
+      kind === 'payouts' ? { nodes: [payoutNode] } : response({}, 429, { 'Retry-After': '4' }),
     )
     const header = await seeded()
     const result = await sync('payout', { state: header.nextState })
@@ -258,12 +285,8 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('detects an immediately repeated cursor without draining a loop', async () => {
-    setup((url) =>
-      url.pathname.endsWith('/payouts.json')
-        ? response({ payouts: [payout] })
-        : response({ transactions: [transaction] }, 200, {
-            Link: '<https://test-shop.myshopify.com/x?page_info=same>; rel="next"',
-          }),
+    setup((kind) =>
+      kind === 'payouts' ? { nodes: [payoutNode] } : { nodes: [transactionNode], next: 'same' },
     )
     const first = await memberPage()
     const next = await sync('payout', { state: first.nextState })
@@ -275,12 +298,10 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('retains duplicate conflicts for shared coverage assessment', async () => {
-    setup((url) =>
-      response(
-        url.pathname.endsWith('/payouts.json')
-          ? { payouts: [payout] }
-          : { transactions: [transaction, { ...transaction, net: '96.00' }] },
-      ),
+    setup((kind) =>
+      kind === 'payouts'
+        ? { nodes: [payoutNode] }
+        : { nodes: [transactionNode, { ...transactionNode, net: { amount: '96.00' } }] },
     )
     expect(evidence(await memberPage()).membership).toMatchObject({
       complete: false,
@@ -288,24 +309,20 @@ describe('bounded Shopify Payments source acquisition', () => {
     })
   })
 
-  it.each([
-    'scheduled',
-    'in_transit',
-    'failed',
-    'canceled',
-  ])('keeps %s header lifecycle separate from terminal traversal', async (status) => {
-    setup((url) =>
-      response(
-        url.pathname.endsWith('/payouts.json')
-          ? { payouts: [{ ...payout, status }] }
-          : { transactions: [] },
-      ),
-    )
-    expect(evidence(await memberPage()).membership).toMatchObject({
-      complete: true,
-      providerReady: false,
-    })
-  })
+  it.each(['scheduled', 'in_transit', 'failed', 'canceled'])(
+    'keeps %s header lifecycle separate from terminal traversal',
+    async (status) => {
+      setup((kind) =>
+        kind === 'payouts'
+          ? { nodes: [{ ...payoutNode, status: status.toUpperCase() }] }
+          : { nodes: [] },
+      )
+      expect(evidence(await memberPage()).membership).toMatchObject({
+        complete: true,
+        providerReady: false,
+      })
+    },
+  )
 
   it('normalizes outgoing and returned movements without assuming unknown semantics', () => {
     for (const [providerType, type] of [
@@ -323,14 +340,12 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('keeps unassigned activity, exact transaction references, test mode and invalid raw data', async () => {
-    setup(() =>
-      response({
-        transactions: [
-          { ...transaction, id: '9007199254740993', payout_id: null, test: true },
-          { ...transaction, id: null },
-        ],
-      }),
-    )
+    setup(() => ({
+      nodes: [
+        { ...transactionNode, id: txId('9007199254740993'), associatedPayout: null, test: true },
+        { ...transactionNode, id: null },
+      ],
+    }))
     const result = await seeded('balance_transaction')
     expect((result.records as ConnectorRecord[])[0]).toMatchObject({
       externalId: '9007199254740993',
@@ -361,45 +376,36 @@ describe('bounded Shopify Payments source acquisition', () => {
   })
 
   it('refuses a merchant change during membership acquisition', async () => {
-    setup((url) =>
-      response(
-        url.pathname.endsWith('/payouts.json') ? { payouts: [payout] } : { transactions: [] },
-      ),
-    )
+    setup((kind) => (kind === 'payouts' ? { nodes: [payoutNode] } : { nodes: [] }))
     const header = await seeded()
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
-        response({
-          data: { shopifyPaymentsAccount: { id: 'gid://shopify/ShopifyPaymentsAccount/888' } },
-        }),
+        accountResponse(
+          'balanceTransactions',
+          [],
+          undefined,
+          'gid://shopify/ShopifyPaymentsAccount/888',
+        ),
       ),
     )
     await expect(sync('payout', { state: header.nextState })).rejects.toThrow('merchant changed')
   })
 
   it('uses history floor only on initial header page and ignores processing-date watermarks', async () => {
-    const fetch = setup((url) =>
-      response(
-        { payouts: [] },
-        200,
-        url.searchParams.has('page_info')
-          ? {}
-          : {
-              Link: '<https://test-shop.myshopify.com/x?page_info=next>; rel="next"',
-            },
-      ),
-    )
+    const fetch = setup((_kind, variables) => ({
+      nodes: [],
+      next: variables.after ? undefined : 'next',
+    }))
     const first = await seeded('payout', {
       config: { payoutHistoryStartDate: '2026-01-01' },
       state: { updatedSince: '2026-09-15' },
     })
-    expect(fetch.mock.calls[1]![0]).toContain('date_min=2026-01-01')
-    await sync('payout', {
-      config: { payoutHistoryStartDate: '2026-01-01' },
-      state: first.nextState,
-    })
-    expect(fetch.mock.calls[3]![0]).not.toContain('date_min')
+    expect(request(fetch, 0).variables).toEqual({ after: null, query: 'issued_at:>=2026-01-01' })
+    // GraphQL cursors do not carry the filter, so every page re-sends the scan's own floor.
+    await sync('payout', { config: {}, state: first.nextState })
+    expect(request(fetch, 1).variables).toEqual({ after: 'next', query: 'issued_at:>=2026-01-01' })
+    expect(JSON.stringify(fetch.mock.calls)).not.toContain('2026-09-15')
   })
 
   it('requires actual processor identity and explicit account permission', async () => {

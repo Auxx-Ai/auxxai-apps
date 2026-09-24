@@ -1,9 +1,8 @@
 // src/blocks/shopify/shared/payments-api.ts
 //
-// Every Shopify Payments HTTP call lives here (money design gap-a §1.3): REST
-// `shopify_payments/*` because `payout_id` is a first-class REST filter that GraphQL does
-// not offer, and because REST returns `source_order_id` flat. Consumers see the projected
-// shape, never a raw body, so a later GraphQL rewrite is this one file.
+// The REST `Raw*` shapes the payments evidence validates, plus the REST helpers behind the
+// payout tools. The connector streams read GraphQL and adapt into these shapes
+// (src/graphql/payments.ts); these tools move to GraphQL in pass 2.
 
 import { UpstreamServiceError } from '@auxx/sdk/server'
 import { API_VERSION, throwShopifyResponseError } from './shopify-api'

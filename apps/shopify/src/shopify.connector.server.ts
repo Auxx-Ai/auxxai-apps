@@ -2,21 +2,19 @@
 //
 // Server handler for the single Shopify data connector. Runs inside the
 // app-runtime sandbox and serves THREE streams off the one connector:
-//   • `customer` → REST /customers.json, contributes into the system `contact` def.
-//   • `order`    → REST /orders.json (line items embedded), contributes into the
+//   • `customer` → GraphQL `customers` (src/graphql/customer.ts), contributes into the
+//                  system `contact` def.
+//   • `order`    → GraphQL `orders` (src/graphql/order.ts), contributes into the
 //                  native `order` / `line_item` / `contact` / `part` entities
 //                  (money plan 37 §6/§7.2 — the retarget off the old owned
 //                  `shopify_orders` / `shopify_line_items` defs).
-//   • `product`  → REST /products.json, contributes into the native `product` /
-//                  `part` entities (money plan 37 §7.1).
+//   • `product`  → GraphQL `products` (src/graphql/product.ts), contributes into the
+//                  native `product` / `part` entities (money plan 37 §7.1).
 //
-// All three share the same "one page + page_info cursor" contract
-// (`fetchShopifyPage`): return ONE page of records plus a flat cursor, and the
-// platform re-invokes with `state.cursor` until `backfillComplete`. Raw `fetch` is
-// used (not the shared shopifyApi helpers) for header access — the shared helpers
-// return parsed JSON with no headers and auto-drain every page, neither of which
-// fits the per-page contract. A 429 is surfaced as `rateLimited` (not thrown) so
-// the platform pauses + re-enqueues from the same cursor.
+// Every stream returns ONE page of records plus a flat cursor (`fetchGraphqlPage`,
+// src/graphql/paged.ts) and the platform re-invokes with `state.cursor` until
+// `backfillComplete`. A throttle is surfaced as `rateLimited` (not thrown) so the
+// platform pauses + re-enqueues from the same cursor.
 //
 // Connection contract: resolve from `args.connection` — `value` is the Admin API
 // access token, `metadata` carries the shop domain.
@@ -57,11 +55,8 @@
 //
 // The `order` projection also binds the PAID instant and the PAYING gateway
 // (`paidAt` / `paidGateway`, accounting plan 29 §3.1) from the order's
-// successful sale/capture transaction. `/orders.json` does not embed
-// `transactions[]`, so `fetchShopifyPage` grew a page-level `supplement` hook:
-// the order stream fetches transaction evidence for every order, including
-// multiple captures and individual refunds, before projecting
-// the page. The rule and the call budget are at the "order payment" section.
+// successful sale/capture transaction. The GraphQL order query carries
+// `transactions` inline; the rule is at the "order payment" section.
 //
 // ── Field naming ─────────────────────────────────────────────────────────────
 // Every projected key here is exactly the `sourcePath` (relative to its
@@ -82,170 +77,46 @@ import type {
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { orderPaymentSourceFields } from '@auxx/sdk/financial-source'
-import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
+import { shopifyGraphql, shopifyHttp } from './graphql/client'
+import {
+  CUSTOMERS_QUERY,
+  type CustomersData,
+  type GqlCustomer,
+  toRawCustomer,
+} from './graphql/customer'
+import { legacyId } from './graphql/legacy-id'
+import {
+  completeOrders,
+  type GqlOrder,
+  ORDERS_FIRST,
+  ORDERS_QUERY,
+  type OrdersData,
+  type RawOrderWithTransactions,
+  toRawOrder,
+} from './graphql/order'
+import { fetchGraphqlPage } from './graphql/paged'
+import {
+  completeVariants,
+  type GqlProduct,
+  inventoryItemCosts,
+  PRODUCTS_QUERY,
+  type ProductRow,
+  type ProductsData,
+  STEERED_PRODUCT_QUERY,
+  type SteeredProductData,
+  toProductRow,
+  toRawProduct,
+} from './graphql/product'
 import { fetchPaymentsStream } from './payments.connector.server'
 
-const API_VERSION = '2024-10'
 const PAGE_SIZE = 250
-const ORDER_PAGE_SIZE = 10
-
-/** Extract the `page_info` token of the `rel="next"` link from a Link header. */
-function nextPageInfo(linkHeader: string | null): string | undefined {
-  return linkHeader?.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)?.[1]
-}
-
-/**
- * Latest `updated_at` across a page, compared by epoch and returned as the original
- * ISO string. Falls back to `fallback` when the page is empty or holds no parseable
- * timestamp — never returns a value older than the mark we came in with.
- */
-function maxUpdatedAt<Raw extends { updated_at: string }>(
-  rows: Raw[],
-  fallback: unknown,
-): string | undefined {
-  const base = typeof fallback === 'string' ? fallback : undefined
-  let best = base
-  let bestMs = base ? Date.parse(base) : Number.NEGATIVE_INFINITY
-  if (Number.isNaN(bestMs)) bestMs = Number.NEGATIVE_INFINITY
-  for (const row of rows) {
-    const ms = Date.parse(row.updated_at)
-    if (Number.isNaN(ms) || ms <= bestMs) continue
-    bestMs = ms
-    best = row.updated_at
-  }
-  return best
-}
-
-/** Shop endpoint and auth headers, shared by a page fetch and its supplement. */
-interface ShopifyHttp {
-  shopDomain: string
-  headers: Record<string, string>
-}
-
-/** Result of a page-level side lookup: its value, or a throttle to retry the page on. */
-type PageSupplement<Extra> = { ok: true; value: Extra } | { ok: false; retryAfterMs?: number }
-
-/** `Retry-After` in ms, or undefined when Shopify sent none (never 0 for a missing header). */
-function retryAfterMs(res: {
-  headers: { get: (name: string) => string | null }
-}): number | undefined {
-  const header = res.headers.get('Retry-After')
-  const seconds = header === null ? Number.NaN : Number(header)
-  return Number.isFinite(seconds) ? seconds * 1000 : undefined
-}
-
-/**
- * Fetch ONE page of a Shopify REST collection and project it into source-shaped
- * records. Shared by every stream: same page_info cursor, same incremental
- * `updated_at` watermark, same 429 → `rateLimited` handling. `toRecord` projects one
- * raw row; `firstPageParams` are filters that ride page 1 only (Shopify forbids any
- * other filter once `page_info` is set — the token encodes them).
- *
- * `supplement` is an optional side lookup run over the page's rows BEFORE
- * projection, for data the collection endpoint does not embed (the order
- * stream's payment transactions). Its value is handed to every `toRecord` call;
- * a throttle inside it retries the whole page from the same cursor, exactly
- * like a 429 on the page itself.
- */
-async function fetchShopifyPage<Raw extends { updated_at: string }, Extra = undefined>(
-  args: ConnectorExecuteArgs,
-  opts: {
-    resource: 'customers' | 'orders' | 'products'
-    rootKey: 'customers' | 'orders' | 'products'
-    toRecord: (raw: Raw, extra: Extra) => ConnectorRecord
-    firstPageParams?: Record<string, string>
-    pageSize?: number
-    supplement?: (rows: Raw[], http: ShopifyHttp) => Promise<PageSupplement<Extra>>
-  },
-): Promise<ConnectorFetchResult> {
-  const { mode, state, connection } = args
-  const token = getShopifyToken(connection)
-  if (!token) {
-    throw new Error('shopify: missing connection (requiresConnection)')
-  }
-  const shopDomain = getShopDomain(connection?.metadata)
-  if (!shopDomain) {
-    throw new Error('shopify: connection metadata is missing the shop domain')
-  }
-  const http: ShopifyHttp = {
-    shopDomain,
-    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
-  }
-
-  const params = new URLSearchParams({ limit: String(opts.pageSize ?? PAGE_SIZE) })
-  if (state.cursor) {
-    params.set('page_info', String(state.cursor))
-  } else {
-    for (const [k, v] of Object.entries(opts.firstPageParams ?? {})) {
-      params.set(k, v)
-    }
-    if (mode === 'incremental' && state.updatedSince) {
-      params.set('updated_at_min', String(state.updatedSince))
-    }
-  }
-
-  const res = await fetch(
-    `https://${shopDomain}/admin/api/${API_VERSION}/${opts.resource}.json?${params}`,
-    { headers: http.headers },
-  )
-
-  // Throttled — pause + retry THIS page from the same cursor (don't burn the budget).
-  if (res.status === 429) {
-    return {
-      records: [],
-      nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
-      rateLimited: { retryAfterMs: retryAfterMs(res) },
-    }
-  }
-  if (!res.ok) {
-    throw new Error(`shopify: Admin API responded ${res.status} for ${opts.resource}`)
-  }
-
-  const rows = ((await res.json()) as Record<string, Raw[] | undefined>)[opts.rootKey] ?? []
-  const next = nextPageInfo(res.headers.get('Link'))
-
-  let extra = undefined as Extra
-  if (opts.supplement) {
-    const supplement = await opts.supplement(rows, http)
-    if (!supplement.ok) {
-      // Same shape as the 429 above: the page is re-fetched later from this cursor.
-      return {
-        records: [],
-        nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
-        rateLimited: { retryAfterMs: supplement.retryAfterMs },
-      }
-    }
-    extra = supplement.value
-  }
-  // High-water mark of `updated_at` so the next incremental run resumes from it.
-  //
-  // Take the MAX across the page, never `rows[rows.length - 1]`. Shopify's REST
-  // collections default to **`id` descending** — verified against a live store:
-  // `updated_at` is neither ascending nor descending within a page (an old order
-  // edited yesterday still sorts first by id). Reading the last row therefore yields
-  // an arbitrary `updated_at`, which fails two ways:
-  //   • it is usually the OLDEST value, so `updated_at_min` never advances and every
-  //     incremental run re-crawls the entire history; and
-  //   • if the lowest-id row happens to be a recently-edited order, the mark jumps
-  //     forward and silently SKIPS every row updated in between.
-  // Comparison is by epoch, not lexicographic: Shopify stamps shop-local offsets, so
-  // strings either side of a DST change do not sort correctly as text.
-  const lastUpdated = maxUpdatedAt(rows, state.updatedSince)
-
-  return {
-    records: rows.map((row) => opts.toRecord(row, extra)),
-    nextState: next
-      ? // More pages in this chain — keep the page cursor, hold the watermark.
-        { cursor: next, updatedSince: state.updatedSince }
-      : // Chain done — drop the cursor, advance the watermark for the next run.
-        { cursor: undefined, updatedSince: lastUpdated, backfillComplete: true },
-  }
-}
+// Probe: `first: 50` with 100 variants requested 219 points (plan §10); REST's 250 would exceed 1000.
+const PRODUCT_PAGE_SIZE = 50
 
 // ── shared projection helpers ────────────────────────────────────────────────
 
 /** A Shopify REST address object (customer default_address / order ship/bill). */
-interface RawAddress {
+export interface RawAddress {
   address1?: string | null
   address2?: string | null
   city?: string | null
@@ -312,10 +183,10 @@ function decimalToMinorUnits(decimal: string | null | undefined): number | null 
 }
 
 // ── customer stream ────────────────────────────────────────────────────────────
-// Unchanged — the `customer` stream keeps its projection as-is; only the
-// manifest that binds it moves to the new mapping shape (money plan 37 §8).
+// Fetched over GraphQL and adapted back into this REST shape (`toRawCustomer`), so
+// the projection below is unchanged (shopify-v3-graphql-plan.md D8).
 
-interface RawCustomer {
+export interface RawCustomer {
   id: number
   email: string | null
   first_name: string | null
@@ -379,7 +250,7 @@ function toCustomerRecord(c: RawCustomer): ConnectorRecord {
  * `shop_money` is ever read — it is the merchant's own currency, which is the one
  * the ledger posts in, and it is the STRING form of the amount (see `RawTaxLine`).
  */
-interface RawMoneySet {
+export interface RawMoneySet {
   shop_money?: { amount?: string | null } | null
 }
 
@@ -394,7 +265,7 @@ interface RawMoneySet {
  * through `decimalToMinorUnits`. Binding the bare scalar opens a second numeric
  * path into the ledger, which is where the 100x money bug lived last time.
  */
-interface RawTaxLine {
+export interface RawTaxLine {
   title?: string | null
   rate?: number | string | null
   price?: number | string | null
@@ -466,7 +337,7 @@ function lineTaxTotal(taxLines: RawTaxLine[] | null | undefined): number | null 
   )
 }
 
-interface RawLineItem {
+export interface RawLineItem {
   id: number | null
   title: string | null
   variant_title: string | null
@@ -501,7 +372,7 @@ interface RawLineItem {
  * but `quantity` here means "units shipped IN THIS FULFILLMENT", not units ordered.
  * Conflating the two is precisely the split-shipment bug these fields exist to avoid.
  */
-interface RawFulfillmentLine {
+export interface RawFulfillmentLine {
   id: number | null
   variant_id: number | null
   sku: string | null
@@ -517,7 +388,7 @@ interface RawFulfillmentLine {
  * that moves on every carrier tracking update, which would drag the recognition date
  * forward days after delivery.
  */
-interface RawFulfillment {
+export interface RawFulfillment {
   id: number | null
   name: string | null
   /** Lifecycle: pending | open | success | cancelled | error | failure. */
@@ -751,7 +622,7 @@ function projectFulfillments(o: RawOrder): ProjectedFulfillment[] {
  * `refund | void | sale | authorization | capture`; `status` is
  * `success | pending | failure | error`.
  */
-interface RawRefundTransaction {
+export interface RawRefundTransaction {
   id?: number | string | null
   kind?: string | null
   status?: string | null
@@ -770,7 +641,7 @@ interface RawRefundTransaction {
  * omitted from the projection: nothing consumes it until the inventory leg
  * exists.
  */
-interface RawRefundLineItem {
+export interface RawRefundLineItem {
   id?: number | null
   line_item_id?: number | null
   line_item?: { title?: string | null } | null
@@ -793,7 +664,7 @@ interface RawRefundLineItem {
  * level while the fact it describes is per line. It is in the payload, so it will
  * look bindable; `refund_line_items[].restock_type` is the field that carries it.
  */
-interface RawRefund {
+export interface RawRefund {
   id?: number | null
   created_at?: string | null
   note?: string | null
@@ -1032,32 +903,23 @@ function projectRefund(r: RawRefund, contactExternalId: string | null) {
 //
 // `paidAt` / `paidGateway` (accounting plan 29 §3.1, bound to `order_paid_at` /
 // `order_paid_gateway`): the `processed_at` and `gateway` of the order's
-// SUCCESSFUL `sale` or `capture` transaction. `/orders.json` does not embed
-// `transactions[]` and its `fields=` filter cannot ask for them, so the rule is:
+// SUCCESSFUL `sale` or `capture` transaction. The rule:
 //
 //   1. Paid at checkout with ONE listed gateway (the overwhelming case): the
 //      order's `processed_at` IS the paid instant, which is also what Shopify
 //      itself dates the sale by, and the one listed gateway IS the paying one.
 //      No extra call.
-//   2. More than one gateway, or an order carrying `payment_terms`: look the
-//      transactions up. `payment_gateway_names` includes FAILED attempts (a
+//   2. More than one gateway, or an order carrying `payment_terms` (inferred
+//      from the transactions, plan D9): read the transactions. `payment_gateway_names` includes FAILED attempts (a
 //      declined Affirm, then a card, reads `['affirm','shopify_payments']`),
 //      and a terms order pays days or weeks after `processed_at`.
 //   3. Not paid yet (`pending`, `authorized`, `partially_paid`, `voided`, ...):
 //      both empty. Paying bumps `updated_at`, so the next incremental sync
 //      sees the flip to `paid` and fills them then.
 //
-// The source fetches actual capture/refund evidence for every order. Each
-// GraphQL request is bounded to one order and 250 transactions. An array at
-// the limit remains explicitly incomplete; missing nodes refuse the page.
+// Transactions arrive inline with every order (src/graphql/order.ts), never
+// truncated: a list that could be cut off is re-queried or the page throws.
 // `read_orders` covers `Order.transactions`.
-//
-// Known residual, documented rather than special-cased: a MANUAL payment
-// method (COD, bank deposit, "mark as paid") lists one gateway and carries no
-// `payment_terms`, but is marked paid AFTER checkout, so rule 1 dates it at
-// `processed_at`. The gateway is right, and that date is exactly what the
-// platform's fork used before this binding existed (`order_placed_at`), so
-// nothing regresses; the manual handles are merchant-named and not enumerable.
 
 /**
  * One order transaction as either the REST (`sale` / `success`) or the GraphQL
@@ -1187,75 +1049,7 @@ export function resolveOrderPayment(
   return { paidAt: o.processed_at, paidGateway: o.payment_gateway_names?.[0] ?? null }
 }
 
-/** Keep full financial transaction payloads bounded to one order per request. */
-const PAID_TRANSACTIONS_BATCH = 1
-
-const PAID_TRANSACTIONS_QUERY = `query PaidTransactions($ids: [ID!]!) {
-  nodes(ids: $ids) {
-    ... on Order {
-      legacyResourceId
-      transactions(first: 250) { id kind status gateway processedAt amountSet { presentmentMoney { amount currencyCode } } settlementCurrency parentTransaction { id } paymentId test authorizationCode receiptJson }
-    }
-  }
-}`
-
-interface PaidTransactionsResponse {
-  data?: {
-    nodes?: Array<{
-      legacyResourceId?: string | null
-      transactions?: OrderTransactionLike[] | null
-    } | null>
-  }
-  errors?: Array<{ message?: string; extensions?: { code?: string } }>
-}
-
-/**
- * The `fetchShopifyPage` supplement for the order stream: transactions for the
- * every order on this page, keyed by order id; legacy payment summaries reuse the data.
- * Throttling (HTTP 429, or a 200 carrying a `THROTTLED` error, which is how the
- * GraphQL API reports it) surfaces as `{ ok: false }` so the page is retried from
- * the same cursor; any other error throws, like a failed REST page does.
- */
-async function fetchPaidTransactions(
-  rows: RawOrder[],
-  http: ShopifyHttp,
-): Promise<PageSupplement<ReadonlyMap<string, OrderTransactionLike[]>>> {
-  const byOrderId = new Map<string, OrderTransactionLike[]>()
-  const ids = rows.map((o) => `gid://shopify/Order/${o.id}`)
-  for (let i = 0; i < ids.length; i += PAID_TRANSACTIONS_BATCH) {
-    const res = await fetch(`https://${http.shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
-      method: 'POST',
-      headers: http.headers,
-      body: JSON.stringify({
-        query: PAID_TRANSACTIONS_QUERY,
-        variables: { ids: ids.slice(i, i + PAID_TRANSACTIONS_BATCH) },
-      }),
-    })
-    if (res.status === 429) {
-      return { ok: false, retryAfterMs: retryAfterMs(res) }
-    }
-    if (!res.ok) {
-      throw new Error(`shopify: GraphQL order transactions lookup responded ${res.status}`)
-    }
-    const body = (await res.json()) as PaidTransactionsResponse
-    if (body.errors?.some((e) => e.extensions?.code === 'THROTTLED')) {
-      return { ok: false }
-    }
-    if (body.errors?.length) {
-      const messages = body.errors.map((e) => e.message ?? 'unknown error').join('; ')
-      throw new Error(`shopify: GraphQL order transactions lookup failed: ${messages}`)
-    }
-    for (const node of body.data?.nodes ?? []) {
-      if (!node?.legacyResourceId || !Array.isArray(node.transactions))
-        throw new Error('shopify: incomplete order transaction response')
-      byOrderId.set(node.legacyResourceId, node.transactions)
-    }
-  }
-  if (byOrderId.size !== rows.length) throw new Error('shopify: missing order transaction coverage')
-  return { ok: true, value: byOrderId }
-}
-
-interface RawOrder {
+export interface RawOrder {
   id: number
   name: string | null
   order_number?: number
@@ -1279,7 +1073,7 @@ interface RawOrder {
    * declined-Affirm-then-paid-by-card order reads `['affirm','shopify_payments']` and a
    * naive `includes('affirm')` mis-routes. This raw list is never mutated; a
    * multi-value order resolves `paidGateway` AND the projected `paymentGateways`
-   * (58 §7, D12) against `fetchPaidTransactions`, dropping the failed names.
+   * (58 §7, D12) against the order's transactions, dropping the failed names.
    */
   payment_gateway_names: string[] | null
   /**
@@ -1325,8 +1119,7 @@ interface RawOrder {
 
 /** Project one REST order into a SOURCE-shaped record (fields keyed by sourcePath,
  *  relative to the mapping's rootPath, see the file header). `transactionsByOrderId`
- *  is the page's `fetchPaidTransactions` result; only the orders that needed a lookup
- *  are in it (see the order payment section). */
+ *  holds the order's inline GraphQL transactions (see the order payment section). */
 function toOrderRecord(
   o: RawOrder,
   transactionsByOrderId: ReadonlyMap<string, OrderTransactionLike[]> = new Map(),
@@ -1587,11 +1380,11 @@ function toOrderRecord(
 // ── product stream ─────────────────────────────────────────────────────────────
 
 /**
- * An embedded Shopify REST product variant (from /products.json `variants[]`).
+ * A product variant in the REST shape (`src/graphql/product.ts` adapts GraphQL into it).
  * `id`/`inventory_item_id` arrive as numbers; both are stringified in projection so
  * the identity and webhook join-key comparisons stay string-based (like line items).
  */
-interface RawVariant {
+export interface RawVariant {
   id: number | null
   sku: string | null
   title: string | null
@@ -1609,12 +1402,12 @@ interface RawVariant {
 }
 
 /** An entry of a REST product's `images[]`; `image` is the featured one (position 1). */
-interface RawProductImage {
+export interface RawProductImage {
   id: number
   src: string | null
 }
 
-interface RawProduct {
+export interface RawProduct {
   id: number
   title: string | null
   body_html: string | null
@@ -1655,57 +1448,11 @@ function productQualifiedTitle(productTitle: string, variantTitle: string | null
   return `${productTitle} - ${variantTitle}`
 }
 
-/** `/inventory_items.json?ids=` accepts at most 100 ids per call. */
-const INVENTORY_ITEM_BATCH = 100
-
 /**
- * The product stream's supplement: each variant's "cost per item", keyed by inventory
- * item id. The REST variant does not carry it; a 429 retries the page like the orders one.
+ * Project one REST-shaped product into a SOURCE-shaped record. `externalId` is the numeric
+ * product id stringified; `costs` maps inventory item id → cost per item.
  */
-async function fetchInventoryItemCosts(
-  rows: RawProduct[],
-  http: ShopifyHttp,
-): Promise<PageSupplement<ReadonlyMap<string, string | null>>> {
-  const costs = new Map<string, string | null>()
-  const ids = [
-    ...new Set(
-      rows.flatMap((p) =>
-        (p.variants ?? []).flatMap((v) =>
-          v.inventory_item_id != null ? [String(v.inventory_item_id)] : [],
-        ),
-      ),
-    ),
-  ]
-  for (let i = 0; i < ids.length; i += INVENTORY_ITEM_BATCH) {
-    const params = new URLSearchParams({
-      ids: ids.slice(i, i + INVENTORY_ITEM_BATCH).join(','),
-      limit: String(INVENTORY_ITEM_BATCH),
-    })
-    const res = await fetch(
-      `https://${http.shopDomain}/admin/api/${API_VERSION}/inventory_items.json?${params}`,
-      { headers: http.headers },
-    )
-    if (res.status === 429) {
-      return { ok: false, retryAfterMs: retryAfterMs(res) }
-    }
-    if (!res.ok) {
-      throw new Error(`shopify: Admin API responded ${res.status} for inventory_items`)
-    }
-    const body = (await res.json()) as {
-      inventory_items?: Array<{ id: number; cost: string | null }>
-    }
-    for (const item of body.inventory_items ?? []) {
-      costs.set(String(item.id), item.cost ?? null)
-    }
-  }
-  return { ok: true, value: costs }
-}
-
-/**
- * Project one REST product into a SOURCE-shaped record. `externalId` is the numeric
- * product id stringified; `costs` is the page's inventory item id → cost map.
- */
-function toProductRecord(
+export function toProductRecord(
   p: RawProduct,
   costs: ReadonlyMap<string, string | null>,
 ): ConnectorRecord {
@@ -1762,71 +1509,31 @@ function toProductRecord(
 // ── webhook-steered product fetch ────────────────────────────────────────────────
 
 /**
- * Steered partial fetch for an `inventory_levels/update` delivery. The webhook
- * payload carries the `inventory_item_id` (NOT a variant/product id), so resolve
- * inventory item → variant → product via one GraphQL lookup, then re-fetch that ONE
- * product through the same REST projection the crawl uses — the `variants[]` fan-out
- * refreshes every sibling variant's quantity in the same page. Single page, no
- * cursor: `backfillComplete` terminates the platform's pagination loop immediately.
+ * Steered fetch for an `inventory_levels/update` delivery, which carries only the
+ * `inventory_item_id`: one query resolves item → variant → product with the crawl's
+ * selection, so the `variants[]` fan-out refreshes every sibling variant.
  */
 async function fetchSteeredProduct(
   args: ConnectorExecuteArgs,
   inventoryItemId: string,
 ): Promise<ConnectorFetchResult> {
-  const { connection } = args
-  const token = getShopifyToken(connection)
-  if (!token) {
-    throw new Error('shopify: missing connection (requiresConnection)')
-  }
-  const shopDomain = getShopDomain(connection?.metadata)
-  if (!shopDomain) {
-    throw new Error('shopify: connection metadata is missing the shop domain')
-  }
-  const headers = {
-    'X-Shopify-Access-Token': token,
-    'Content-Type': 'application/json',
-  }
-
-  // inventory_item_id → owning product id. GraphQL is the only join Shopify offers
-  // (REST has no inventory-item → variant lookup without scanning).
-  const gqlRes = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      query:
-        'query($id: ID!) { inventoryItem(id: $id) { variant { product { legacyResourceId } } } }',
-      variables: { id: `gid://shopify/InventoryItem/${inventoryItemId}` },
-    }),
+  const http = shopifyHttp(args.connection)
+  const res = await shopifyGraphql<SteeredProductData>(http, STEERED_PRODUCT_QUERY, {
+    id: `gid://shopify/InventoryItem/${legacyId(inventoryItemId)}`,
   })
-  if (!gqlRes.ok) {
-    throw new Error(`shopify: GraphQL inventoryItem lookup responded ${gqlRes.status}`)
-  }
-  const gql = (await gqlRes.json()) as {
-    data?: { inventoryItem?: { variant?: { product?: { legacyResourceId?: string } } } | null }
-  }
-  const productId = gql.data?.inventoryItem?.variant?.product?.legacyResourceId
-  if (!productId) {
-    // Item deleted/detached between the delivery and this fetch — nothing to refresh.
-    return { records: [], nextState: { backfillComplete: true } }
-  }
-
-  const res = await fetch(
-    `https://${shopDomain}/admin/api/${API_VERSION}/products/${productId}.json`,
-    { headers },
-  )
-  if (res.status === 404) {
-    return { records: [], nextState: { backfillComplete: true } }
-  }
   if (!res.ok) {
-    throw new Error(`shopify: Admin API responded ${res.status} for products/${productId}`)
+    return { records: [], nextState: {}, rateLimited: { retryAfterMs: res.retryAfterMs } }
   }
-  const { product } = (await res.json()) as { product: RawProduct }
-  const costs = await fetchInventoryItemCosts([product], { shopDomain, headers })
-  if (!costs.ok) {
-    return { records: [], nextState: {}, rateLimited: { retryAfterMs: costs.retryAfterMs } }
+  const product = res.data.inventoryItem?.variant?.product
+  // Item deleted/detached between the delivery and this fetch — nothing to refresh.
+  if (!product) return { records: [], nextState: { backfillComplete: true } }
+
+  const completed = await completeVariants([product], http)
+  if (!completed.ok) {
+    return { records: [], nextState: {}, rateLimited: { retryAfterMs: completed.retryAfterMs } }
   }
   return {
-    records: [toProductRecord(product, costs.value)],
+    records: completed.data.map((p) => toProductRecord(toRawProduct(p), inventoryItemCosts(p))),
     nextState: { backfillComplete: true },
   }
 }
@@ -1845,41 +1552,41 @@ export default async function shopifySync(
     case 'balance_transaction':
       return fetchPaymentsStream(args)
     case 'customer':
-      return fetchShopifyPage<RawCustomer>(args, {
-        resource: 'customers',
-        rootKey: 'customers',
+      return fetchGraphqlPage<CustomersData, GqlCustomer, RawCustomer>(args, {
+        query: CUSTOMERS_QUERY,
+        first: PAGE_SIZE,
+        connection: (data) => data.customers,
+        toRaw: toRawCustomer,
         toRecord: toCustomerRecord,
       })
-    case 'order':
-      return fetchShopifyPage<RawOrder, ReadonlyMap<string, OrderTransactionLike[]>>(args, {
-        resource: 'orders',
-        rootKey: 'orders',
-        toRecord: (order, transactions) =>
-          toOrderRecord(order, transactions, getShopDomain(args.connection?.metadata)!),
-        pageSize: ORDER_PAGE_SIZE,
-        // `status=any` so cancelled/archived orders backfill too.
-        firstPageParams: { status: 'any' },
-        // Actual transaction evidence for each order, with explicit incomplete coverage at the cap.
-        supplement: fetchPaidTransactions,
+    case 'order': {
+      const shopDomain = shopifyHttp(args.connection).shopDomain
+      // No status filter: GraphQL `orders` returns open, closed and cancelled alike.
+      return fetchGraphqlPage<OrdersData, GqlOrder, RawOrderWithTransactions>(args, {
+        query: ORDERS_QUERY,
+        first: ORDERS_FIRST,
+        connection: (data) => data.orders,
+        complete: completeOrders,
+        toRaw: toRawOrder,
+        toRecord: (order) =>
+          toOrderRecord(order, new Map([[String(order.id), order.transactions]]), shopDomain),
       })
+    }
     case 'product':
-      return fetchShopifyPage<RawProduct, ReadonlyMap<string, string | null>>(args, {
-        resource: 'products',
-        rootKey: 'products',
-        toRecord: toProductRecord,
-        supplement: fetchInventoryItemCosts,
-        // ⚠️ EXPLICITLY UNFILTERED, and it has to stay that way. This stream is
-        // `syncMode: 'snapshot'`, so the platform treats a product ABSENT from the
-        // crawl as deleted and archives it. Anything that narrows this query turns
-        // "filtered out" into "deleted": scoping to `status=active` alone would
-        // archive every product the merchant archived in Shopify, and a
-        // `collection_id` would archive everything outside that collection.
-        //
-        // The status set is spelled out rather than left to the endpoint's default
-        // for the same reason the order stream passes `status: 'any'` — a default is
-        // not a contract, and this one decides whether records get archived.
-        firstPageParams: { status: 'active,archived,draft', published_status: 'any' },
-      })
+      // ⚠️ EXPLICITLY UNFILTERED: a snapshot stream archives every product missing from
+      // the crawl, so any filter turns "filtered out" into "deleted". Forcing `snapshot`
+      // keeps an `updated_at` term out of the query; an unknown status throws in the adapter.
+      return fetchGraphqlPage<ProductsData, GqlProduct, ProductRow>(
+        { ...args, mode: 'snapshot' },
+        {
+          query: PRODUCTS_QUERY,
+          first: PRODUCT_PAGE_SIZE,
+          connection: (data) => data.products,
+          complete: completeVariants,
+          toRaw: toProductRow,
+          toRecord: (row) => toProductRecord(row.product, row.costs),
+        },
+      )
     default:
       throw new Error(`shopify: unknown stream "${args.streamKey}"`)
   }

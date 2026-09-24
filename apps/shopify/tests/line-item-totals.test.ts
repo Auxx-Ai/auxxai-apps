@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { shopifyConnector } from '../src/shopify.connector'
 import shopifySync from '../src/shopify.connector.server'
+import { ordersPageBody } from './rest-order-as-graphql'
 
 /**
  * Accounting plan 29 §2.3 (`plans/accounting/tasks/29-clearing-at-the-payment-date.md`,
@@ -70,24 +71,12 @@ const BASE_ORDER = {
 }
 
 function mockOrdersFetch(orders: unknown[]) {
-  return (url: string) =>
+  return () =>
     Promise.resolve({
       ok: true,
       status: 200,
       headers: { get: () => null },
-      json: () =>
-        Promise.resolve(
-          url.includes('/graphql.json')
-            ? {
-                data: {
-                  nodes: orders.map((order) => ({
-                    legacyResourceId: String((order as { id: number }).id),
-                    transactions: [],
-                  })),
-                },
-              }
-            : { orders },
-        ),
+      json: () => Promise.resolve(ordersPageBody(orders)),
     })
 }
 
