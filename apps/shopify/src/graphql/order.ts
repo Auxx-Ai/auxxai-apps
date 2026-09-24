@@ -452,8 +452,11 @@ export const TRANSACTION_KIND = lowercased([
   'SUGGESTED_REFUND',
   'VOID',
 ])
-// AWAITING_RESPONSE / UNKNOWN have no REST spelling; `moneyPending` would misread them.
-export const TRANSACTION_STATUS = lowercased(['SUCCESS', 'FAILURE', 'PENDING', 'ERROR'])
+// Unresolved statuses read as pending: the memo waits and nothing counts as settled.
+export const TRANSACTION_STATUS = lowercased(['SUCCESS', 'FAILURE', 'PENDING', 'ERROR'], {
+  AWAITING_RESPONSE: 'pending',
+  UNKNOWN: 'pending',
+})
 const DISCOUNT_TYPE: EnumTable = {
   DiscountCodeApplication: 'discount_code',
   ManualDiscountApplication: 'manual',
@@ -513,11 +516,23 @@ function toRawAddress(addr: GqlAddress | null | undefined) {
   }
 }
 
-/** REST line `fulfillment_status`, derived from quantities (the GraphQL field is deprecated). */
-function lineFulfillmentStatus(li: GqlLineItem): string | null {
-  if (li.unfulfilledQuantity === 0) return 'fulfilled'
-  if (li.unfulfilledQuantity === li.quantity) return null
-  return 'partial'
+/** Units shipped per order line id, across every fulfillment that is not cancelled. */
+function shippedByLineId(fulfillments: RawFulfillment[]): Map<number, number> {
+  const shipped = new Map<number, number>()
+  for (const f of fulfillments) {
+    if (f.status === 'cancelled') continue
+    for (const fl of f.line_items ?? []) {
+      if (fl.id == null) continue
+      shipped.set(fl.id, (shipped.get(fl.id) ?? 0) + (fl.quantity ?? 0))
+    }
+  }
+  return shipped
+}
+
+/** REST line `fulfillment_status` from shipped units (the GraphQL field is deprecated). */
+function lineFulfillmentStatus(shipped: number, quantity: number): string | null {
+  if (shipped <= 0) return null
+  return shipped >= quantity ? 'fulfilled' : 'partial'
 }
 
 function toRawFulfillment(f: GqlFulfillment): RawFulfillment {
@@ -581,8 +596,8 @@ function toRawDiscountApplication(d: GqlDiscountApplication) {
 }
 
 /**
- * D9: REST's `payment_terms` needs `read_payment_terms`, which we do not hold. Mark the
- * order "paid later" when its latest successful sale/capture postdates `processedAt`.
+ * D9: latest successful sale/capture after `processedAt` ⇒ paid later (terms, capture-later
+ * and mark-as-paid orders alike). `paymentTerms` itself needs a scope we do not hold.
  */
 function inferredPaymentTerms(node: GqlOrder): RawOrder['payment_terms'] {
   const paidAt = resolvePaidTransaction(node.transactions)?.paidAt
@@ -595,6 +610,8 @@ function inferredPaymentTerms(node: GqlOrder): RawOrder['payment_terms'] {
 export function toRawOrder(node: GqlOrder): RawOrderWithTransactions {
   if (node.transactions.length >= ORDER_LIST_MAX)
     throw new Error('shopify: order transactions are truncated')
+  const fulfillments = node.fulfillments.map(toRawFulfillment)
+  const shipped = shippedByLineId(fulfillments)
   return {
     id: legacyId(node.legacyResourceId),
     name: node.name ?? null,
@@ -623,7 +640,7 @@ export function toRawOrder(node: GqlOrder): RawOrderWithTransactions {
     updated_at: node.updatedAt,
     processed_at: node.processedAt ?? null,
     cancelled_at: node.cancelledAt ?? null,
-    fulfillments: node.fulfillments.map(toRawFulfillment),
+    fulfillments,
     shipping_address: toRawAddress(node.shippingAddress),
     billing_address: toRawAddress(node.billingAddress),
     customer: node.customer
@@ -635,24 +652,27 @@ export function toRawOrder(node: GqlOrder): RawOrderWithTransactions {
           tax_exempt: node.customer.taxExempt ?? null,
         }
       : null,
-    line_items: complete(node.lineItems, 'lineItems').map((li) => ({
-      id: gidTail(li.id, 'LineItem'),
-      title: li.title ?? null,
-      variant_title: li.variantTitle ?? null,
-      variant_id: optionalId(li.variant),
-      sku: li.sku ?? null,
-      vendor: li.vendor ?? null,
-      quantity: li.quantity,
-      fulfillable_quantity: li.unfulfilledQuantity,
-      price: money(li.originalUnitPriceSet),
-      fulfillment_status: lineFulfillmentStatus(li),
-      product_id: optionalId(li.product),
-      taxable: li.taxable ?? null,
-      tax_lines: (li.taxLines ?? []).map(toRawTaxLine),
-      discount_allocations: (li.discountAllocations ?? []).map((a) => ({
-        amount: money(a.allocatedAmountSet),
-      })),
-    })),
+    line_items: complete(node.lineItems, 'lineItems').map((li) => {
+      const id = gidTail(li.id, 'LineItem')
+      return {
+        id,
+        title: li.title ?? null,
+        variant_title: li.variantTitle ?? null,
+        variant_id: optionalId(li.variant),
+        sku: li.sku ?? null,
+        vendor: li.vendor ?? null,
+        quantity: li.quantity,
+        fulfillable_quantity: li.unfulfilledQuantity,
+        price: money(li.originalUnitPriceSet),
+        fulfillment_status: lineFulfillmentStatus(shipped.get(id) ?? 0, li.quantity),
+        product_id: optionalId(li.product),
+        taxable: li.taxable ?? null,
+        tax_lines: (li.taxLines ?? []).map(toRawTaxLine),
+        discount_allocations: (li.discountAllocations ?? []).map((a) => ({
+          amount: money(a.allocatedAmountSet),
+        })),
+      }
+    }),
     refunds: node.refunds.map(toRawRefund),
     tax_lines: (node.taxLines ?? []).map(toRawTaxLine),
     shipping_lines: complete(node.shippingLines, 'shippingLines').map((sl) => ({

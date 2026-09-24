@@ -306,15 +306,23 @@ describe('toRawOrder', () => {
     })
   })
 
-  it('derives the line fulfillment_status from quantities', () => {
-    const line = (quantity: number, unfulfilledQuantity: number) =>
+  it('derives the line fulfillment_status from live fulfillments, not unfulfilledQuantity', () => {
+    const f0 = ORDER.fulfillments[0]!
+    const status = (unfulfilledQuantity: number, fulfillments: GqlFulfillment[]) =>
       toRawOrder({
         ...ORDER,
-        lineItems: done([{ ...ORDER.lineItems.nodes[0]!, quantity, unfulfilledQuantity }]),
+        lineItems: done([{ ...ORDER.lineItems.nodes[0]!, quantity: 3, unfulfilledQuantity }]),
+        fulfillments,
       }).line_items![0]!.fulfillment_status
-    expect(line(3, 0)).toBe('fulfilled')
-    expect(line(3, 3)).toBeNull()
-    expect(line(3, 2)).toBe('partial')
+    const shipped = (id: number, quantity: number, fulfillmentStatus = 'SUCCESS') =>
+      fulfillment(id, fulfillmentStatus, 'DELIVERED', f0.createdAt!, quantity)
+
+    expect(status(3, [])).toBeNull()
+    expect(status(1, [shipped(801, 2)])).toBe('partial')
+    expect(status(0, [shipped(801, 2), shipped(803, 1)])).toBe('fulfilled')
+    expect(status(3, [shipped(801, 3, 'CANCELLED')])).toBeNull()
+    // Refunded before shipping: nothing left to fulfil, but nothing shipped either.
+    expect(status(0, [])).toBeNull()
   })
 
   it('adapts fulfillments, the cancelled one included', () => {
@@ -427,6 +435,8 @@ describe('enum tables', () => {
       FAILURE: 'failure',
       PENDING: 'pending',
       ERROR: 'error',
+      AWAITING_RESPONSE: 'pending',
+      UNKNOWN: 'pending',
     })
   })
 
@@ -465,12 +475,32 @@ describe('enum tables', () => {
       [
         {
           ...ORDER,
-          refunds: [{ ...r0, transactions: done([{ ...rt0, status: 'AWAITING_RESPONSE' }]) }],
+          refunds: [{ ...r0, transactions: done([{ ...rt0, status: 'SETTLING' }]) }],
         },
         'transaction status',
       ],
     ]
     for (const [order, label] of cases) expect(() => toRawOrder(order)).toThrow(label)
+  })
+})
+
+describe('unresolved transaction statuses', () => {
+  it('read as pending: the memo waits and the leg is not counted as refunded', async () => {
+    const r0 = ORDER.refunds[0]!
+    const settled = r0.transactions.nodes[0]!
+    const awaiting = {
+      ...settled,
+      id: 'gid://shopify/OrderTransaction/9005',
+      status: 'AWAITING_RESPONSE',
+      amountSet: shop('10.00'),
+    }
+    stubGraphql([
+      ordersPage([{ ...ORDER, refunds: [{ ...r0, transactions: done([settled, awaiting]) }] }]),
+    ])
+    const [refund] = (await syncOrders()).records[0]!.fields.refunds as Array<
+      Record<string, unknown>
+    >
+    expect(refund).toMatchObject({ moneyPending: true, amountRefunded: 2833 })
   })
 })
 
