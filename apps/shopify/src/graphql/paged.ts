@@ -5,7 +5,7 @@ import type {
   ConnectorFetchResult,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
-import { shopifyGraphql, shopifyHttp } from './client'
+import { type GraphqlPage, type ShopifyHttp, shopifyGraphql, shopifyHttp } from './client'
 
 /** `state.cursor` of a GraphQL-paged stream (plan §6.1). */
 export interface GraphqlCursor {
@@ -79,6 +79,8 @@ export async function fetchGraphqlPage<Data, Node, Raw extends { updated_at: str
     toRaw: (node: Node) => Raw
     toRecord: (raw: Raw) => ConnectorRecord
     extraQuery?: string[]
+    /** Per-page follow-ups before `toRaw` (e.g. nested paging); a throttle retries the page. */
+    complete?: (nodes: Node[], http: ShopifyHttp) => Promise<GraphqlPage<Node[]>>
   },
 ): Promise<ConnectorFetchResult> {
   const { state } = args
@@ -98,7 +100,19 @@ export async function fetchGraphqlPage<Data, Node, Raw extends { updated_at: str
     }
   }
 
-  const { nodes, pageInfo } = opts.connection(res.data)
+  const { nodes: pageNodes, pageInfo } = opts.connection(res.data)
+  let nodes = pageNodes
+  if (opts.complete) {
+    const completed = await opts.complete(pageNodes, http)
+    if (!completed.ok) {
+      return {
+        records: [],
+        nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
+        rateLimited: { retryAfterMs: completed.retryAfterMs },
+      }
+    }
+    nodes = completed.data
+  }
   const rows = nodes.map(opts.toRaw)
   const records = rows.map(opts.toRecord)
   if (pageInfo.hasNextPage) {

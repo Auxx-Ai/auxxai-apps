@@ -8,11 +8,11 @@
 //                  native `order` / `line_item` / `contact` / `part` entities
 //                  (money plan 37 §6/§7.2 — the retarget off the old owned
 //                  `shopify_orders` / `shopify_line_items` defs).
-//   • `product`  → REST /products.json, contributes into the native `product` /
-//                  `part` entities (money plan 37 §7.1).
+//   • `product`  → GraphQL `products` (src/graphql/product.ts), contributes into the
+//                  native `product` / `part` entities (money plan 37 §7.1).
 //
-// `order`/`product` share the "one page + page_info cursor" contract
-// (`fetchShopifyPage`), `customer` its GraphQL twin (`fetchGraphqlPage`): return
+// `order` uses the "one page + page_info cursor" contract (`fetchShopifyPage`),
+// `customer`/`product` its GraphQL twin (`fetchGraphqlPage`): return
 // ONE page of records plus a flat cursor, and the
 // platform re-invokes with `state.cursor` until `backfillComplete`. Raw `fetch` is
 // used (not the shared shopifyApi helpers) for header access — the shared helpers
@@ -85,19 +85,34 @@ import type {
 } from '@auxx/sdk/data-connectors'
 import { orderPaymentSourceFields } from '@auxx/sdk/financial-source'
 import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
-import { retryAfterMs, type ShopifyHttp } from './graphql/client'
+import { retryAfterMs, type ShopifyHttp, shopifyGraphql, shopifyHttp } from './graphql/client'
 import {
   CUSTOMERS_QUERY,
   type CustomersData,
   type GqlCustomer,
   toRawCustomer,
 } from './graphql/customer'
+import { legacyId } from './graphql/legacy-id'
 import { fetchGraphqlPage, maxUpdatedAt } from './graphql/paged'
+import {
+  completeVariants,
+  type GqlProduct,
+  inventoryItemCosts,
+  PRODUCTS_QUERY,
+  type ProductRow,
+  type ProductsData,
+  STEERED_PRODUCT_QUERY,
+  type SteeredProductData,
+  toProductRow,
+  toRawProduct,
+} from './graphql/product'
 import { fetchPaymentsStream } from './payments.connector.server'
 
 // TODO(mk): move to ADMIN_API_VERSION after the live-store run (shopify-v3-graphql-plan.md §9 step 1).
 const API_VERSION = '2024-10'
 const PAGE_SIZE = 250
+// Probe: `first: 50` with 100 variants requested 219 points (plan §10); REST's 250 would exceed 1000.
+const PRODUCT_PAGE_SIZE = 50
 const ORDER_PAGE_SIZE = 10
 
 /** Extract the `page_info` token of the `rel="next"` link from a Link header. */
@@ -124,8 +139,8 @@ type PageSupplement<Extra> = { ok: true; value: Extra } | { ok: false; retryAfte
 async function fetchShopifyPage<Raw extends { updated_at: string }, Extra = undefined>(
   args: ConnectorExecuteArgs,
   opts: {
-    resource: 'orders' | 'products'
-    rootKey: 'orders' | 'products'
+    resource: 'orders'
+    rootKey: 'orders'
     toRecord: (raw: Raw, extra: Extra) => ConnectorRecord
     firstPageParams?: Record<string, string>
     pageSize?: number
@@ -1561,11 +1576,11 @@ function toOrderRecord(
 // ── product stream ─────────────────────────────────────────────────────────────
 
 /**
- * An embedded Shopify REST product variant (from /products.json `variants[]`).
+ * A product variant in the REST shape (`src/graphql/product.ts` adapts GraphQL into it).
  * `id`/`inventory_item_id` arrive as numbers; both are stringified in projection so
  * the identity and webhook join-key comparisons stay string-based (like line items).
  */
-interface RawVariant {
+export interface RawVariant {
   id: number | null
   sku: string | null
   title: string | null
@@ -1583,12 +1598,12 @@ interface RawVariant {
 }
 
 /** An entry of a REST product's `images[]`; `image` is the featured one (position 1). */
-interface RawProductImage {
+export interface RawProductImage {
   id: number
   src: string | null
 }
 
-interface RawProduct {
+export interface RawProduct {
   id: number
   title: string | null
   body_html: string | null
@@ -1629,57 +1644,11 @@ function productQualifiedTitle(productTitle: string, variantTitle: string | null
   return `${productTitle} - ${variantTitle}`
 }
 
-/** `/inventory_items.json?ids=` accepts at most 100 ids per call. */
-const INVENTORY_ITEM_BATCH = 100
-
 /**
- * The product stream's supplement: each variant's "cost per item", keyed by inventory
- * item id. The REST variant does not carry it; a 429 retries the page like the orders one.
+ * Project one REST-shaped product into a SOURCE-shaped record. `externalId` is the numeric
+ * product id stringified; `costs` maps inventory item id → cost per item.
  */
-async function fetchInventoryItemCosts(
-  rows: RawProduct[],
-  http: ShopifyHttp,
-): Promise<PageSupplement<ReadonlyMap<string, string | null>>> {
-  const costs = new Map<string, string | null>()
-  const ids = [
-    ...new Set(
-      rows.flatMap((p) =>
-        (p.variants ?? []).flatMap((v) =>
-          v.inventory_item_id != null ? [String(v.inventory_item_id)] : [],
-        ),
-      ),
-    ),
-  ]
-  for (let i = 0; i < ids.length; i += INVENTORY_ITEM_BATCH) {
-    const params = new URLSearchParams({
-      ids: ids.slice(i, i + INVENTORY_ITEM_BATCH).join(','),
-      limit: String(INVENTORY_ITEM_BATCH),
-    })
-    const res = await fetch(
-      `https://${http.shopDomain}/admin/api/${API_VERSION}/inventory_items.json?${params}`,
-      { headers: http.headers },
-    )
-    if (res.status === 429) {
-      return { ok: false, retryAfterMs: retryAfterMs(res) }
-    }
-    if (!res.ok) {
-      throw new Error(`shopify: Admin API responded ${res.status} for inventory_items`)
-    }
-    const body = (await res.json()) as {
-      inventory_items?: Array<{ id: number; cost: string | null }>
-    }
-    for (const item of body.inventory_items ?? []) {
-      costs.set(String(item.id), item.cost ?? null)
-    }
-  }
-  return { ok: true, value: costs }
-}
-
-/**
- * Project one REST product into a SOURCE-shaped record. `externalId` is the numeric
- * product id stringified; `costs` is the page's inventory item id → cost map.
- */
-function toProductRecord(
+export function toProductRecord(
   p: RawProduct,
   costs: ReadonlyMap<string, string | null>,
 ): ConnectorRecord {
@@ -1736,71 +1705,31 @@ function toProductRecord(
 // ── webhook-steered product fetch ────────────────────────────────────────────────
 
 /**
- * Steered partial fetch for an `inventory_levels/update` delivery. The webhook
- * payload carries the `inventory_item_id` (NOT a variant/product id), so resolve
- * inventory item → variant → product via one GraphQL lookup, then re-fetch that ONE
- * product through the same REST projection the crawl uses — the `variants[]` fan-out
- * refreshes every sibling variant's quantity in the same page. Single page, no
- * cursor: `backfillComplete` terminates the platform's pagination loop immediately.
+ * Steered fetch for an `inventory_levels/update` delivery, which carries only the
+ * `inventory_item_id`: one query resolves item → variant → product with the crawl's
+ * selection, so the `variants[]` fan-out refreshes every sibling variant.
  */
 async function fetchSteeredProduct(
   args: ConnectorExecuteArgs,
   inventoryItemId: string,
 ): Promise<ConnectorFetchResult> {
-  const { connection } = args
-  const token = getShopifyToken(connection)
-  if (!token) {
-    throw new Error('shopify: missing connection (requiresConnection)')
-  }
-  const shopDomain = getShopDomain(connection?.metadata)
-  if (!shopDomain) {
-    throw new Error('shopify: connection metadata is missing the shop domain')
-  }
-  const headers = {
-    'X-Shopify-Access-Token': token,
-    'Content-Type': 'application/json',
-  }
-
-  // inventory_item_id → owning product id. GraphQL is the only join Shopify offers
-  // (REST has no inventory-item → variant lookup without scanning).
-  const gqlRes = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      query:
-        'query($id: ID!) { inventoryItem(id: $id) { variant { product { legacyResourceId } } } }',
-      variables: { id: `gid://shopify/InventoryItem/${inventoryItemId}` },
-    }),
+  const http = shopifyHttp(args.connection)
+  const res = await shopifyGraphql<SteeredProductData>(http, STEERED_PRODUCT_QUERY, {
+    id: `gid://shopify/InventoryItem/${legacyId(inventoryItemId)}`,
   })
-  if (!gqlRes.ok) {
-    throw new Error(`shopify: GraphQL inventoryItem lookup responded ${gqlRes.status}`)
-  }
-  const gql = (await gqlRes.json()) as {
-    data?: { inventoryItem?: { variant?: { product?: { legacyResourceId?: string } } } | null }
-  }
-  const productId = gql.data?.inventoryItem?.variant?.product?.legacyResourceId
-  if (!productId) {
-    // Item deleted/detached between the delivery and this fetch — nothing to refresh.
-    return { records: [], nextState: { backfillComplete: true } }
-  }
-
-  const res = await fetch(
-    `https://${shopDomain}/admin/api/${API_VERSION}/products/${productId}.json`,
-    { headers },
-  )
-  if (res.status === 404) {
-    return { records: [], nextState: { backfillComplete: true } }
-  }
   if (!res.ok) {
-    throw new Error(`shopify: Admin API responded ${res.status} for products/${productId}`)
+    return { records: [], nextState: {}, rateLimited: { retryAfterMs: res.retryAfterMs } }
   }
-  const { product } = (await res.json()) as { product: RawProduct }
-  const costs = await fetchInventoryItemCosts([product], { shopDomain, headers })
-  if (!costs.ok) {
-    return { records: [], nextState: {}, rateLimited: { retryAfterMs: costs.retryAfterMs } }
+  const product = res.data.inventoryItem?.variant?.product
+  // Item deleted/detached between the delivery and this fetch — nothing to refresh.
+  if (!product) return { records: [], nextState: { backfillComplete: true } }
+
+  const completed = await completeVariants([product], http)
+  if (!completed.ok) {
+    return { records: [], nextState: {}, rateLimited: { retryAfterMs: completed.retryAfterMs } }
   }
   return {
-    records: [toProductRecord(product, costs.value)],
+    records: completed.data.map((p) => toProductRecord(toRawProduct(p), inventoryItemCosts(p))),
     nextState: { backfillComplete: true },
   }
 }
@@ -1839,23 +1768,20 @@ export default async function shopifySync(
         supplement: fetchPaidTransactions,
       })
     case 'product':
-      return fetchShopifyPage<RawProduct, ReadonlyMap<string, string | null>>(args, {
-        resource: 'products',
-        rootKey: 'products',
-        toRecord: toProductRecord,
-        supplement: fetchInventoryItemCosts,
-        // ⚠️ EXPLICITLY UNFILTERED, and it has to stay that way. This stream is
-        // `syncMode: 'snapshot'`, so the platform treats a product ABSENT from the
-        // crawl as deleted and archives it. Anything that narrows this query turns
-        // "filtered out" into "deleted": scoping to `status=active` alone would
-        // archive every product the merchant archived in Shopify, and a
-        // `collection_id` would archive everything outside that collection.
-        //
-        // The status set is spelled out rather than left to the endpoint's default
-        // for the same reason the order stream passes `status: 'any'` — a default is
-        // not a contract, and this one decides whether records get archived.
-        firstPageParams: { status: 'active,archived,draft', published_status: 'any' },
-      })
+      // ⚠️ EXPLICITLY UNFILTERED: a snapshot stream archives every product missing from
+      // the crawl, so any filter turns "filtered out" into "deleted". Forcing `snapshot`
+      // keeps an `updated_at` term out of the query; an unknown status throws in the adapter.
+      return fetchGraphqlPage<ProductsData, GqlProduct, ProductRow>(
+        { ...args, mode: 'snapshot' },
+        {
+          query: PRODUCTS_QUERY,
+          first: PRODUCT_PAGE_SIZE,
+          connection: (data) => data.products,
+          complete: completeVariants,
+          toRaw: toProductRow,
+          toRecord: (row) => toProductRecord(row.product, row.costs),
+        },
+      )
     default:
       throw new Error(`shopify: unknown stream "${args.streamKey}"`)
   }
