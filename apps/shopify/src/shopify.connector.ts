@@ -20,7 +20,7 @@
 //                  → reference to the native `line_item` it credits, and
 //                  `tax_lines[]` → contributing native `tax_line`.
 //   • `product`  → contributing native `product`, `variants[]` → contributing
-//                  native `part` (+ a flat drilled child onto `catalog_item`).
+//                  native `part` (sell price, kind and sellable included).
 //
 // Retargeted off the connector's four old owned defs (`shopify_orders`,
 // `shopify_line_items`, `shopify_products`, `shopify_variants`) onto the native
@@ -35,12 +35,10 @@
 // already declared on the target's registry field — nothing is provisioned by
 // this manifest, the resolver just looks the edge up. Verified against
 // `packages/lib/src/resources/registry/resources/{order,line-item,part,product,
-// catalog-item,contact}-fields.ts` on 2026-09-02 (money plan 37 §7.1 footnote):
-// `product_parts` (on `product`), `part_catalog_items` (on `part`),
-// `order_line_items` / `order_contact` (on `order`), `line_item_part` (on
-// `line_item`). The resolver resolves the key against the PARENT def, which is
-// why the catalog-item edge is `system:part_catalog_items`, not
-// `system:catalog_item_part`.
+// contact}-fields.ts` on 2026-09-02 (money plan 37 §7.1 footnote):
+// `product_parts` (on `product`), `order_line_items` / `order_contact` (on
+// `order`), `line_item_part` (on `line_item`). The resolver resolves the key
+// against the PARENT def.
 //
 // The credit-memo and tax-line edges added by money plans 47 and 48 and renamed
 // by accounting plan 10 (`plans/accounting/tasks/10-credit-memos.md` §10) follow
@@ -403,42 +401,13 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'title', target: 'part_title', mergeStrategy: 'fill_blank' },
             { sourcePath: 'sku', target: 'part_sku', match: 'exclusive' },
             { sourcePath: 'price', appField: 'price' },
+            // Overwrite: Shopify owns a connector-bound part's price (107-D11).
+            { sourcePath: 'price', target: 'part_sell_price' },
+            // `service` when the variant does not ship, else `finished_good`; a person's kind wins.
+            { sourcePath: 'partKind', target: 'part_kind', mergeStrategy: 'fill_blank' },
+            { sourcePath: 'sellable', target: 'part_sellable', mergeStrategy: 'fill_blank' },
             { sourcePath: 'inventoryQuantity', appField: 'externalQuantity' },
             { sourcePath: 'imageUrl', target: 'part_image', mergeStrategy: 'fill_blank' },
-          ],
-        },
-
-        // FLAT DRILLED CHILD: the same variants[] subtree also contributes the
-        // catalog item that carries the sell price (shopify-product-mapping.md
-        // §5.1). Needs parentRootPath because it is a SECOND mapping over the
-        // same subtree as its sibling (the `part` mapping) above.
-        {
-          rootPath: 'variants[]',
-          parentRootPath: 'variants[]',
-          relationshipFieldKey: 'system:part_catalog_items',
-          target: { entityKind: 'catalog_item' },
-          // Unlike its part, a catalog item is purely a sellable-price row sourced from
-          // this variant. Nothing else accumulates against it, so when the variant is
-          // gone the row is genuinely dead and archiving it is the honest outcome.
-          orphanBehavior: 'archive',
-          fields: [
-            // `fill_blank` as the part title (plan 39 §6.3); the unit price stays
-            // overwrite because Shopify is the main price.
-            { sourcePath: 'title', target: 'catalog_item_name', mergeStrategy: 'fill_blank' },
-            { sourcePath: 'price', target: 'catalog_item_default_unit_price' },
-            // A CONSTANT, not a source path: Shopify has no field that answers
-            // "what kind of sellable thing is this", and `catalog_item_category`
-            // is a closed enum (service | material | labor) that free text like
-            // `productType` ("Apparel", "Snowboard") cannot fill. A Shopify
-            // product variant is a physical good, so the connector says so.
-            //
-            // Without this the platform's `applyDefaults` fills the registry
-            // default `service` on every synced item, because this mapping never
-            // mentions the field. That mislabelled 276 of 276 connector-managed
-            // items in production, 275 of them carrying a part link and therefore
-            // demonstrably goods. `overwrite` (the default) is what repairs them:
-            // the next sync rewrites the category on rows already landed.
-            { constant: 'material', target: 'catalog_item_category' },
           ],
         },
       ],
@@ -471,6 +440,9 @@ export const shopifyConnector = defineDataConnector({
             option3: null,
             imageUrl:
               'https://cdn.shopify.com/s/files/1/0000/0001/products/red-tee-m.jpg?v=1704873600',
+            requiresShipping: true,
+            partKind: 'finished_good',
+            sellable: true,
           },
         ],
       },
