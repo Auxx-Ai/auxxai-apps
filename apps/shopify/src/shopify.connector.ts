@@ -378,6 +378,8 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'handle', target: 'product_handle' },
             { sourcePath: 'status', target: 'product_status' },
             { sourcePath: 'tags', target: 'category' },
+            // A URL on a FILE field: the platform downloads it in the background.
+            { sourcePath: 'imageUrl', target: 'product_image', mergeStrategy: 'fill_blank' },
           ],
           // No `connectionFields` here — `storeDomain` is declared on
           // `contact` only (fields.ts); `product` has no per-connection
@@ -402,6 +404,7 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'sku', target: 'part_sku', match: 'exclusive' },
             { sourcePath: 'price', appField: 'price' },
             { sourcePath: 'inventoryQuantity', appField: 'externalQuantity' },
+            { sourcePath: 'imageUrl', target: 'part_image', mergeStrategy: 'fill_blank' },
           ],
         },
 
@@ -453,6 +456,7 @@ export const shopifyConnector = defineDataConnector({
         createdAt: '2024-01-05T08:00:00Z',
         publishedAt: '2024-01-06T08:00:00Z',
         updatedAt: '2024-01-10T08:00:00Z',
+        imageUrl: 'https://cdn.shopify.com/s/files/1/0000/0001/products/red-tee.jpg?v=1704873600',
         variants: [
           {
             shopifyId: '44556677',
@@ -465,6 +469,8 @@ export const shopifyConnector = defineDataConnector({
             option1: 'Medium',
             option2: null,
             option3: null,
+            imageUrl:
+              'https://cdn.shopify.com/s/files/1/0000/0001/products/red-tee-m.jpg?v=1704873600',
           },
         ],
       },
