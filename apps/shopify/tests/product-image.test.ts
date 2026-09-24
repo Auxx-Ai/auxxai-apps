@@ -62,7 +62,7 @@ describe('product stream image URLs', () => {
     vi.unstubAllGlobals()
   })
 
-  it('carries the featured image and each variant image verbatim, query string included', async () => {
+  it('carries the featured image and each variant image verbatim, falling back to the featured image', async () => {
     vi.stubGlobal('fetch', mockFetch(RAW_PRODUCT))
 
     const result = await shopifySync({
@@ -75,7 +75,7 @@ describe('product stream image URLs', () => {
     const fields = result.records[0]!.fields as Record<string, unknown>
     expect(fields.imageUrl).toBe(FEATURED)
     const variants = fields.variants as Array<Record<string, unknown>>
-    expect(variants.map((v) => v.imageUrl)).toEqual([FEATURED, BLUE, null, null])
+    expect(variants.map((v) => v.imageUrl)).toEqual([FEATURED, BLUE, FEATURED, FEATURED])
   })
 
   it('emits null when the product has no image', async () => {

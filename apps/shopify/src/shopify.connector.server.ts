@@ -1693,7 +1693,8 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
         option1: v.option1,
         option2: v.option2,
         option3: v.option3,
-        imageUrl: v.image_id != null ? (imageSrcById.get(v.image_id) ?? null) : null,
+        imageUrl:
+          (v.image_id != null ? imageSrcById.get(v.image_id) : undefined) ?? p.image?.src ?? null,
       })),
     },
   }

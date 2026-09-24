@@ -379,7 +379,7 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'status', target: 'product_status' },
             { sourcePath: 'tags', target: 'category' },
             // A URL on a FILE field: the platform downloads it in the background.
-            { sourcePath: 'imageUrl', target: 'product_image' },
+            { sourcePath: 'imageUrl', target: 'product_image', mergeStrategy: 'fill_blank' },
           ],
           // No `connectionFields` here — `storeDomain` is declared on
           // `contact` only (fields.ts); `product` has no per-connection
@@ -404,7 +404,7 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'sku', target: 'part_sku', match: 'exclusive' },
             { sourcePath: 'price', appField: 'price' },
             { sourcePath: 'inventoryQuantity', appField: 'externalQuantity' },
-            { sourcePath: 'imageUrl', target: 'part_image' },
+            { sourcePath: 'imageUrl', target: 'part_image', mergeStrategy: 'fill_blank' },
           ],
         },
 
