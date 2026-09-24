@@ -4,9 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import shopifySync, {
   gatewayTransactionIdOf,
   needsPaidTransactionLookup,
+  type OrderTransactionLike,
   resolveOrderPayment,
   resolvePaidTransaction,
 } from '../src/shopify.connector.server'
+import { ordersPageBody } from './rest-order-as-graphql'
 
 /**
  * Accounting plan 29 §3.1 (`plans/accounting/tasks/29-clearing-at-the-payment-date.md`):
@@ -16,13 +18,12 @@ import shopifySync, {
  *
  *   1. one gateway, paid at checkout: `processed_at` and that gateway, NO lookup;
  *   2. several gateways (a declined attempt is listed too) or payment terms:
- *      one GraphQL `nodes(ids:)` lookup per page, the successful transaction wins;
+ *      the successful transaction (inline on the GraphQL order) wins;
  *   3. unpaid (`pending` terms order): both empty until a later sync sees it paid.
  *
  * Exercised through the real `shopifySync` entry point with `fetch` mocked, the
- * same way `fulfillment-fanout.test.ts` does, so the page-level `supplement`
- * plumbing (and the "no second call" claim) is what is asserted, not just the
- * pure resolvers.
+ * same way `fulfillment-fanout.test.ts` does, so the page plumbing (and the
+ * "no second call" claim) is what is asserted, not just the pure resolvers.
  */
 
 const BASE_ORDER = {
@@ -70,9 +71,9 @@ function jsonResponse(body: unknown): FakeResponse {
 }
 
 /**
- * `fetch` that serves the REST orders page and, for the GraphQL endpoint, the
- * given `nodes` payload. Records every call so a test can assert how many
- * round trips the page cost.
+ * `fetch` that serves the orders as one GraphQL page, each carrying the
+ * transactions of its `nodes` entry. Records every call so a test can assert
+ * how many round trips the page cost.
  */
 function mockFetch(
   orders: unknown[],
@@ -84,10 +85,12 @@ function mockFetch(
   const calls: Array<{ url: string; body?: unknown }> = []
   const fetchMock = (url: string, init?: { body?: string }) => {
     calls.push({ url, body: init?.body ? JSON.parse(init.body) : undefined })
-    if (url.includes('/graphql.json')) {
-      return Promise.resolve(jsonResponse({ data: { nodes: graphqlNodes } }))
-    }
-    return Promise.resolve(jsonResponse({ orders }))
+    const transactions = new Map(
+      (
+        graphqlNodes as Array<{ legacyResourceId: string; transactions: OrderTransactionLike[] }>
+      ).map((node) => [node.legacyResourceId, node.transactions]),
+    )
+    return Promise.resolve(jsonResponse(ordersPageBody(orders, transactions)))
   }
   return { calls, fetchMock }
 }
@@ -120,9 +123,9 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
     expect(fields.paidGateway).toBe('shopify_payments')
     // The unresolved list is still projected beside it.
     expect(fields.paymentGateways).toBe('shopify_payments')
-    // The source now fetches actual movements even when the legacy paid summary needs no lookup.
-    expect(calls).toHaveLength(2)
-    expect(calls[0]!.url).toContain('/orders.json')
+    // Transactions ride the orders page: one call.
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toContain('/graphql.json')
   })
 
   it('two gateways (declined Affirm, then card): the successful transaction wins paidGateway, and the declined one drops off paymentGateways (58 §7, D12)', async () => {
@@ -163,11 +166,8 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
     // One gateway, not two: the declined Affirm attempt never sold anything.
     expect(fields.paymentGateways).toBe('shopify_payments')
 
-    // Exactly one extra call, to GraphQL, asking for this one order.
-    expect(calls).toHaveLength(2)
-    expect(calls[1]!.url).toContain('/graphql.json')
-    const body = calls[1]!.body as { variables: { ids: string[] } }
-    expect(body.variables.ids).toEqual([`gid://shopify/Order/${order.id}`])
+    // No extra call: the transactions came inline with the order.
+    expect(calls).toHaveLength(1)
   })
 
   it('a pending terms order leaves both empty while fetching source observations', async () => {
@@ -185,7 +185,7 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
 
     expect(fields.paidAt).toBeNull()
     expect(fields.paidGateway).toBeNull()
-    expect(calls).toHaveLength(2)
+    expect(calls).toHaveLength(1)
   })
 
   it('a terms order seen paid on a later sync is dated by its sale transaction, not processed_at', async () => {
@@ -239,38 +239,19 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
     expect(result.nextState.backfillComplete).toBeUndefined()
   })
 
-  it('caps order pages at ten and preserves the cursor for the next page', async () => {
-    const calls: string[] = []
-    vi.stubGlobal('fetch', (url: string) => {
-      calls.push(url)
-      if (url.includes('/graphql.json'))
-        return Promise.resolve(
-          jsonResponse({
-            data: {
-              nodes: [{ legacyResourceId: String(BASE_ORDER.id), transactions: [] }],
-            },
-          }),
-        )
-      return Promise.resolve({
-        ...jsonResponse({ orders: [BASE_ORDER] }),
-        headers: {
-          get: (name: string) =>
-            name === 'Link'
-              ? '<https://test-shop.myshopify.com/orders.json?page_info=next-token>; rel="next"'
-              : null,
-        },
-      })
+  it('pages orders 25 at a time and preserves the cursor for the next page', async () => {
+    const calls: Array<{ variables: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', (_url: string, init: { body: string }) => {
+      calls.push(JSON.parse(init.body))
+      return Promise.resolve(jsonResponse(ordersPageBody([BASE_ORDER], new Map(), 'next-token')))
     })
 
     const first = await syncOrders()
-    const firstUrl = new URL(calls[0]!)
-    expect(firstUrl.searchParams.get('limit')).toBe('10')
-    expect(first.nextState.cursor).toBe('next-token')
+    expect(calls[0]!.variables.first).toBe(25)
+    expect(first.nextState.cursor).toEqual({ v: 3, after: 'next-token' })
 
     await syncOrders({ cursor: first.nextState.cursor })
-    const secondUrl = new URL(calls[2]!)
-    expect(secondUrl.searchParams.get('limit')).toBe('10')
-    expect(secondUrl.searchParams.get('page_info')).toBe('next-token')
+    expect(calls[1]!.variables).toMatchObject({ first: 25, after: 'next-token' })
   })
 })
 
@@ -400,12 +381,7 @@ describe('42C actual transaction source projection', () => {
       paymentSourceUpdatedAt: order.updated_at,
     })
     expect(fields).not.toHaveProperty('financialTransactions')
-    expect(JSON.stringify(calls[1]!.body)).toContain('amountSet')
-  })
-  it('refuses missing GraphQL nodes instead of claiming an empty complete source', async () => {
-    const { fetchMock } = mockFetch([BASE_ORDER], [])
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(syncOrders()).rejects.toThrow('missing order transaction coverage')
+    expect(JSON.stringify(calls[0]!.body)).toContain('amountSet')
   })
 })
 

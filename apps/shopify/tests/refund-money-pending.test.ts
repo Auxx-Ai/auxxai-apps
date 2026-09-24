@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { shopifyConnector } from '../src/shopify.connector'
 import shopifySync from '../src/shopify.connector.server'
+import { ordersPageBody } from './rest-order-as-graphql'
 
 // A refund whose money is still pending holds its credit memo back from issuing
 // (platform brief 101 E9); `moneyPending` is what says so.
@@ -58,24 +59,12 @@ const BASE_ORDER = {
 }
 
 function mockOrdersFetch(orders: unknown[]) {
-  return (url: string) =>
+  return () =>
     Promise.resolve({
       ok: true,
       status: 200,
       headers: { get: () => null },
-      json: () =>
-        Promise.resolve(
-          url.includes('/graphql.json')
-            ? {
-                data: {
-                  nodes: orders.map((order) => ({
-                    legacyResourceId: String((order as { id: number }).id),
-                    transactions: [],
-                  })),
-                },
-              }
-            : { orders },
-        ),
+      json: () => Promise.resolve(ordersPageBody(orders)),
     })
 }
 
