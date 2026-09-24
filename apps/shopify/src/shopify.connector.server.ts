@@ -1602,7 +1602,14 @@ interface RawVariant {
   option1: string | null
   option2: string | null
   option3: string | null
+  image_id: number | null
   updated_at: string
+}
+
+/** An entry of a REST product's `images[]`; `image` is the featured one (position 1). */
+interface RawProductImage {
+  id: number
+  src: string | null
 }
 
 interface RawProduct {
@@ -1617,6 +1624,8 @@ interface RawProduct {
   created_at: string
   updated_at: string
   published_at: string | null
+  image?: RawProductImage | null
+  images?: RawProductImage[] | null
   variants?: RawVariant[] | null
 }
 
@@ -1649,6 +1658,9 @@ function productQualifiedTitle(productTitle: string, variantTitle: string | null
  * product id stringified.
  */
 function toProductRecord(p: RawProduct): ConnectorRecord {
+  // Image URLs pass through verbatim: the CDN's `?v=` changes when an image is
+  // replaced, and the platform compares the URL exactly to skip re-downloads.
+  const imageSrcById = new Map((p.images ?? []).map((img) => [img.id, img.src]))
   return {
     streamKey: 'product',
     externalId: String(p.id),
@@ -1665,6 +1677,7 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
       createdAt: p.created_at,
       publishedAt: p.published_at,
       updatedAt: p.updated_at,
+      imageUrl: p.image?.src ?? null,
       // Raw array — the platform fans each element out per the `variants[]`
       // mapping into the native `part` (+ `catalog_item`). `shopifyId` is the
       // variant's identity and `inventoryItemId` the webhook join key; both
@@ -1680,6 +1693,7 @@ function toProductRecord(p: RawProduct): ConnectorRecord {
         option1: v.option1,
         option2: v.option2,
         option3: v.option3,
+        imageUrl: v.image_id != null ? (imageSrcById.get(v.image_id) ?? null) : null,
       })),
     },
   }
