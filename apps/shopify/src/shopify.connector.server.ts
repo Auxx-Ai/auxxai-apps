@@ -2,7 +2,8 @@
 //
 // Server handler for the single Shopify data connector. Runs inside the
 // app-runtime sandbox and serves THREE streams off the one connector:
-//   • `customer` → REST /customers.json, contributes into the system `contact` def.
+//   • `customer` → GraphQL `customers` (src/graphql/customer.ts), contributes into the
+//                  system `contact` def.
 //   • `order`    → REST /orders.json (line items embedded), contributes into the
 //                  native `order` / `line_item` / `contact` / `part` entities
 //                  (money plan 37 §6/§7.2 — the retarget off the old owned
@@ -10,8 +11,9 @@
 //   • `product`  → REST /products.json, contributes into the native `product` /
 //                  `part` entities (money plan 37 §7.1).
 //
-// All three share the same "one page + page_info cursor" contract
-// (`fetchShopifyPage`): return ONE page of records plus a flat cursor, and the
+// `order`/`product` share the "one page + page_info cursor" contract
+// (`fetchShopifyPage`), `customer` its GraphQL twin (`fetchGraphqlPage`): return
+// ONE page of records plus a flat cursor, and the
 // platform re-invokes with `state.cursor` until `backfillComplete`. Raw `fetch` is
 // used (not the shared shopifyApi helpers) for header access — the shared helpers
 // return parsed JSON with no headers and auto-drain every page, neither of which
@@ -83,8 +85,17 @@ import type {
 } from '@auxx/sdk/data-connectors'
 import { orderPaymentSourceFields } from '@auxx/sdk/financial-source'
 import { getShopDomain, getShopifyToken } from './blocks/shopify/shared/shopify-api'
+import { retryAfterMs, type ShopifyHttp } from './graphql/client'
+import {
+  CUSTOMERS_QUERY,
+  type CustomersData,
+  type GqlCustomer,
+  toRawCustomer,
+} from './graphql/customer'
+import { fetchGraphqlPage, maxUpdatedAt } from './graphql/paged'
 import { fetchPaymentsStream } from './payments.connector.server'
 
+// TODO(mk): move to ADMIN_API_VERSION after the live-store run (shopify-v3-graphql-plan.md §9 step 1).
 const API_VERSION = '2024-10'
 const PAGE_SIZE = 250
 const ORDER_PAGE_SIZE = 10
@@ -94,45 +105,8 @@ function nextPageInfo(linkHeader: string | null): string | undefined {
   return linkHeader?.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)?.[1]
 }
 
-/**
- * Latest `updated_at` across a page, compared by epoch and returned as the original
- * ISO string. Falls back to `fallback` when the page is empty or holds no parseable
- * timestamp — never returns a value older than the mark we came in with.
- */
-function maxUpdatedAt<Raw extends { updated_at: string }>(
-  rows: Raw[],
-  fallback: unknown,
-): string | undefined {
-  const base = typeof fallback === 'string' ? fallback : undefined
-  let best = base
-  let bestMs = base ? Date.parse(base) : Number.NEGATIVE_INFINITY
-  if (Number.isNaN(bestMs)) bestMs = Number.NEGATIVE_INFINITY
-  for (const row of rows) {
-    const ms = Date.parse(row.updated_at)
-    if (Number.isNaN(ms) || ms <= bestMs) continue
-    bestMs = ms
-    best = row.updated_at
-  }
-  return best
-}
-
-/** Shop endpoint and auth headers, shared by a page fetch and its supplement. */
-interface ShopifyHttp {
-  shopDomain: string
-  headers: Record<string, string>
-}
-
 /** Result of a page-level side lookup: its value, or a throttle to retry the page on. */
 type PageSupplement<Extra> = { ok: true; value: Extra } | { ok: false; retryAfterMs?: number }
-
-/** `Retry-After` in ms, or undefined when Shopify sent none (never 0 for a missing header). */
-function retryAfterMs(res: {
-  headers: { get: (name: string) => string | null }
-}): number | undefined {
-  const header = res.headers.get('Retry-After')
-  const seconds = header === null ? Number.NaN : Number(header)
-  return Number.isFinite(seconds) ? seconds * 1000 : undefined
-}
 
 /**
  * Fetch ONE page of a Shopify REST collection and project it into source-shaped
@@ -150,8 +124,8 @@ function retryAfterMs(res: {
 async function fetchShopifyPage<Raw extends { updated_at: string }, Extra = undefined>(
   args: ConnectorExecuteArgs,
   opts: {
-    resource: 'customers' | 'orders' | 'products'
-    rootKey: 'customers' | 'orders' | 'products'
+    resource: 'orders' | 'products'
+    rootKey: 'orders' | 'products'
     toRecord: (raw: Raw, extra: Extra) => ConnectorRecord
     firstPageParams?: Record<string, string>
     pageSize?: number
@@ -245,7 +219,7 @@ async function fetchShopifyPage<Raw extends { updated_at: string }, Extra = unde
 // ── shared projection helpers ────────────────────────────────────────────────
 
 /** A Shopify REST address object (customer default_address / order ship/bill). */
-interface RawAddress {
+export interface RawAddress {
   address1?: string | null
   address2?: string | null
   city?: string | null
@@ -312,10 +286,10 @@ function decimalToMinorUnits(decimal: string | null | undefined): number | null 
 }
 
 // ── customer stream ────────────────────────────────────────────────────────────
-// Unchanged — the `customer` stream keeps its projection as-is; only the
-// manifest that binds it moves to the new mapping shape (money plan 37 §8).
+// Fetched over GraphQL and adapted back into this REST shape (`toRawCustomer`), so
+// the projection below is unchanged (shopify-v3-graphql-plan.md D8).
 
-interface RawCustomer {
+export interface RawCustomer {
   id: number
   email: string | null
   first_name: string | null
@@ -1845,9 +1819,11 @@ export default async function shopifySync(
     case 'balance_transaction':
       return fetchPaymentsStream(args)
     case 'customer':
-      return fetchShopifyPage<RawCustomer>(args, {
-        resource: 'customers',
-        rootKey: 'customers',
+      return fetchGraphqlPage<CustomersData, GqlCustomer, RawCustomer>(args, {
+        query: CUSTOMERS_QUERY,
+        first: PAGE_SIZE,
+        connection: (data) => data.customers,
+        toRaw: toRawCustomer,
         toRecord: toCustomerRecord,
       })
     case 'order':
