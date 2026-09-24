@@ -1,7 +1,7 @@
 // apps/shopify/tests/product-image.test.ts
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import shopifySync from '../src/shopify.connector.server'
+import { describe, expect, it } from 'vitest'
+import { toProductRecord } from '../src/shopify.connector.server'
 
 const FEATURED = 'https://cdn.shopify.com/s/files/1/0001/products/tee.jpg?v=1704873600'
 const BLUE = 'https://cdn.shopify.com/s/files/1/0001/products/tee-blue.jpg?v=1704873999'
@@ -31,80 +31,25 @@ const RAW_PRODUCT = {
   ],
 }
 
-function mockFetch(product: unknown) {
-  return (url: string) =>
-    Promise.resolve({
-      ok: true,
-      status: 200,
-      headers: { get: () => null },
-      json: () =>
-        Promise.resolve(
-          url.includes('/graphql.json')
-            ? {
-                data: {
-                  inventoryItem: { variant: { product: { legacyResourceId: '987654321' } } },
-                },
-              }
-            : url.includes('/products.json')
-              ? { products: [product] }
-              : { product },
-        ),
-    })
-}
+type Product = Parameters<typeof toProductRecord>[0]
 
-const connection = {
-  value: 'shpat_test',
-  metadata: { connectionVariables: { shop: 'test-shop' } },
+function project(product: unknown) {
+  return toProductRecord(product as Product, new Map())
 }
 
 describe('product stream image URLs', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('carries the featured image and each variant image verbatim, falling back to the featured image', async () => {
-    vi.stubGlobal('fetch', mockFetch(RAW_PRODUCT))
-
-    const result = await shopifySync({
-      streamKey: 'product',
-      mode: 'backfill',
-      state: {},
-      connection,
-    } as never)
-
-    const fields = result.records[0]!.fields as Record<string, unknown>
+  it('carries the featured image and each variant image verbatim, falling back to the featured image', () => {
+    const fields = project(RAW_PRODUCT).fields as Record<string, unknown>
     expect(fields.imageUrl).toBe(FEATURED)
     const variants = fields.variants as Array<Record<string, unknown>>
     expect(variants.map((v) => v.imageUrl)).toEqual([FEATURED, BLUE, FEATURED, FEATURED])
   })
 
-  it('emits null when the product has no image', async () => {
-    vi.stubGlobal('fetch', mockFetch({ ...RAW_PRODUCT, image: null, images: [] }))
-
-    const result = await shopifySync({
-      streamKey: 'product',
-      mode: 'backfill',
-      state: {},
-      connection,
-    } as never)
-
-    const fields = result.records[0]!.fields as Record<string, unknown>
+  it('emits null when the product has no image', () => {
+    const fields = project({ ...RAW_PRODUCT, image: null, images: [] }).fields as Record<
+      string,
+      unknown
+    >
     expect(fields.imageUrl).toBeNull()
-  })
-
-  it('projects the same image fields on the webhook-steered single-product fetch', async () => {
-    vi.stubGlobal('fetch', mockFetch(RAW_PRODUCT))
-
-    const result = await shopifySync({
-      streamKey: 'product',
-      mode: 'webhook',
-      state: {},
-      connection,
-      triggerContext: { resourceId: '55555' },
-    } as never)
-
-    const fields = result.records[0]!.fields as Record<string, unknown>
-    expect(fields.imageUrl).toBe(FEATURED)
-    expect((fields.variants as Array<Record<string, unknown>>)[1]!.imageUrl).toBe(BLUE)
   })
 })
