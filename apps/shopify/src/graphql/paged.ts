@@ -6,6 +6,7 @@ import type {
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { type GraphqlPage, type ShopifyHttp, shopifyGraphql, shopifyHttp } from './client'
+import { type Pushdown, pushdownTerms } from './pushdown'
 
 /** `state.cursor` of a GraphQL-paged stream (plan §6.1). */
 export interface GraphqlCursor {
@@ -79,24 +80,32 @@ export async function fetchGraphqlPage<Data, Node, Raw extends { updated_at: str
     toRaw: (node: Node) => Raw
     toRecord: (raw: Raw) => ConnectorRecord
     extraQuery?: string[]
+    /** Translates `args.recordFilter` into extra terms; without it the filter is ignored. */
+    pushdown?: Pushdown
     /** Per-page follow-ups before `toRaw` (e.g. nested paging); a throttle retries the page. */
     complete?: (nodes: Node[], http: ShopifyHttp) => Promise<GraphqlPage<Node[]>>
   },
 ): Promise<ConnectorFetchResult> {
   const { state } = args
+  // Before any upstream call: an unpushable `exact` clause throws here.
+  const pushed = opts.pushdown
+    ? pushdownTerms(args.streamKey, opts.pushdown, args.recordFilter)
+    : { terms: [], narrowed: false }
+  const narrowed = pushed.narrowed ? { narrowed: true as const } : {}
   const http = shopifyHttp(args.connection)
   const cursor = readGraphqlCursor(state.cursor)
 
   const res = await shopifyGraphql<Data>(http, opts.query, {
     first: opts.first,
     after: cursor?.after ?? null,
-    query: searchQuery(args, opts.extraQuery),
+    query: searchQuery(args, [...(opts.extraQuery ?? []), ...pushed.terms]),
   })
   if (!res.ok) {
     return {
       records: [],
       nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
       rateLimited: { retryAfterMs: res.retryAfterMs },
+      ...narrowed,
     }
   }
 
@@ -109,6 +118,7 @@ export async function fetchGraphqlPage<Data, Node, Raw extends { updated_at: str
         records: [],
         nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
         rateLimited: { retryAfterMs: completed.retryAfterMs },
+        ...narrowed,
       }
     }
     nodes = completed.data
@@ -118,7 +128,7 @@ export async function fetchGraphqlPage<Data, Node, Raw extends { updated_at: str
   if (pageInfo.hasNextPage) {
     if (!pageInfo.endCursor) throw new Error('shopify: GraphQL page has a next page but no cursor')
     const next: GraphqlCursor = { v: 3, after: pageInfo.endCursor }
-    return { records, nextState: { cursor: next, updatedSince: state.updatedSince } }
+    return { records, nextState: { cursor: next, updatedSince: state.updatedSince }, ...narrowed }
   }
   return {
     records,
@@ -127,5 +137,6 @@ export async function fetchGraphqlPage<Data, Node, Raw extends { updated_at: str
       updatedSince: maxUpdatedAt(rows, state.updatedSince),
       backfillComplete: true,
     },
+    ...narrowed,
   }
 }
