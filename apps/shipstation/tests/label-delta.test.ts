@@ -1,8 +1,8 @@
 // tests/label-delta.test.ts
 
 /**
- * The steady-phase label delta: two cursors, two watermarks, and the rules that
- * make advancing either of them safe.
+ * The steady-phase label delta: two sweeps, one `since: { created, voided }`,
+ * and the rules that make advancing either floor safe.
  *
  * `fetch` is stubbed rather than the shared client, matching `label-crawl.test.ts`,
  * so the request each sweep actually builds (path, query, sort direction) is
@@ -11,11 +11,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import shipstationSync, {
-  type LabelWatermarks,
+  type LabelSince,
   type RawConnectorLabel,
+  readLabelSince,
   type ShipstationLabelCursor,
-  decodeLabelWatermark,
-  encodeLabelWatermark,
   projectLabelRecord,
 } from '../src/shipstation.connector.server'
 
@@ -23,7 +22,10 @@ const PAGE_SIZE = 50
 const IMPORT_START = '2025-10-01T00:00:00.000Z'
 const CREATED_SINCE = '2026-09-01T00:00:00.000Z'
 const VOIDED_SINCE = '2026-09-05T00:00:00.000Z'
-const WATERMARK = `${CREATED_SINCE}|${VOIDED_SINCE}`
+const SINCE: LabelSince = { created: CREATED_SINCE, voided: VOIDED_SINCE }
+const QUERY = { period: { from: IMPORT_START } }
+/** A steady run: the floor rides along with the previous run's `since`. */
+const STEADY = { ...QUERY, since: SINCE }
 
 function label(n: number, extra: Partial<RawConnectorLabel> = {}): RawConnectorLabel {
   return {
@@ -54,25 +56,18 @@ const fetchMock = vi.fn()
 function args(overrides: Record<string, unknown> = {}) {
   return {
     streamKey: 'label',
-    // ⚠️ Deliberately the WRONG mode for a steady stream. The run's mode is
-    // decided connector-wide and reads `snapshot` whenever any stream is still
-    // backfilling, so the handler must not key its phase on it. Every delta test
-    // here runs under `mode: 'snapshot'` for exactly that reason.
-    mode: 'snapshot',
-    state: {},
+    query: QUERY,
     connection: { value: 'test-api-key' },
-    config: { importStart: IMPORT_START },
+    config: {},
     ...overrides,
   } as unknown as Parameters<typeof shipstationSync>[0]
 }
 
-const cursorOf = (result: { nextState: { cursor?: unknown } }) =>
-  result.nextState.cursor as ShipstationLabelCursor
+const cursorOf = (result: { cursor?: unknown }) => result.cursor as ShipstationLabelCursor
 
 const urlOf = (call: number) => new URL(String(fetchMock.mock.calls[call][0]))
 
-const marks = (result: { nextState: { updatedSince?: string } }): LabelWatermarks | null =>
-  decodeLabelWatermark(result.nextState.updatedSince)
+const sinceOf = (result: { since?: unknown }) => result.since as LabelSince | undefined
 
 beforeEach(() => {
   fetchMock.mockReset()
@@ -83,91 +78,70 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('the watermark codec', () => {
-  it('round-trips both halves', () => {
-    const encoded = encodeLabelWatermark({ created: CREATED_SINCE, voided: VOIDED_SINCE })
-    expect(encoded).toBe(WATERMARK)
-    expect(decodeLabelWatermark(encoded)).toEqual({
-      created: CREATED_SINCE,
-      voided: VOIDED_SINCE,
-    })
+describe('reading since back', () => {
+  it('reads both floors and normalizes them to ISO instants', () => {
+    expect(readLabelSince(SINCE)).toEqual(SINCE)
+    expect(readLabelSince({ created: '2026-09-01', voided: '2026-09-05' })).toEqual(SINCE)
   })
 
-  it('normalizes both halves to the fixed-width ISO form the lexical fold needs', () => {
-    // The platform folds successive watermarks with a LEXICAL max. That is only
-    // a component-wise comparison of the pair while both halves are exactly 24
-    // characters, so the codec must normalize rather than pass a date through.
-    const encoded = encodeLabelWatermark({ created: '2026-09-01', voided: '2026-09-05' })
-    const [created, voided] = encoded.split('|')
-    expect(created).toHaveLength(24)
-    expect(voided).toHaveLength(24)
-  })
-
-  it('makes the lexical max pick the later pair, in both halves', () => {
-    const older = encodeLabelWatermark({ created: CREATED_SINCE, voided: VOIDED_SINCE })
-    const newerCreated = encodeLabelWatermark({
-      created: '2026-09-11T00:00:00.000Z',
-      voided: VOIDED_SINCE,
-    })
-    const newerVoided = encodeLabelWatermark({
-      created: CREATED_SINCE,
-      voided: '2026-09-11T00:00:00.000Z',
-    })
-    expect(newerCreated > older).toBe(true)
-    expect(newerVoided > older).toBe(true)
-  })
-
-  it('reads a missing or unusable watermark as none, never as a floor of zero', () => {
-    expect(decodeLabelWatermark(undefined)).toBeNull()
-    expect(decodeLabelWatermark('')).toBeNull()
-    expect(decodeLabelWatermark('2026-09-01T00:00:00.000Z')).toBeNull()
-    expect(decodeLabelWatermark('not-a-date|also-not')).toBeNull()
+  it('reads a missing or unusable marker as none, never as a floor of zero', () => {
+    expect(readLabelSince(undefined)).toBeNull()
+    expect(readLabelSince('')).toBeNull()
+    expect(readLabelSince('2026-09-01T00:00:00.000Z|2026-09-05T00:00:00.000Z')).toBeNull()
+    expect(readLabelSince({ created: 'not-a-date', voided: VOIDED_SINCE })).toBeNull()
   })
 })
 
 describe('phase selection', () => {
-  it('crawls from importStart when the stream has no watermark', async () => {
+  it('crawls from the period floor when the query carries no since', async () => {
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [label(1)], pages: 1, total: 1 }))
     const result = await shipstationSync(args())
 
     expect(urlOf(0).searchParams.get('created_at_start')).toBe(IMPORT_START)
-    // A backfill has nothing after it, so both floors advance together.
-    expect(marks(result)?.created).toBe(marks(result)?.voided)
-    expect(result.nextState.backfillComplete).toBe(true)
+    // A full crawl has nothing after it, so both floors advance together.
+    expect(sinceOf(result)?.created).toBe(sinceOf(result)?.voided)
+    expect(result.cursor).toBeUndefined()
   })
 
-  it('opens the delta from the stored watermark, not from args.mode', async () => {
+  it('opens the delta from query.since', async () => {
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [label(1)], pages: 1, total: 1 }))
-    const result = await shipstationSync(args({ state: { updatedSince: WATERMARK } }))
+    const result = await shipstationSync(args({ query: STEADY }))
 
     const url = urlOf(0)
     expect(url.pathname).toBe('/v2/labels')
     expect(url.searchParams.get('created_at_start')).toBe(CREATED_SINCE)
     expect(url.searchParams.get('sort_by')).toBe('created_at')
     expect(url.searchParams.get('sort_dir')).toBe('asc')
-    // The created half is done, so the void sweep is queued next and only the
-    // created floor has moved.
+    // The created half is done, so the void sweep is queued next; `since` waits for
+    // the last page.
     expect(cursorOf(result).delta?.sweep).toBe('voided')
-    expect(marks(result)?.voided).toBe(VOIDED_SINCE)
-    expect(result.nextState.backfillComplete).toBeFalsy()
+    expect(cursorOf(result).delta?.voidedSince).toBe(VOIDED_SINCE)
+    expect(result.since).toBeUndefined()
   })
 
-  it('falls back to importStart when the watermark is unreadable, rather than skipping history', async () => {
+  it('never reads created labels from before the period floor, whatever since says', async () => {
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [], pages: 1, total: 0 }))
-    await shipstationSync(args({ state: { updatedSince: 'garbage' } }))
+    const floor = '2026-09-03T00:00:00.000Z'
+    await shipstationSync(args({ query: { period: { from: floor }, since: SINCE } }))
+    expect(urlOf(0).searchParams.get('created_at_start')).toBe(floor)
+  })
+
+  it('falls back to the floor when since is unreadable, rather than skipping history', async () => {
+    fetchMock.mockResolvedValueOnce(jsonPage({ labels: [], pages: 1, total: 0 }))
+    await shipstationSync(args({ query: { ...QUERY, since: 'garbage' } }))
     expect(urlOf(0).searchParams.get('created_at_start')).toBe(IMPORT_START)
   })
 
   it('still runs the void sweep when no label was created since the last run', async () => {
     // An empty created window must not end the run: the void sweep is the half
-    // that carries the change a creation watermark cannot see.
+    // that carries the change a creation marker cannot see.
     const now = new Date().toISOString()
     const result = await shipstationSync(
-      args({ state: { updatedSince: encodeLabelWatermark({ created: now, voided: now }) } })
+      args({ query: { ...QUERY, since: { created: now, voided: now } } })
     )
     expect(fetchMock).not.toHaveBeenCalled()
     expect(cursorOf(result).delta?.sweep).toBe('voided')
-    expect(result.nextState.backfillComplete).toBeFalsy()
+    expect(result.since).toBeUndefined()
   })
 })
 
@@ -175,7 +149,7 @@ describe('the void sweep', () => {
   /** Drive the created half to exhaustion and hand back the void-sweep cursor. */
   async function toVoidSweep() {
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [], pages: 1, total: 0 }))
-    const first = await shipstationSync(args({ state: { updatedSince: WATERMARK } }))
+    const first = await shipstationSync(args({ query: STEADY }))
     fetchMock.mockReset()
     return cursorOf(first)
   }
@@ -183,7 +157,7 @@ describe('the void sweep', () => {
   it('asks for voided labels newest-first, with no created-time filter', async () => {
     const cursor = await toVoidSweep()
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [], pages: 1, total: 0 }))
-    await shipstationSync(args({ state: { cursor, updatedSince: WATERMARK } }))
+    await shipstationSync(args({ query: STEADY, cursor }))
 
     const url = urlOf(0)
     expect(url.pathname).toBe('/v2/labels')
@@ -195,14 +169,14 @@ describe('the void sweep', () => {
     expect(url.searchParams.get('created_at_start')).toBeNull()
   })
 
-  it('stops at the first label voided at or before the watermark', async () => {
+  it('stops at the first label voided at or before since.voided', async () => {
     const cursor = await toVoidSweep()
     fetchMock.mockResolvedValueOnce(
       jsonPage({
         labels: [
           label(1, { voided: true, voided_at: '2026-09-07T00:00:00.000Z' }),
           label(2, { voided: true, voided_at: '2026-09-06T00:00:00.000Z' }),
-          // At the watermark exactly: already seen, so the sweep stops HERE.
+          // At the marker exactly: already seen, so the sweep stops HERE.
           label(3, { voided: true, voided_at: VOIDED_SINCE }),
           label(4, { voided: true, voided_at: '2026-09-04T00:00:00.000Z' }),
         ],
@@ -210,13 +184,13 @@ describe('the void sweep', () => {
         total: 450,
       })
     )
-    const result = await shipstationSync(args({ state: { cursor, updatedSince: WATERMARK } }))
+    const result = await shipstationSync(args({ query: STEADY, cursor }))
 
     const records = Array.isArray(result.records) ? result.records : []
     expect(records.map((r) => r.externalId)).toEqual(['se-1', 'se-2'])
     // Stopping is the end of the sweep even though the provider reports 9 pages.
-    expect(result.nextState.backfillComplete).toBe(true)
-    expect(result.nextState.cursor).toBeUndefined()
+    expect(result.cursor).toBeUndefined()
+    expect(result.since).toBeDefined()
   })
 
   it('does not stop on a voided label with no usable voided_at', async () => {
@@ -233,15 +207,15 @@ describe('the void sweep', () => {
         total: 2,
       })
     )
-    const result = await shipstationSync(args({ state: { cursor, updatedSince: WATERMARK } }))
+    const result = await shipstationSync(args({ query: STEADY, cursor }))
     const records = Array.isArray(result.records) ? result.records : []
     expect(records.map((r) => r.externalId)).toEqual(['se-1', 'se-2'])
   })
 
-  it('skips a void on a label created before importStart, and keeps paging anyway', async () => {
+  it('skips a void on a label created before the floor, and keeps paging anyway', async () => {
     // The void sweep is unbounded in creation time by construction, so the
-    // import floor has to be applied locally. Pagination is decided by the RAW
-    // page, so a page emptied by that filter is still a full page.
+    // floor has to be applied locally. Pagination is decided by the RAW page,
+    // so a page emptied by that filter is still a full page.
     const cursor = await toVoidSweep()
     fetchMock.mockResolvedValueOnce(
       jsonPage({
@@ -256,14 +230,14 @@ describe('the void sweep', () => {
         total: 200,
       })
     )
-    const result = await shipstationSync(args({ state: { cursor, updatedSince: WATERMARK } }))
+    const result = await shipstationSync(args({ query: STEADY, cursor }))
 
     expect(Array.isArray(result.records) && result.records).toHaveLength(0)
-    expect(result.nextState.backfillComplete).toBeFalsy()
+    expect(result.cursor).toBeDefined()
     expect(cursorOf(result).page).toBe(2)
   })
 
-  it('advances the void floor only when the sweep is exhausted', async () => {
+  it('advances both floors only when the sweep is exhausted', async () => {
     const cursor = await toVoidSweep()
     fetchMock.mockResolvedValueOnce(
       jsonPage({
@@ -274,84 +248,69 @@ describe('the void sweep', () => {
         total: 200,
       })
     )
-    const midSweep = await shipstationSync(args({ state: { cursor, updatedSince: WATERMARK } }))
-    // Mid-sweep: no watermark at all, so the engine keeps the stored pair.
-    expect(midSweep.nextState.updatedSince).toBeUndefined()
+    const midSweep = await shipstationSync(args({ query: STEADY, cursor }))
+    // Mid-sweep: no `since` at all, so the platform keeps the stored pair.
+    expect(midSweep.since).toBeUndefined()
 
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [], pages: 4, total: 200 }))
-    const done = await shipstationSync(
-      args({ state: { cursor: cursorOf(midSweep), updatedSince: WATERMARK } })
-    )
-    expect(done.nextState.backfillComplete).toBe(true)
-    expect(marks(done)?.voided).toBe(cursor.runEnd)
+    const done = await shipstationSync(args({ query: STEADY, cursor: cursorOf(midSweep) }))
+    expect(done.cursor).toBeUndefined()
+    expect(sinceOf(done)?.voided).toBe(cursor.runEnd)
     // The created half keeps the value its own sweep proved, not a fresh `now`.
-    expect(marks(done)?.created).toBe(cursor.runEnd)
+    expect(sinceOf(done)?.created).toBe(cursor.runEnd)
   })
 })
 
-describe('preserving both cursors on failure', () => {
-  it('advances neither watermark when the created sweep errors', async () => {
+describe('preserving both floors on failure', () => {
+  it('advances neither floor when the created sweep errors', async () => {
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 500 }))
-    await expect(shipstationSync(args({ state: { updatedSince: WATERMARK } }))).rejects.toThrow()
+    await expect(shipstationSync(args({ query: STEADY }))).rejects.toThrow()
 
-    // Throwing is what preserves them: no advanced `nextState` is ever produced,
-    // so the engine keeps the pair it already had.
+    // Throwing is what preserves them: no `since` is ever produced, so the
+    // platform keeps the pair it already had.
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 401 }))
-    await expect(shipstationSync(args({ state: { updatedSince: WATERMARK } }))).rejects.toThrow()
+    await expect(shipstationSync(args({ query: STEADY }))).rejects.toThrow()
   })
 
-  it('keeps the void floor when the void sweep errors after the created sweep finished', async () => {
+  it('returns no since when the void sweep errors after the created sweep finished', async () => {
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [label(1)], pages: 1, total: 1 }))
-    const createdDone = await shipstationSync(args({ state: { updatedSince: WATERMARK } }))
-    // The created half is proven, so its floor moves; the void half has not run.
-    expect(marks(createdDone)?.created).toBe(cursorOf(createdDone).runEnd)
-    expect(marks(createdDone)?.voided).toBe(VOIDED_SINCE)
+    const createdDone = await shipstationSync(args({ query: STEADY }))
+    // `since` rides the last page only, so the created half re-reads if the void sweep fails.
+    expect(createdDone.since).toBeUndefined()
+    expect(cursorOf(createdDone).delta?.createdSince).toBe(cursorOf(createdDone).runEnd)
 
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 500 }))
     await expect(
-      shipstationSync(
-        args({
-          state: {
-            cursor: cursorOf(createdDone),
-            updatedSince: createdDone.nextState.updatedSince,
-          },
-        })
-      )
+      shipstationSync(args({ query: STEADY, cursor: cursorOf(createdDone) }))
     ).rejects.toThrow()
   })
 
-  it('returns rateLimited on a 429 in either sweep, holding the page and both floors', async () => {
+  it('returns rateLimited on a 429 in either sweep, with no cursor and no since', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ errors: [{ message: 'slow down' }] }), {
         status: 429,
         headers: { 'retry-after': '7' },
       })
     )
-    const created = await shipstationSync(args({ state: { updatedSince: WATERMARK } }))
+    const created = await shipstationSync(args({ query: STEADY }))
     expect(created.rateLimited?.retryAfterMs).toBe(7000)
-    expect(created.nextState.updatedSince).toBeUndefined()
-    expect(cursorOf(created).delta?.sweep).toBe('created')
-    expect(cursorOf(created).page).toBe(1)
+    expect(created.since).toBeUndefined()
+    expect(created.cursor).toBeUndefined()
 
     fetchMock.mockReset()
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [], pages: 1, total: 0 }))
-    const atVoidSweep = cursorOf(
-      await shipstationSync(args({ state: { updatedSince: WATERMARK } }))
-    )
+    const atVoidSweep = cursorOf(await shipstationSync(args({ query: STEADY })))
 
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429 }))
-    const voided = await shipstationSync(
-      args({ state: { cursor: atVoidSweep, updatedSince: WATERMARK } })
-    )
+    const voided = await shipstationSync(args({ query: STEADY, cursor: atVoidSweep }))
     expect(voided.rateLimited).toBeDefined()
     // No `Retry-After` must NOT become 0, which would ask for an instant retry.
     expect(voided.rateLimited?.retryAfterMs).toBeUndefined()
-    expect(voided.nextState.updatedSince).toBeUndefined()
-    expect(cursorOf(voided).delta?.sweep).toBe('voided')
-    expect(cursorOf(voided).page).toBe(1)
+    expect(voided.since).toBeUndefined()
+    expect(voided.cursor).toBeUndefined()
   })
 
-  it('advances no watermark when the run stops at the page budget', async () => {
+  it('returns no since when the run stops at the page budget', async () => {
     const spent: ShipstationLabelCursor = {
       runEnd: '2026-09-11T00:00:00.000Z',
       windows: [{ start: CREATED_SINCE, end: '2026-09-11T00:00:00.000Z' }],
@@ -360,11 +319,9 @@ describe('preserving both cursors on failure', () => {
       delta: { sweep: 'created', createdSince: CREATED_SINCE, voidedSince: VOIDED_SINCE },
     }
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = await shipstationSync(
-      args({ state: { cursor: spent, updatedSince: WATERMARK } })
-    )
+    const result = await shipstationSync(args({ query: STEADY, cursor: spent }))
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(result.nextState.updatedSince).toBeUndefined()
+    expect(result.since).toBeUndefined()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -440,11 +397,9 @@ describe('rule 3: shipment structural fields only from non-voided labels', () =>
       fetchMock.mockResolvedValueOnce(
         jsonPage({ labels: [voidedLabel, replacementLabel], pages: 1, total: 2 })
       )
-      const created = await shipstationSync(args({ state: { updatedSince: WATERMARK } }))
+      const created = await shipstationSync(args({ query: STEADY }))
       fetchMock.mockResolvedValueOnce(jsonPage({ labels: [voidedLabel], pages: 1, total: 1 }))
-      const voidSweep = await shipstationSync(
-        args({ state: { cursor: cursorOf(created), updatedSince: WATERMARK } })
-      )
+      const voidSweep = await shipstationSync(args({ query: STEADY, cursor: cursorOf(created) }))
       const emitted = [
         ...(Array.isArray(created.records) ? created.records : []),
         ...(Array.isArray(voidSweep.records) ? voidSweep.records : []),
@@ -474,14 +429,10 @@ describe('rule 3: shipment structural fields only from non-voided labels', () =>
     // there overwrites the shipment's display name with a dead number, and which
     // number a shipment ends up with then depends on sweep order.
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [], pages: 1, total: 0 }))
-    const atVoidSweep = cursorOf(
-      await shipstationSync(args({ state: { updatedSince: WATERMARK } }))
-    )
+    const atVoidSweep = cursorOf(await shipstationSync(args({ query: STEADY })))
 
     fetchMock.mockResolvedValueOnce(jsonPage({ labels: [voidedLabel], pages: 1, total: 1 }))
-    const result = await shipstationSync(
-      args({ state: { cursor: atVoidSweep, updatedSince: WATERMARK } })
-    )
+    const result = await shipstationSync(args({ query: STEADY, cursor: atVoidSweep }))
     const records = Array.isArray(result.records) ? result.records : []
     expect(records).toHaveLength(1)
     expect(records[0].fields.masterTrackingNumber).toBeUndefined()

@@ -4,8 +4,8 @@
  * The Affirm financial-source sync: paging, cursor, membership, throttle.
  *
  * One page per `execute`. The platform drives the loop — this returns one page
- * of records plus the cursor to resume from, and is re-invoked until it returns
- * `backfillComplete`.
+ * of records plus the cursor to resume from, and is re-invoked until a page
+ * returns no cursor. `query.period` bounds the settlement dates read.
  *
  * ## Why this is not simply Shopify's handler
  *
@@ -26,10 +26,10 @@
  *
  * ## Cursor discipline
  *
- * - **429 returns `rateLimited` with the SAME cursor.** It never sleeps: the
- *   platform pauses the chain and re-enqueues, so the connector does not burn
+ * - **429 returns `rateLimited`.** It never sleeps: the platform pauses the
+ *   chain and re-invokes with the SAME cursor, so the connector does not burn
  *   its sandbox budget waiting.
- * - **No `updatedSince` is ever emitted.** The template suggests advancing a
+ * - **No `since` is ever returned.** The template suggests advancing a
  *   watermark to the newest row seen; that is wrong for reconciliation. A
  *   settlement date is not an update timestamp, and a watermark advanced past
  *   a page we failed to read is a deposit that silently never arrives. This
@@ -49,6 +49,7 @@
 import type {
   ConnectorExecuteArgs,
   ConnectorFetchResult,
+  ConnectorQuery,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { payoutSourceFields, processorSourceFields } from '@auxx/sdk/financial-source'
@@ -62,6 +63,7 @@ import {
 } from './settlement-evidence'
 import { type AffirmCredentials, affirmCredentialsFrom } from './tools/shared/connection'
 import {
+  AFFIRM_MEMBER_WINDOW_DAYS,
   AFFIRM_SETTLEMENT_PAGE_LIMIT,
   fetchSettlementEvents,
   fetchSettlements,
@@ -82,11 +84,6 @@ export const AFFIRM_PROVIDER_KEY = 'affirm'
  * row is `live`.
  */
 const AFFIRM_ENVIRONMENT = 'live'
-
-/** Config accepted by the connector. Kept in lock-step with `affirm.connector.ts`. */
-export interface AffirmConnectorConfig {
-  settlementHistoryStartDate?: string
-}
 
 /**
  * The persisted cursor. `version` is checked on resume so a shape change
@@ -112,8 +109,6 @@ interface AffirmCursor {
   window?: { after: string; before: string }
 }
 
-const HISTORY_START = /^\d{4}-\d{2}-\d{2}$/
-
 function resumeCursor(value: unknown, streamKey: string): AffirmCursor | null {
   if (value === undefined || value === null) return null
   if (typeof value !== 'object' || (value as AffirmCursor).version !== 1) {
@@ -135,8 +130,8 @@ function resumeCursor(value: unknown, streamKey: string): AffirmCursor | null {
   return cursor
 }
 
-/** Move to the next deposit header, or finish the backfill. */
-function continuation(cursor: AffirmCursor, outerCursor?: string) {
+/** Move to the next deposit header, or finish the scan. */
+function continuation(cursor: AffirmCursor, outerCursor?: string): { cursor?: AffirmCursor } {
   return outerCursor
     ? {
         cursor: {
@@ -150,7 +145,7 @@ function continuation(cursor: AffirmCursor, outerCursor?: string) {
           headerIndex: cursor.headerIndex + 1,
         },
       }
-    : { backfillComplete: true }
+    : {}
 }
 
 /** Translate the header, keeping a rejection rather than losing the deposit. */
@@ -270,23 +265,33 @@ function settlementCurrency(raw: AffirmSettlementSummary): string | undefined {
     : undefined
 }
 
-function historyStart(config: AffirmConnectorConfig | undefined): string | undefined {
-  const start = config?.settlementHistoryStartDate
-  if (start === undefined || start === '') return undefined
-  if (!HISTORY_START.test(String(start))) {
-    throw new Error('Settlement history start must be YYYY-MM-DD')
+/** A settlement date window, `YYYY-MM-DD`, covering the query's UTC period. */
+type DateWindow = { after?: string; before?: string }
+
+/**
+ * `after` is inclusive; `before` is unproven either way, so it lands `1 + slackDays` past
+ * the last date the exclusive `period.to` covers and the platform re-checks the over-read.
+ */
+function periodWindow(query: ConnectorQuery, slackDays = 0): DateWindow {
+  const utcDate = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+  const from = query.period?.from ? Date.parse(query.period.from) : Number.NaN
+  const to = query.period?.to ? Date.parse(query.period.to) : Number.NaN
+  return {
+    after: Number.isFinite(from) ? utcDate(from) : undefined,
+    before: Number.isFinite(to) ? utcDate(to - 1 + (1 + slackDays) * 86_400_000) : undefined,
   }
-  return String(start)
 }
 
 /** The standalone event feed — every row, including those with no `deposit_id`. */
 async function fetchBalancePage(
   credentials: AffirmCredentials,
   cursor: AffirmCursor,
-  after: string | undefined
+  dates: DateWindow
 ): Promise<ConnectorFetchResult> {
+  // A resumed page carries its position in the provider cursor; re-sending the dates
+  // alongside it would re-anchor the scan.
   const page = await fetchSettlementEvents(credentials, {
-    after: cursor.outerCursor ? undefined : after,
+    ...(cursor.outerCursor ? {} : dates),
     limit: AFFIRM_SETTLEMENT_PAGE_LIMIT,
     page: cursor.outerCursor ?? null,
   })
@@ -325,23 +330,23 @@ async function fetchBalancePage(
   if (page.nextPage && page.nextPage === cursor.outerCursor) {
     throw new Error('Affirm repeated a settlement event page cursor')
   }
-  return {
-    records,
-    nextState: page.nextPage
-      ? { cursor: { ...cursor, outerCursor: page.nextPage, pageIndex: cursor.pageIndex + 1 } }
-      : { backfillComplete: true },
-  }
+  return page.nextPage
+    ? {
+        records,
+        cursor: { ...cursor, outerCursor: page.nextPage, pageIndex: cursor.pageIndex + 1 },
+      }
+    : { records }
 }
 
 /** Read ONE deposit header and open its membership scan. */
 async function fetchHeaderPage(
   credentials: AffirmCredentials,
   cursor: AffirmCursor,
-  after: string | undefined
+  dates: DateWindow
 ): Promise<ConnectorFetchResult> {
   // One header per call, so a membership scan is always bounded to one deposit.
   const page = await fetchSettlements(credentials, {
-    after: cursor.outerCursor ? undefined : after,
+    ...(cursor.outerCursor ? {} : dates),
     limit: 1,
     page: cursor.outerCursor ?? null,
   })
@@ -352,7 +357,7 @@ async function fetchHeaderPage(
     throw new Error('Affirm repeated a settlement page cursor')
   }
   const raw = page.rows[0]
-  if (!raw) return { records: [], nextState: continuation(cursor, page.nextPage ?? undefined) }
+  if (!raw) return { records: [], ...continuation(cursor, page.nextPage ?? undefined) }
 
   let depositId: string | null = null
   try {
@@ -390,8 +395,7 @@ async function fetchHeaderPage(
             : 'Affirm settlement has no usable deposit identity or date; membership cannot be scanned',
       }),
     ],
-    nextState:
-      depositId && window ? { cursor: next } : continuation(cursor, page.nextPage ?? undefined),
+    ...(depositId && window ? { cursor: next } : continuation(cursor, page.nextPage ?? undefined)),
   }
 }
 
@@ -444,16 +448,9 @@ async function fetchMemberPage(
           ...projected,
         }),
       ],
-      nextState:
-        page.nextPage && !repeated
-          ? {
-              cursor: {
-                ...cursor,
-                memberCursor: page.nextPage,
-                pageIndex: cursor.pageIndex + 1,
-              },
-            }
-          : continuation(cursor, cursor.outerCursor),
+      ...(page.nextPage && !repeated
+        ? { cursor: { ...cursor, memberCursor: page.nextPage, pageIndex: cursor.pageIndex + 1 } }
+        : continuation(cursor, cursor.outerCursor)),
     }
   } catch (error) {
     // A throttle is the platform's business, not a membership finding.
@@ -472,7 +469,7 @@ async function fetchMemberPage(
             error instanceof Error ? error.message : 'Affirm deposit membership is unavailable',
         }),
       ],
-      nextState: continuation(cursor, cursor.outerCursor),
+      ...continuation(cursor, cursor.outerCursor),
     }
   }
 }
@@ -481,32 +478,33 @@ async function fetchMemberPage(
  * Fetch one bounded source page. The platform owns cursor persistence and the
  * continuation loop.
  */
-export async function fetchAffirmStream(
-  args: ConnectorExecuteArgs<AffirmConnectorConfig>
-): Promise<ConnectorFetchResult> {
+export async function fetchAffirmStream(args: ConnectorExecuteArgs): Promise<ConnectorFetchResult> {
   // A connector receives its bound connection EXPLICITLY. `getConnection()`
   // resolves a tool context and is not the connector contract.
   const credentials = affirmCredentialsFrom(args.connection?.fields)
-  const cursor = resumeCursor(args.state.cursor, args.streamKey)
-  const after = historyStart(args.config)
+  const cursor = resumeCursor(args.cursor, args.streamKey)
+  // An event's `transactionDate` (the period path) can precede its settlement `date`, which
+  // is what the feed filters on, so its upper bound gets the member window's slack.
+  const dates =
+    args.streamKey === 'payout'
+      ? periodWindow(args.query)
+      : periodWindow(args.query, AFFIRM_MEMBER_WINDOW_DAYS)
 
   // Commit the acquisition identity BEFORE reading any financial fact. Retries
   // reuse the same identity; `startedAt` is diagnostic, never a provider version.
   if (!cursor) {
     return {
       records: [],
-      nextState: {
-        cursor: {
-          version: 1,
-          streamKey: args.streamKey,
-          scanId: crypto.randomUUID(),
-          startedAt: new Date().toISOString(),
-          phase: args.streamKey === 'payout' ? 'headers' : 'balance',
-          merchantId: credentials.merchantId,
-          pageIndex: 0,
-          headerIndex: 0,
-        } satisfies AffirmCursor,
-      },
+      cursor: {
+        version: 1,
+        streamKey: args.streamKey,
+        scanId: crypto.randomUUID(),
+        startedAt: new Date().toISOString(),
+        phase: args.streamKey === 'payout' ? 'headers' : 'balance',
+        merchantId: credentials.merchantId,
+        pageIndex: 0,
+        headerIndex: 0,
+      } satisfies AffirmCursor,
     }
   }
 
@@ -516,15 +514,14 @@ export async function fetchAffirmStream(
   const bound: AffirmCursor = { ...cursor, merchantId: credentials.merchantId }
 
   try {
-    if (bound.phase === 'balance') return await fetchBalancePage(credentials, bound, after)
-    if (bound.phase === 'headers') return await fetchHeaderPage(credentials, bound, after)
+    if (bound.phase === 'balance') return await fetchBalancePage(credentials, bound, dates)
+    if (bound.phase === 'headers') return await fetchHeaderPage(credentials, bound, dates)
     return await fetchMemberPage(credentials, bound)
   } catch (error) {
     if (error instanceof RateLimitError) {
-      // Never sleep. Hand the SAME cursor back and let the platform re-enqueue.
+      // Never sleep. The platform re-invokes with this same cursor after the wait.
       return {
         records: [],
-        nextState: { cursor },
         rateLimited: {
           retryAfterMs:
             error.retryAfterSeconds === undefined ? undefined : error.retryAfterSeconds * 1000,

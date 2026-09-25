@@ -71,8 +71,7 @@ function mockOrdersFetch(orders: unknown[]) {
 async function syncRefunds() {
   const result = await shopifySync({
     streamKey: 'order',
-    mode: 'backfill',
-    state: {},
+    query: {},
     connection: {
       value: 'shpat_test',
       metadata: { connectionVariables: { shop: 'test-shop' } },
@@ -108,7 +107,7 @@ describe('refund moneyPending (101 E9)', () => {
           { id: 1, kind: 'refund', status: 'success', amount: '5.00' },
           { id: 2, kind: 'refund', status: 'pending', amount: '10.00' },
         ]),
-      ]),
+      ])
     )
 
     const [refund] = await syncRefunds()
@@ -126,7 +125,7 @@ describe('refund moneyPending (101 E9)', () => {
           { id: 1, kind: 'refund', status: 'success', amount: '15.00' },
           { id: 2, kind: 'void', status: 'pending', amount: '1.00' },
         ]),
-      ]),
+      ])
     )
 
     const [refund] = await syncRefunds()

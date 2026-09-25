@@ -138,8 +138,7 @@ describe('order stream fulfillment fan-out (money plan 55 §5)', () => {
 
     const result = await shopifySync({
       streamKey: 'order',
-      mode: 'backfill',
-      state: {},
+      query: {},
       connection: {
         value: 'shpat_test',
         metadata: { connectionVariables: { shop: 'test-shop' } },

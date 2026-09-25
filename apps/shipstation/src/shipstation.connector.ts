@@ -69,25 +69,8 @@ export const shipstationConnector = defineDataConnector({
     'Sync shipments and every package tracking number from ShipStation, including voided and re-printed labels.',
   requiresConnection: true,
   iconKey: 'package',
-  config: z.object({
-    // The FIXED start of the import window, and the only reason this connector
-    // can use a snapshot mode at all (build plan §5). It is a floor that never
-    // moves: a cutoff that crept forward would silently abandon labels already
-    // imported, and a void arriving on one of them would then never be seen.
-    // The provider reported 4,290 labels with the oldest observed at
-    // 2025-10-20, so this bounds the crawl to history the merchant cares about
-    // rather than to whatever the API still serves.
-    // `z.iso.datetime()`, not a bare `z.string()`. It emits
-    // `format: 'date-time'` into the extracted JSON Schema, which is what lets
-    // the platform render a datetime picker instead of a free-text box: a
-    // required text field with no validation accepts "last week" at save time
-    // and only fails when the sync runs.
-    importStart: z.iso
-      .datetime()
-      .describe(
-        'Import labels created on or after this date. Fixed, not a moving cutoff: every run re-reads this whole window.'
-      ),
-  }),
+  // The import window's start is the platform's history floor, sent as `query.period.from`.
+  config: z.object({}),
   // No connector-level `webhookTrigger`. `GET /v2/environment/webhooks` returned
   // an empty list on the probe and no V2 event contract, signature scheme or
   // delivery behaviour was verified. V1 `SHIP_NOTIFY` must not be assumed to
@@ -110,7 +93,7 @@ export const shipstationConnector = defineDataConnector({
       // ── Why it was a snapshot ────────────────────────────────────────────
       //   1. `created_at_start` / `created_at_end` are the only date filters
       //      `/v2/labels` has. There is no label modified-time filter at all.
-      //   2. A new-labels-only watermark would therefore never see a VOID on an
+      //   2. A new-labels-only marker would therefore never see a VOID on an
       //      old label, which is the single most important state change this
       //      connector exists to carry. The probe found 117 voided labels in the
       //      account; a delta keyed on creation time sees none of them change.
@@ -131,19 +114,16 @@ export const shipstationConnector = defineDataConnector({
       // API sorts on and never hands back. Do not reach for it.
       //
       // ── The delta that IS written ────────────────────────────────────────
-      //   • NEW LABELS: `created_at_start=<created watermark>`,
+      //   • NEW LABELS: `created_at_start=<since.created>`,
       //     `sort_by=created_at`, ascending, over frozen, subdividable windows.
       //   • VOIDS: `label_status=voided`, `sort_by=voided_at`, DESCENDING,
-      //     stopping at the first label whose `voided_at` is at or before the
-      //     void watermark. `voided_at` IS returned and IS a legal `sort_by`,
+      //     stopping at the first label whose `voided_at` is at or before
+      //     `since.voided`. `voided_at` IS returned and IS a legal `sort_by`,
       //     which is the whole reason this half is possible.
       //
-      // The two watermarks are carried in the single string the platform
-      // persists per stream; `encodeLabelWatermark` in the server module
-      // explains why a lexical max over that encoding is the right fold rather
-      // than a lucky one. Each half advances ONLY when its own sweep has been
-      // crawled to exhaustion, so a sweep that errors or runs out of page budget
-      // leaves both floors where they were.
+      // Both floors ride one opaque `since: { created, voided }`, returned on the
+      // last page only, so a sweep that errors or runs out of page budget leaves
+      // both where they were.
       //
       // The residual gap is a label change that is neither a creation nor a
       // void, principally `tracking_status` drift.
@@ -160,7 +140,7 @@ export const shipstationConnector = defineDataConnector({
       // 76s steady state, extrapolating to 35-40 minutes per cycle over ~4,290
       // labels and growing with history forever. Nothing was broken; it was just
       // expensive.
-      syncMode: 'incremental',
+      query: { period: 'createdAt', since: true },
       mappings: [
         // ── label root -> native shipment ────────────────────────────────────
         {
@@ -168,7 +148,7 @@ export const shipstationConnector = defineDataConnector({
           target: { entityKind: 'shipment' },
           // 🛑 `ignore`, NEVER `archive` or `mark_deleted` (build plan §5). A
           // filtered or partial scan is not deletion evidence: this crawl is
-          // bounded by `importStart`, so "not returned" legitimately means
+          // bounded by `query.period`, so "not returned" legitimately means
           // "outside the window", "on a page we have not reached yet", or
           // "expired from the provider's visible history" far more often than
           // it means "gone". Voided labels are INCLUDED in the crawl and their
@@ -176,11 +156,10 @@ export const shipstationConnector = defineDataConnector({
           // from a page is never read as a void. There is exactly one way a
           // parcel becomes voided here, and it is an explicit field.
           //
-          // ⚠️ Kept DECLARED even though the stream is now `incremental`, where
-          // the platform ignores it outright ("absence means unchanged, not
-          // deleted"). It is the answer if this stream ever goes back to a
-          // snapshot, and the reasoning above is what a future reader would
-          // otherwise have to reconstruct.
+          // ⚠️ Kept DECLARED even though a `since` or `period` query never
+          // reconciles, so the platform ignores it here. It is the answer if this
+          // stream ever runs unbounded, and the reasoning above is what a future
+          // reader would otherwise have to reconstruct.
           orphanBehavior: 'ignore',
           // ── mergeStrategy: none, and here is why ──────────────────────────
           // Every binding below takes the default `overwrite`, deliberately.
@@ -657,18 +636,17 @@ export const shipstationConnector = defineDataConnector({
       key: 'shipment',
       // A GENUINE `modified_at` delta, unlike labels: `modified_at_start` /
       // `modified_at_end` are real filters, `modified_at` is a legal `sort_by`,
-      // AND it is returned on the shipment object. One cursor, not two.
-      syncMode: 'incremental',
+      // AND it is returned on the shipment object. One marker, not two.
+      query: { period: 'createdAt', since: true },
       mappings: [
         {
           rootPath: '',
           target: { entityKind: 'shipment' },
           // Same answer and same reasoning as the label stream's root mapping:
-          // the crawl is bounded by `importStart` and filtered locally to
+          // the crawl is bounded by `query.period` and filtered locally to
           // shipments that have had a label, so "not returned" is never deletion
           // evidence. Declared for the same reason too — the platform ignores it
-          // on an `incremental` stream, and it is the answer if that ever
-          // changes.
+          // on a bounded query, and it is the answer if that ever changes.
           orphanBehavior: 'ignore',
           fields: [
             // Identity, and the whole point: `shipmentId` is `identity: true` in

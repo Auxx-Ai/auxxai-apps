@@ -166,7 +166,10 @@ are worked examples of the app-side entity system surface, registered on
 - `template.connector.ts` / `.connector.server.ts`: `defineDataConnector`,
   syncing external records with one OWNED mapping (writes the entity from
   `entities.ts`) and one CONTRIBUTING mapping (enriches `contact`, with a
-  `match` field for adopting an existing record).
+  `match` field for adopting an existing record). Its stream declares
+  `query: { ids: true, since: true }`; `execute` fetches exactly the `query`
+  it is given, pages with `cursor`, returns `since` on the last page, and
+  throws `DeltaExpiredError` when the provider rejects a stale marker.
 
 These are examples only, replace or delete them for a real app. **Before
 declaring your own fields, entities, or a connector, read

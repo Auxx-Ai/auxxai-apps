@@ -84,8 +84,7 @@ function request(fetch: ReturnType<typeof setup>, index: number) {
 function sync(streamKey = 'payout', overrides: Partial<ConnectorExecuteArgs> = {}) {
   return fetchPaymentsStream({
     streamKey,
-    mode: 'incremental',
-    state: {},
+    query: {},
     config: {},
     connection: { value: 'test-token', metadata: { connectionVariables: { shop: 'test-shop' } } },
     ...overrides,
@@ -117,11 +116,11 @@ function evidence(result: Awaited<ReturnType<typeof sync>>) {
 }
 async function seeded(streamKey = 'payout', overrides: Partial<ConnectorExecuteArgs> = {}) {
   const seed = await sync(streamKey, overrides)
-  return sync(streamKey, { ...overrides, state: seed.nextState })
+  return sync(streamKey, { ...overrides, cursor: seed.cursor })
 }
 async function memberPage() {
   const header = await seeded()
-  return sync('payout', { state: header.nextState })
+  return sync('payout', { cursor: header.cursor })
 }
 afterEach(() => vi.unstubAllGlobals())
 
@@ -133,7 +132,7 @@ describe('bounded Shopify Payments source acquisition', () => {
         { sourcePath: 'amount', target: 'payout_source_amount' },
         { sourcePath: 'currency', target: 'payout_source_currency' },
         { sourcePath: 'status', target: 'payout_source_status' },
-      ]),
+      ])
     )
     expect(payout.mappings[1]).toMatchObject({
       rootPath: 'processorTransactions[]',
@@ -146,7 +145,7 @@ describe('bounded Shopify Payments source acquisition', () => {
         { sourcePath: 'gross', target: 'processor_balance_gross' },
         { sourcePath: 'fee', target: 'processor_balance_fee' },
         { sourcePath: 'net', target: 'processor_balance_net' },
-      ]),
+      ])
     )
     expect(JSON.stringify([payout.mappings, balance.mappings])).not.toContain('_evidence')
   })
@@ -156,7 +155,7 @@ describe('bounded Shopify Payments source acquisition', () => {
     const first = await sync()
     expect(first.records).toEqual([])
     expect(fetch).not.toHaveBeenCalled()
-    expect(first.nextState.cursor).toMatchObject({ version: 3, phase: 'headers', pageIndex: 0 })
+    expect(first.cursor).toMatchObject({ version: 3, phase: 'headers', pageIndex: 0 })
   })
 
   it('returns separate header and one member page per call with stable retry identity', async () => {
@@ -184,7 +183,7 @@ describe('bounded Shopify Payments source acquisition', () => {
       payout: { amount: '96.00', issuedAt: null, issuedOn: '2026-09-12', currencyExponent: 2 },
       membership: { page: null, complete: false },
     })
-    const first = await sync('payout', { state: header.nextState })
+    const first = await sync('payout', { cursor: header.cursor })
     expect(fetch).toHaveBeenCalledTimes(2)
     expect(request(fetch, -1).variables).toEqual({ after: null, query: 'payments_transfer_id:10' })
     expect(evidence(first).membership).toMatchObject({
@@ -192,10 +191,10 @@ describe('bounded Shopify Payments source acquisition', () => {
       page: { index: 0, terminal: false },
     })
     expect(evidence(first).membership.entries).toHaveLength(1)
-    expect(JSON.stringify(first.nextState)).not.toContain('100.00')
-    const retry = await sync('payout', { state: header.nextState })
+    expect(JSON.stringify(first.cursor)).not.toContain('100.00')
+    const retry = await sync('payout', { cursor: header.cursor })
     expect(evidence(retry)).toEqual(evidence(first))
-    const final = await sync('payout', { state: first.nextState })
+    const final = await sync('payout', { cursor: first.cursor })
     expect(evidence(final).acquisition).toEqual(evidence(first).acquisition)
     expect(evidence(final).membership).toMatchObject({
       complete: true,
@@ -206,7 +205,7 @@ describe('bounded Shopify Payments source acquisition', () => {
       after: 'second',
       query: 'payments_transfer_id:10',
     })
-    expect(final.nextState.backfillComplete).toBe(true)
+    expect(final.cursor).toBeUndefined()
   })
 
   it('retains malformed raw rows and exact successful rows on the same page', async () => {
@@ -225,7 +224,7 @@ describe('bounded Shopify Payments source acquisition', () => {
                 associatedPayout: { id: 'gid://shopify/ShopifyPaymentsPayout/99', status: 'PAID' },
               },
             ],
-          },
+          }
     )
     const result = evidence(await memberPage())
     expect(result.membership).toMatchObject({ complete: false, page: { terminal: true } })
@@ -239,7 +238,7 @@ describe('bounded Shopify Payments source acquisition', () => {
     setup((kind) =>
       kind === 'payouts'
         ? { nodes: [{ ...payoutNode, net: { amount: 97, currencyCode: 'USD' } }] }
-        : { nodes: [] },
+        : { nodes: [] }
     )
     expect(evidence(await seeded())).toMatchObject({
       payout: null,
@@ -257,7 +256,7 @@ describe('bounded Shopify Payments source acquisition', () => {
       rejectionReason: expect.stringContaining('unsafe'),
     })
     expect((result.records as ConnectorRecord[])[0]!.externalId).toMatch(/^rejected:/)
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
   })
 
   it('never seals a failed or expired membership request as complete', async () => {
@@ -268,40 +267,39 @@ describe('bounded Shopify Payments source acquisition', () => {
       page: null,
       reason: expect.stringContaining('400'),
     })
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
   })
 
   it('retries a throttled page using the already checkpointed cursor', async () => {
     setup((kind) =>
-      kind === 'payouts' ? { nodes: [payoutNode] } : response({}, 429, { 'Retry-After': '4' }),
+      kind === 'payouts' ? { nodes: [payoutNode] } : response({}, 429, { 'Retry-After': '4' })
     )
     const header = await seeded()
-    const result = await sync('payout', { state: header.nextState })
+    const result = await sync('payout', { cursor: header.cursor })
     expect(result).toEqual({
       records: [],
-      nextState: { cursor: header.nextState.cursor },
       rateLimited: { retryAfterMs: 4000 },
     })
   })
 
   it('detects an immediately repeated cursor without draining a loop', async () => {
     setup((kind) =>
-      kind === 'payouts' ? { nodes: [payoutNode] } : { nodes: [transactionNode], next: 'same' },
+      kind === 'payouts' ? { nodes: [payoutNode] } : { nodes: [transactionNode], next: 'same' }
     )
     const first = await memberPage()
-    const next = await sync('payout', { state: first.nextState })
+    const next = await sync('payout', { cursor: first.cursor })
     expect(evidence(next).membership).toMatchObject({
       complete: false,
       reason: expect.stringContaining('repeated'),
     })
-    expect(next.nextState.backfillComplete).toBe(true)
+    expect(next.cursor).toBeUndefined()
   })
 
   it('retains duplicate conflicts for shared coverage assessment', async () => {
     setup((kind) =>
       kind === 'payouts'
         ? { nodes: [payoutNode] }
-        : { nodes: [transactionNode, { ...transactionNode, net: { amount: '96.00' } }] },
+        : { nodes: [transactionNode, { ...transactionNode, net: { amount: '96.00' } }] }
     )
     expect(evidence(await memberPage()).membership).toMatchObject({
       complete: false,
@@ -315,13 +313,13 @@ describe('bounded Shopify Payments source acquisition', () => {
       setup((kind) =>
         kind === 'payouts'
           ? { nodes: [{ ...payoutNode, status: status.toUpperCase() }] }
-          : { nodes: [] },
+          : { nodes: [] }
       )
       expect(evidence(await memberPage()).membership).toMatchObject({
         complete: true,
         providerReady: false,
       })
-    },
+    }
   )
 
   it('normalizes outgoing and returned movements without assuming unknown semantics', () => {
@@ -371,7 +369,7 @@ describe('bounded Shopify Payments source acquisition', () => {
       rejectionReason: expect.stringContaining('source ID'),
     })
     expect((result.records as ConnectorRecord[])[0]!.fields).not.toHaveProperty(
-      'processorBalanceEvidence',
+      'processorBalanceEvidence'
     )
   })
 
@@ -385,33 +383,29 @@ describe('bounded Shopify Payments source acquisition', () => {
           'balanceTransactions',
           [],
           undefined,
-          'gid://shopify/ShopifyPaymentsAccount/888',
-        ),
-      ),
+          'gid://shopify/ShopifyPaymentsAccount/888'
+        )
+      )
     )
-    await expect(sync('payout', { state: header.nextState })).rejects.toThrow('merchant changed')
+    await expect(sync('payout', { cursor: header.cursor })).rejects.toThrow('merchant changed')
   })
 
-  it('uses history floor only on initial header page and ignores processing-date watermarks', async () => {
+  it('sends the period floor on every header page, since GraphQL cursors do not carry it', async () => {
     const fetch = setup((_kind, variables) => ({
       nodes: [],
       next: variables.after ? undefined : 'next',
     }))
-    const first = await seeded('payout', {
-      config: { payoutHistoryStartDate: '2026-01-01' },
-      state: { updatedSince: '2026-09-15' },
-    })
+    const query = { period: { from: '2026-01-01T00:00:00.000Z' } }
+    const first = await seeded('payout', { query })
     expect(request(fetch, 0).variables).toEqual({ after: null, query: 'issued_at:>=2026-01-01' })
-    // GraphQL cursors do not carry the filter, so every page re-sends the scan's own floor.
-    await sync('payout', { config: {}, state: first.nextState })
+    await sync('payout', { query, cursor: first.cursor })
     expect(request(fetch, 1).variables).toEqual({ after: 'next', query: 'issued_at:>=2026-01-01' })
-    expect(JSON.stringify(fetch.mock.calls)).not.toContain('2026-09-15')
   })
 
   it('requires actual processor identity and explicit account permission', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => response({ data: { shopifyPaymentsAccount: null } })),
+      vi.fn(async () => response({ data: { shopifyPaymentsAccount: null } }))
     )
     await expect(seeded()).rejects.toThrow('account identity is unavailable')
     await expect(
@@ -423,7 +417,7 @@ describe('bounded Shopify Payments source acquisition', () => {
             scope: 'read_shopify_payments_payouts',
           },
         },
-      }),
+      })
     ).rejects.toBeInstanceOf(InsufficientPermissionsError)
   })
 
@@ -434,7 +428,7 @@ describe('bounded Shopify Payments source acquisition', () => {
     expect(() => exactEvidenceAmount(97)).toThrow()
     expect(() => exactEvidenceAmount('1.2oops')).toThrow()
     expect(() => balanceEvidence({ ...transaction, id: Number.MAX_SAFE_INTEGER + 1 })).toThrow(
-      'unsafe',
+      'unsafe'
     )
   })
 })

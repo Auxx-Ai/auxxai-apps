@@ -3,6 +3,7 @@
 import type {
   ConnectorExecuteArgs,
   ConnectorFetchResult,
+  ConnectorQuery,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { payoutSourceFields, processorSourceFields } from '@auxx/sdk/financial-source'
@@ -49,14 +50,14 @@ async function accountPage<K extends Key, Node>(
   http: ShopifyHttp,
   query: string,
   key: K,
-  variables: Record<string, unknown>,
+  variables: Record<string, unknown>
 ) {
   const page = await shopifyGraphql<PaymentsAccountData<K, Node>>(http, query, variables)
   if (!page.ok) throw new PaymentsThrottle(page.retryAfterMs)
   const account = page.data.shopifyPaymentsAccount
   if (!account?.id?.startsWith('gid://shopify/ShopifyPaymentsAccount/'))
     throw new PaymentsAccountError(
-      'Shopify Payments account identity is unavailable; verify the connected account and permissions',
+      'Shopify Payments account identity is unavailable; verify the connected account and permissions'
     )
   return { accountId: account.id, connection: account[key] }
 }
@@ -74,16 +75,14 @@ function pageOf<Node>(connection: GraphqlConnection<Node> | undefined, key: Key)
 /** A non-object node stays as it arrived, so evidence rejects it with the raw body. */
 function adaptRows(nodes: unknown[]): unknown[] {
   return nodes.map((node) =>
-    node && typeof node === 'object'
-      ? toRawBalanceTransaction(node as GqlBalanceTransaction)
-      : node,
+    node && typeof node === 'object' ? toRawBalanceTransaction(node as GqlBalanceTransaction) : node
   )
 }
 
 function bindAccount(cursor: PaymentsCursor, accountId: string): PaymentsCursor {
   if (cursor.accountId && cursor.accountId !== accountId)
     throw new PaymentsAccountError(
-      'Shopify Payments merchant changed during acquisition; restart the scan',
+      'Shopify Payments merchant changed during acquisition; restart the scan'
     )
   return { ...cursor, accountId }
 }
@@ -95,8 +94,6 @@ interface PaymentsCursor {
   startedAt: string
   phase: 'headers' | 'members' | 'balance'
   accountId?: string
-  /** The payouts search string, fixed for the scan because GraphQL cursors do not carry it. */
-  headerQuery?: string
   outerCursor?: string
   memberCursor?: string
   pageIndex: number
@@ -120,14 +117,36 @@ function resumeCursor(value: unknown, streamKey: string): PaymentsCursor | null 
   return cursor
 }
 
-function historyQuery(config: ConnectorExecuteArgs['config']): string | undefined {
-  if (!config?.payoutHistoryStartDate) return undefined
-  const start = String(config.payoutHistoryStartDate)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error('Payout history start must be YYYY-MM-DD')
-  return `issued_at:>=${start}`
+const DAY_MS = 86_400_000
+
+/** The period's bound as a UTC date, rounded outward so a whole-day filter never narrows it. */
+function utcDate(iso: string, roundUp: boolean): string {
+  const ms = Date.parse(iso)
+  if (Number.isNaN(ms)) throw new Error(`Shopify Payments: unparseable period bound "${iso}"`)
+  const day = (roundUp ? Math.ceil(ms / DAY_MS) : Math.floor(ms / DAY_MS)) * DAY_MS
+  return new Date(day).toISOString().slice(0, 10)
 }
 
-function continuation(cursor: PaymentsCursor, outerCursor?: string) {
+/** `query.period` as a whole-day search on `field`; `to` stays exclusive. */
+function periodSearch(field: string, query: ConnectorQuery): string | null {
+  const terms: string[] = []
+  if (query.period?.from) terms.push(`${field}:>=${utcDate(query.period.from, false)}`)
+  if (query.period?.to) terms.push(`${field}:<${utcDate(query.period.to, true)}`)
+  return terms.length ? terms.join(' AND ') : null
+}
+
+/** Whether a balance row's `processed_at` falls in the period; an undated row is kept for evidence. */
+function inPeriod(raw: unknown, query: ConnectorQuery): boolean {
+  const at =
+    raw && typeof raw === 'object'
+      ? Date.parse(String((raw as RawBalanceTransaction).processed_at))
+      : NaN
+  if (Number.isNaN(at)) return true
+  const { from, to } = query.period ?? {}
+  return (!from || at >= Date.parse(from)) && (!to || at < Date.parse(to))
+}
+
+function continuation(cursor: PaymentsCursor, outerCursor?: string): { cursor?: PaymentsCursor } {
   return outerCursor
     ? {
         cursor: {
@@ -140,7 +159,7 @@ function continuation(cursor: PaymentsCursor, outerCursor?: string) {
           headerIndex: cursor.headerIndex + 1,
         },
       }
-    : { backfillComplete: true }
+    : {}
 }
 
 function projectRows(rows: unknown[], shop: string, payoutId?: string) {
@@ -208,7 +227,7 @@ function payoutRecord(
   cursor: PaymentsCursor,
   externalAccountId: string,
   membership: Record<string, unknown>,
-  adaptError?: string,
+  adaptError?: string
 ): ConnectorRecord {
   const raw = cursor.payout!
   let id: string
@@ -235,7 +254,7 @@ function payoutRecord(
 
 /** Fetch one bounded source page. The platform owns cursor persistence and continuation. */
 export async function fetchPaymentsStream(
-  args: ConnectorExecuteArgs,
+  args: ConnectorExecuteArgs
 ): Promise<ConnectorFetchResult> {
   if (!getShopifyToken(args.connection) || !getShopDomain(args.connection?.metadata))
     throw new Error('Shopify Payments requires a connected Shopify store')
@@ -243,46 +262,44 @@ export async function fetchPaymentsStream(
   if (typeof scopes === 'string' && scopes.trim()) {
     const granted = new Set(scopes.split(/[ ,]+/))
     const missing = ['read_shopify_payments_payouts', 'read_shopify_payments_accounts'].filter(
-      (scope) => !granted.has(scope) && !granted.has('read_shopify_payments'),
+      (scope) => !granted.has(scope) && !granted.has('read_shopify_payments')
     )
     if (missing.length) throw new InsufficientPermissionsError('organization', missing)
   }
-  const cursor = resumeCursor(args.state.cursor, args.streamKey)
+  const cursor = resumeCursor(args.cursor, args.streamKey)
   // Commit the acquisition identity BEFORE reading any financial facts. Retries use
   // the same identity; this timestamp is diagnostic, never a provider version.
   if (!cursor) {
-    const payout = args.streamKey === 'payout'
     return {
       records: [],
-      nextState: {
-        cursor: {
-          version: 3,
-          streamKey: args.streamKey,
-          scanId: crypto.randomUUID(),
-          startedAt: new Date().toISOString(),
-          phase: payout ? 'headers' : 'balance',
-          ...(payout ? { headerQuery: historyQuery(args.config) } : {}),
-          pageIndex: 0,
-          headerIndex: 0,
-        } satisfies PaymentsCursor,
-      },
+      cursor: {
+        version: 3,
+        streamKey: args.streamKey,
+        scanId: crypto.randomUUID(),
+        startedAt: new Date().toISOString(),
+        phase: args.streamKey === 'payout' ? 'headers' : 'balance',
+        pageIndex: 0,
+        headerIndex: 0,
+      } satisfies PaymentsCursor,
     }
   }
   const http = shopifyHttp(args.connection)
   const shop = http.shopDomain
   try {
-    // No updatedSince: provider processing dates are not update timestamps.
+    // No `since`: provider processing dates are not update timestamps.
     if (cursor.phase === 'balance') {
       const { accountId, connection } = await accountPage<'balanceTransactions', unknown>(
         http,
         BALANCE_TRANSACTIONS_QUERY,
         'balanceTransactions',
-        { after: cursor.outerCursor ?? null },
+        { after: cursor.outerCursor ?? null, query: periodSearch('processed_at', args.query) }
       )
       const bound = bindAccount(cursor, accountId)
       const result = pageOf(connection, 'balanceTransactions')
       const pageId = `${cursor.scanId}:${cursor.pageIndex}`
-      const records = adaptRows(result.rows).map((raw, index) => {
+      // The search widens to whole days, so the exact period is re-applied to each row.
+      const rows = adaptRows(result.rows).filter((raw) => inPeriod(raw, args.query))
+      const records = rows.map((raw, index) => {
         const projected = projectRows([raw], shop)
         const entry = projected.entries[0] ?? null
         const environment =
@@ -308,19 +325,19 @@ export async function fetchPaymentsStream(
       })
       if (result.next && result.next === cursor.outerCursor)
         throw new Error('Shopify Payments repeated a balance page cursor')
-      return {
-        records,
-        nextState: result.next
-          ? { cursor: { ...bound, outerCursor: result.next, pageIndex: cursor.pageIndex + 1 } }
-          : { backfillComplete: true },
-      }
+      return result.next
+        ? {
+            records,
+            cursor: { ...bound, outerCursor: result.next, pageIndex: cursor.pageIndex + 1 },
+          }
+        : { records }
     }
     if (cursor.phase === 'headers') {
       const { accountId, connection } = await accountPage<'payouts', GqlPayout>(
         http,
         PAYOUT_HEADERS_QUERY,
         'payouts',
-        { after: cursor.outerCursor ?? null, query: cursor.headerQuery ?? null },
+        { after: cursor.outerCursor ?? null, query: periodSearch('issued_at', args.query) }
       )
       const bound = bindAccount(cursor, accountId)
       const result = pageOf(connection, 'payouts')
@@ -329,7 +346,7 @@ export async function fetchPaymentsStream(
       if (result.next && result.next === cursor.outerCursor)
         throw new Error('Shopify Payments repeated a payout page cursor')
       const node = result.rows[0]
-      if (!node) return { records: [], nextState: continuation(bound, result.next) }
+      if (!node) return { records: [], ...continuation(bound, result.next) }
       let raw: RawPayout
       let adaptError: string | undefined
       try {
@@ -365,10 +382,10 @@ export async function fetchPaymentsStream(
               rawRows: [],
               reason: 'Payout membership acquisition is pending',
             },
-            adaptError,
+            adaptError
           ),
         ],
-        nextState: hasSourceIdentity ? { cursor: next } : continuation(bound, result.next),
+        ...(hasSourceIdentity ? { cursor: next } : continuation(bound, result.next)),
       }
     }
     if (!cursor.payout) throw new Error('Payout membership cursor has no payout header')
@@ -379,7 +396,7 @@ export async function fetchPaymentsStream(
         http,
         PAYOUT_MEMBERS_QUERY,
         'balanceTransactions',
-        { after: cursor.memberCursor ?? null, query: payoutMembersQuery(payoutId) },
+        { after: cursor.memberCursor ?? null, query: payoutMembersQuery(payoutId) }
       )
       const bound = bindAccount(cursor, accountId)
       const result = pageOf(connection, 'balanceTransactions')
@@ -406,10 +423,9 @@ export async function fetchPaymentsStream(
             ...projected,
           }),
         ],
-        nextState:
-          result.next && !repeated
-            ? { cursor: { ...bound, memberCursor: result.next, pageIndex: cursor.pageIndex + 1 } }
-            : continuation(bound, cursor.outerCursor),
+        ...(result.next && !repeated
+          ? { cursor: { ...bound, memberCursor: result.next, pageIndex: cursor.pageIndex + 1 } }
+          : continuation(bound, cursor.outerCursor)),
       }
     } catch (error) {
       if (fatal(error)) throw error
@@ -425,16 +441,13 @@ export async function fetchPaymentsStream(
           }),
         ],
         // A failed or expired traversal stays incomplete. A later scan starts a new acquisition.
-        nextState: continuation(cursor, cursor.outerCursor),
+        ...continuation(cursor, cursor.outerCursor),
       }
     }
   } catch (error) {
+    // The platform retries this same cursor after the wait.
     if (error instanceof PaymentsThrottle)
-      return {
-        records: [],
-        nextState: { cursor },
-        rateLimited: { retryAfterMs: error.retryAfterMs },
-      }
+      return { records: [], rateLimited: { retryAfterMs: error.retryAfterMs } }
     throw error
   }
 }

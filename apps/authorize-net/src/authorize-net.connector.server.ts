@@ -1,12 +1,13 @@
 // src/authorize-net.connector.server.ts
 
 // One page per `execute`; the platform drives the loop. `getSettledBatchList` accepts a
-// bounded date range (31 days, recalled not proven), so history is walked as windows
-// computed once from the configured start date.
+// bounded date range (31 days, recalled not proven), so `query.period` is walked as
+// windows computed from its `from`.
 
 import type {
   ConnectorExecuteArgs,
   ConnectorFetchResult,
+  ConnectorQuery,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { payoutSourceFields } from '@auxx/sdk/financial-source'
@@ -35,14 +36,6 @@ import {
 /** First member of every `sourceKey` tuple this connector writes. */
 export const AUTHORIZE_NET_PROVIDER_KEY = 'authorize_net'
 
-/** Build plan §10.4 — the LFK cutover. Earlier batches are evidence only. */
-export const AUTHORIZE_NET_DEFAULT_HISTORY_START = '2026-01-01'
-
-/** Config accepted by the connector. Kept in lock-step with `authorize-net.connector.ts`. */
-export interface AuthorizeNetConnectorConfig {
-  settlementHistoryStartDate?: string
-}
-
 interface AuthorizeNetCursor {
   version: 1
   streamKey: string
@@ -65,15 +58,18 @@ interface AuthorizeNetCursor {
   pageIndex: number
 }
 
-const HISTORY_START = /^\d{4}-\d{2}-\d{2}$/
-
-function historyStart(config: AuthorizeNetConnectorConfig | undefined): string {
-  const start = config?.settlementHistoryStartDate
-  if (start === undefined || start === '') return AUTHORIZE_NET_DEFAULT_HISTORY_START
-  if (!HISTORY_START.test(String(start))) {
-    throw new Error('Settlement history start must be YYYY-MM-DD')
+/** The query's period as settlement windows; `to` is exclusive, so the last second before it. */
+function periodWindows(query: ConnectorQuery): { first: string; last: string }[] {
+  const from = query.period?.from
+  // The batch list has no "everything" call, only bounded windows walked from a start.
+  if (!from) {
+    throw new Error(
+      'Authorize.net needs a start date to list settlements: set "Import history from" on the connector'
+    )
   }
-  return String(start)
+  const to = query.period?.to
+  const end = to ? new Date(Date.parse(to) - 1000).toISOString() : new Date().toISOString()
+  return settlementWindows(from, end, AUTHORIZE_NET_MAX_WINDOW_DAYS)
 }
 
 function resumeCursor(value: unknown, streamKey: string): AuthorizeNetCursor | null {
@@ -228,7 +224,7 @@ async function fetchHeaderPage(
   windows: { first: string; last: string }[]
 ): Promise<ConnectorFetchResult> {
   const window = windows[cursor.windowIndex]
-  if (!window) return { records: [], nextState: { backfillComplete: true } }
+  if (!window) return { records: [] }
 
   const batches = await fetchSettledBatches({
     credentials,
@@ -239,14 +235,12 @@ async function fetchHeaderPage(
   if (batches.length === 0) {
     return {
       records: [],
-      nextState: { cursor: { ...cursor, windowIndex: cursor.windowIndex + 1, batchIndex: 0 } },
+      cursor: { ...cursor, windowIndex: cursor.windowIndex + 1, batchIndex: 0 },
     }
   }
   return {
     records: [],
-    nextState: {
-      cursor: { ...cursor, phase: 'members', batches, batchIndex: 0, offset: 1, pageIndex: 0 },
-    },
+    cursor: { ...cursor, phase: 'members', batches, batchIndex: 0, offset: 1, pageIndex: 0 },
   }
 }
 
@@ -300,16 +294,10 @@ async function fetchMemberPage(
           ...projected,
         }),
       ],
-      nextState:
+      cursor:
         more && !stalled
-          ? {
-              cursor: {
-                ...cursor,
-                offset: cursor.offset + returned,
-                pageIndex: cursor.pageIndex + 1,
-              },
-            }
-          : { cursor: nextBatch(cursor) },
+          ? { ...cursor, offset: cursor.offset + returned, pageIndex: cursor.pageIndex + 1 }
+          : nextBatch(cursor),
     }
   } catch (error) {
     if (error instanceof RateLimitError) throw error
@@ -329,39 +317,38 @@ async function fetchMemberPage(
               : 'Authorize.net batch membership is unavailable',
         }),
       ],
-      nextState: { cursor: nextBatch(cursor) },
+      cursor: nextBatch(cursor),
     }
   }
 }
 
 /** Fetch one bounded source page. The platform owns cursor persistence. */
 export async function fetchAuthorizeNetStream(
-  args: ConnectorExecuteArgs<AuthorizeNetConnectorConfig>
+  args: ConnectorExecuteArgs
 ): Promise<ConnectorFetchResult> {
   // A connector is handed its connection; `getConnection()` resolves a tool context.
   const credentials = authorizeNetCredentialsFrom(args.connection?.fields)
-  const cursor = resumeCursor(args.state.cursor, args.streamKey)
+  const cursor = resumeCursor(args.cursor, args.streamKey)
+  const windows = periodWindows(args.query)
 
   if (!cursor) {
     const account = await resolveAccount(credentials)
     return {
       records: [],
-      nextState: {
-        cursor: {
-          version: 1,
-          streamKey: args.streamKey,
-          scanId: crypto.randomUUID(),
-          startedAt: new Date().toISOString(),
-          phase: 'headers',
-          accountId: account.accountId,
-          environment: credentials.environment,
-          currency: account.currency,
-          windowIndex: 0,
-          batchIndex: 0,
-          offset: 1,
-          pageIndex: 0,
-        } satisfies AuthorizeNetCursor,
-      },
+      cursor: {
+        version: 1,
+        streamKey: args.streamKey,
+        scanId: crypto.randomUUID(),
+        startedAt: new Date().toISOString(),
+        phase: 'headers',
+        accountId: account.accountId,
+        environment: credentials.environment,
+        currency: account.currency,
+        windowIndex: 0,
+        batchIndex: 0,
+        offset: 1,
+        pageIndex: 0,
+      } satisfies AuthorizeNetCursor,
     }
   }
 
@@ -369,22 +356,15 @@ export async function fetchAuthorizeNetStream(
     throw new Error('The Authorize.net environment changed during acquisition; restart the scan')
   }
 
-  const windows = settlementWindows(
-    historyStart(args.config),
-    new Date().toISOString(),
-    AUTHORIZE_NET_MAX_WINDOW_DAYS
-  )
-
   try {
     return cursor.phase === 'headers'
       ? await fetchHeaderPage(credentials, cursor, windows)
       : await fetchMemberPage(credentials, cursor)
   } catch (error) {
     if (error instanceof RateLimitError) {
-      // Never sleep: hand the same cursor back and let the platform re-enqueue.
+      // Never sleep: the platform re-invokes with this same cursor after the wait.
       return {
         records: [],
-        nextState: { cursor },
         rateLimited: {
           retryAfterMs:
             error.retryAfterSeconds === undefined ? undefined : error.retryAfterSeconds * 1000,

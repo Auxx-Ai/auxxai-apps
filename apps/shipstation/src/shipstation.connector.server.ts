@@ -12,8 +12,9 @@
 //                  not on a label at all. Contributes into the same native
 //                  `shipment` rows the label stream already resolves.
 //
-// Both streams are `syncMode: 'incremental'`. The label stream used to be a
-// snapshot; §"the two-cursor label delta" below is why it no longer has to be.
+// Both streams declare `query: { period: 'createdAt', since: true }`. The label
+// stream used to be a snapshot; §"the two-cursor label delta" below is why it no
+// longer has to be.
 //
 // ── The two-cursor label delta ───────────────────────────────────────────────
 // `/v2/labels` has no `modified_at` FILTER and, worse, never returns
@@ -25,13 +26,13 @@
 // What IS writable is two cursors, each with a watermark the response actually
 // carries (build plan §5, "The delta that IS available"):
 //
-//   1. NEW LABELS. `created_at_start=<created watermark>`, `sort_by=created_at`,
-//      ascending, over frozen windows — the same crawl the backfill runs, with a
-//      moving start instead of the fixed `importStart`.
+//   1. NEW LABELS. `created_at_start=<since.created>`, `sort_by=created_at`,
+//      ascending, over frozen windows — the same crawl the full read runs, with a
+//      moving start instead of the fixed `query.period.from`.
 //   2. VOIDS. `label_status=voided`, `sort_by=voided_at`, DESCENDING, stopping at
-//      the first label whose `voided_at` is at or before the void watermark.
+//      the first label whose `voided_at` is at or before `since.voided`.
 //
-// A void is precisely the change a new-labels-only watermark misses, and it is
+// A void is precisely the change a new-labels-only marker misses, and it is
 // the single most important state change this connector exists to carry (the
 // probe found 117 voided labels). Covering it separately is the entire reason
 // this stream can stop being a snapshot.
@@ -48,27 +49,15 @@
 // The fix is the per-box tracking stream in status plan §6, which supersedes
 // this value at rung 1 of the ladder.
 //
-// ── Two watermarks, one engine slot ──────────────────────────────────────────
-// The platform persists ONE watermark string per stream (`nextState.updatedSince`
-// in, `state.updatedSince` back out) and folds successive values with a LEXICAL
-// max. The label stream needs two, so they are encoded as
-// `<createdISO>|<voidedISO>`. `Date#toISOString()` is always 24 characters, so a
-// lexical comparison of that pair is a component-wise comparison of the two
-// halves, and both halves only ever move forward — which makes the engine's max
-// the right answer rather than an accident. See `encodeLabelWatermark`.
-//
-// ⚠️ A half is advanced ONLY when its own sweep has been crawled to exhaustion.
-// A sweep that errors throws, so nothing advanced is ever returned; a sweep
-// stopped by the page budget returns no watermark at all. Never advance a
-// watermark past a window that errored.
+// ── Two floors, one `since` ──────────────────────────────────────────────────
+// The label stream's `since` is `{ created, voided }`, opaque to the platform and
+// returned on the LAST page only, so a sweep that errors or runs out of page
+// budget moves neither floor. Never advance a floor past a window that errored.
 //
 // ── Which phase this stream is in ────────────────────────────────────────────
-// NOT `args.mode`. The run's mode is decided connector-wide (it is `incremental`
-// only when EVERY stream is already steady), and a stream that is steady while a
-// sibling still backfills runs its watermark catch-up inside a run whose mode
-// says `snapshot`. The reliable signal is the state itself: a stored cursor says
-// what it is, and a stored watermark can only exist because a backfill finished.
-// `readLabelCursor` / `readShipmentCursor` encode exactly that.
+// A stored cursor continues its crawl; otherwise `query.since` opens the delta,
+// and its absence crawls the whole `query.period`. `readLabelCursor` /
+// `readShipmentCursor` encode exactly that.
 //
 // ── Why normalization lives HERE and not in the mapping ──────────────────────
 // A `ConnectorMapping` field is a `sourcePath` → `target` binding with no
@@ -129,6 +118,7 @@
 import type {
   ConnectorExecuteArgs,
   ConnectorFetchResult,
+  ConnectorQuery,
   ConnectorRecord,
 } from '@auxx/sdk/data-connectors'
 import { RateLimitError } from '@auxx/sdk/server'
@@ -174,80 +164,23 @@ const MIN_WINDOW_MS = 60_000
  */
 const MAX_PAGES_PER_RUN = 2_000
 
-/**
- * Connector config this handler reads. Declared as a zod schema in
- * `shipstation.connector.ts`; this interface is the shape that file must
- * produce, exported so the two cannot drift apart silently.
- */
-export interface ShipstationConnectorConfig {
-  /**
-   * Fixed start of the import window (ISO date or datetime). It is a FIXED
-   * boundary, never a moving cutoff: moving it forward would silently abandon
-   * history already imported, which build plan §5 rules out.
-   *
-   * It remains a floor on BOTH streams after the delta landed. The new-labels
-   * cursor starts from it on the first run and from the watermark afterwards;
-   * the void sweep and the shipment crawl apply it as an explicit filter, so a
-   * label voided today on a shipment created before the configured start is
-   * still out of scope. Without that the delta would quietly import history the
-   * snapshot deliberately excluded.
-   *
-   * This is the connector's ENTIRE config. `shipstation.connector.ts` declares
-   * `z.object({ importStart: z.iso.datetime() })` and nothing else, and in
-   * particular no store filter. The pagination below is still driven off the RAW
-   * page rather than the projected one, because both delta sweeps DO filter
-   * locally and an emptied page must never read as the end of the crawl.
-   */
-  importStart?: string
-}
+// ── since ────────────────────────────────────────────────────────────────────
 
-// ── watermark codec ──────────────────────────────────────────────────────────
-
-/** The label stream's two delta floors, both ISO-8601 instants. */
-export interface LabelWatermarks {
+/** The label stream's `since`: one floor per sweep, both ISO-8601 instants. */
+export interface LabelSince {
   /** Labels CREATED at or after this are re-read by the new-labels sweep. */
   created: string
   /** Labels VOIDED strictly after this are re-read by the void sweep. */
   voided: string
 }
 
-/**
- * Encode both label watermarks into the single string the platform persists.
- *
- * The platform folds successive watermarks with a LEXICAL max
- * (`maxWatermark`), so the encoding has to make that fold correct rather than
- * merely survive it. `Date#toISOString()` is always exactly 24 characters, so
- * `<created>|<voided>` compares component-wise: the created halves decide,
- * and the voided halves break the tie. Both halves only ever move forward
- * within a run, so the lexically greater pair is always the later one.
- *
- * 🛑 Never widen either half to a variable-length format. A pair whose first
- * component can change length stops comparing component-wise and the engine's
- * max silently picks the wrong one.
- */
-export function encodeLabelWatermark(watermarks: LabelWatermarks): string {
-  return `${toIso(watermarks.created)}|${toIso(watermarks.voided)}`
-}
-
-/**
- * Read both label watermarks back, or null when the stream has none yet (a
- * first run, or a forced re-backfill, which clears the watermark).
- */
-export function decodeLabelWatermark(raw: unknown): LabelWatermarks | null {
-  if (typeof raw !== 'string') return null
-  const [created, voided] = raw.split('|')
-  if (!created || !voided) return null
-  if (!Number.isFinite(Date.parse(created)) || !Number.isFinite(Date.parse(voided))) return null
-  return { created, voided }
-}
-
-/** Normalize to the 24-character ISO form the codec above depends on. */
-function toIso(value: string): string {
-  const ms = Date.parse(value)
-  if (!Number.isFinite(ms)) {
-    throw new Error(`shipstation: refusing to encode a watermark from "${value}"`)
-  }
-  return new Date(ms).toISOString()
+/** Read the label stream's `since` back, or null on a first run or a malformed marker. */
+export function readLabelSince(raw: unknown): LabelSince | null {
+  if (!raw || typeof raw !== 'object') return null
+  const { created, voided } = raw as Partial<LabelSince>
+  const createdIso = typeof created === 'string' ? isoOrNull(created) : null
+  const voidedIso = typeof voided === 'string' ? isoOrNull(voided) : null
+  return createdIso && voidedIso ? { created: createdIso, voided: voidedIso } : null
 }
 
 // ── normalized vocabulary ────────────────────────────────────────────────────
@@ -758,6 +691,8 @@ export function projectLabelRecord(
   // nameless shipment.
   const fields: Record<string, unknown> = {
     labelId: label.label_id,
+    // The stream's `query.period` path, re-checked by the platform on a period re-import.
+    createdAt: label.created_at ?? null,
     shipmentId: label.shipment_id ?? null,
     storeId: label.store_id ?? null,
     externalShipmentId: label.external_shipment_id ?? null,
@@ -849,6 +784,8 @@ export function projectShipmentRecord(shipment: RawShipment): ConnectorRecord {
       shipmentId: shipment.shipment_id,
       shipmentNumber: shipment.shipment_number ?? null,
       storeId: shipment.store_id ?? null,
+      // The stream's `query.period` path, re-checked by the platform on a period re-import.
+      createdAt: shipment.created_at ?? null,
     },
   }
 }
@@ -862,12 +799,12 @@ export interface LabelWindow {
 }
 
 /**
- * The steady-phase extension of the label cursor. Absent on a backfill cursor,
+ * The steady-phase extension of the label cursor. Absent on a full-crawl cursor,
  * which is what tells the two phases apart when the cursor is read back.
  */
 export interface LabelDeltaState {
   /**
-   * Which of the two cursors is in progress. `created` runs first and exhausts
+   * Which of the two sweeps is in progress. `created` runs first and exhausts
    * `windows`; `voided` then runs the descending sweep, which does not use
    * `windows` at all.
    */
@@ -879,16 +816,14 @@ export interface LabelDeltaState {
 }
 
 /**
- * The cursor this stream returns in `nextState.cursor` and reads back from
- * `state.cursor`. Structured rather than a bare token because the crawl has to
- * be able to SUBDIVIDE: `windows[0]` is the window in progress, the rest are
- * waiting, and a window that turns out to hold more rows than the offset ceiling
- * is replaced in place by its two halves.
+ * The label stream's page cursor. Structured rather than a bare token because
+ * the crawl has to be able to SUBDIVIDE: `windows[0]` is the window in progress,
+ * the rest are waiting, and a window that turns out to hold more rows than the
+ * offset ceiling is replaced in place by its two halves.
  *
- * The same shape serves the backfill and the steady delta. `delta` is what
+ * The same shape serves the full crawl and the steady delta. `delta` is what
  * distinguishes them, and the window crawl underneath is identical — the delta's
- * new-labels sweep is the backfill crawl with a moving start instead of the
- * fixed `importStart`.
+ * new-labels sweep is the full crawl with `since.created` as its start.
  */
 export interface ShipstationLabelCursor {
   /** Window end frozen once per run, so a long crawl has a stable horizon. */
@@ -922,21 +857,27 @@ function isWindowCursor(value: unknown): value is ShipstationLabelCursor {
   )
 }
 
-/**
- * Resolve the configured import start. Thrown rather than defaulted: a silent
- * default would decide how much of the customer's shipping history exists, and
- * a wrong answer there is invisible.
- */
-function resolveImportStart(config: ShipstationConnectorConfig): string {
-  const raw = config?.importStart
-  const ms = typeof raw === 'string' ? Date.parse(raw) : Number.NaN
-  if (Number.isNaN(ms)) {
-    throw new Error(
-      'shipstation: connector config `importStart` is missing or not a parseable date; ' +
-        'the label crawl needs a fixed import window start'
-    )
-  }
-  return new Date(ms).toISOString()
+/** An absent `period.from` asks for everything; the window crawl subdivides from here. */
+const EPOCH = new Date(0).toISOString()
+
+/** `value` as the 24-character ISO form, or null when it is not a date. */
+function isoOrNull(value: string | undefined): string | null {
+  const ms = value ? Date.parse(value) : Number.NaN
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+}
+
+/** The query's creation-time floor, the epoch when it sets none. */
+function createdFloor(query: ConnectorQuery): string {
+  // A fixed date, never a moving cutoff: a floor that crept forward would abandon labels
+  // already imported, and a void arriving on one of them would never be seen.
+  return isoOrNull(query.period?.from) ?? EPOCH
+}
+
+/** The run's frozen horizon: now, or the period's exclusive end when it is earlier. */
+function runHorizon(query: ConnectorQuery): string {
+  const now = new Date().toISOString()
+  const to = isoOrNull(query.period?.to)
+  return to && to < now ? to : now
 }
 
 /** One window from `start` to a frozen `end`, or none when the range is empty. */
@@ -945,81 +886,59 @@ function openWindows(start: string, end: string): LabelWindow[] {
 }
 
 /**
- * Read the BACKFILL cursor back, or open a fresh one. The run's window end is
+ * Open a FULL-crawl cursor over the query's period. The run's window end is
  * frozen HERE, at the first page, and carried in the cursor for every later
  * page: a window end recomputed per page would drift forward mid-crawl and the
  * crawl would never reach it.
  */
-export function readCursor(
-  raw: unknown,
-  config: ShipstationConnectorConfig
-): ShipstationLabelCursor {
-  if (isWindowCursor(raw)) return raw
-  const start = resolveImportStart(config)
-  const end = new Date().toISOString()
-  return { runEnd: end, windows: openWindows(start, end), page: 1, pagesFetched: 0 }
+export function openCrawlCursor(query: ConnectorQuery): ShipstationLabelCursor {
+  const end = runHorizon(query)
+  return { runEnd: end, windows: openWindows(createdFloor(query), end), page: 1, pagesFetched: 0 }
 }
 
 /**
- * Open a fresh STEADY cursor from the persisted watermark pair.
- *
- * Both halves fall back to `importStart` when the stream has no watermark, which
- * makes a missing or corrupt watermark expensive rather than lossy: the run
- * re-reads the configured history instead of quietly skipping it.
+ * Open a STEADY cursor from the previous run's `since`. The new-labels sweep
+ * starts from the later of `since.created` and the period floor, so the delta
+ * never imports history the floor excludes.
  */
-export function openDeltaCursor(
-  updatedSince: unknown,
-  config: ShipstationConnectorConfig
-): ShipstationLabelCursor {
-  const importStart = resolveImportStart(config)
-  const stored = decodeLabelWatermark(updatedSince)
-  const createdSince = stored?.created ?? importStart
-  const voidedSince = stored?.voided ?? importStart
-  const end = new Date().toISOString()
+export function openDeltaCursor(since: LabelSince, query: ConnectorQuery): ShipstationLabelCursor {
+  const floor = createdFloor(query)
+  const createdSince = since.created > floor ? since.created : floor
+  const end = runHorizon(query)
   return {
     runEnd: end,
     windows: openWindows(createdSince, end),
     page: 1,
     pagesFetched: 0,
-    delta: { sweep: 'created', createdSince, voidedSince },
+    delta: { sweep: 'created', createdSince, voidedSince: since.voided },
   }
 }
 
 /**
- * Decide which phase the LABEL stream is in and hand back the right cursor.
- *
- * 🛑 Not keyed on `args.mode`. The run's mode is connector-wide and reads
- * `snapshot` whenever any stream is still backfilling, including for a stream
- * that is itself long past its own backfill. The state is the honest signal:
- *
- * 1. a stored cursor already says which crawl it belongs to, so continue it;
- * 2. no cursor but a watermark can only mean a backfill that finished, so open
- *    the delta;
- * 3. neither means a first run, or a forced re-backfill (which clears the
- *    watermark), so crawl the whole `importStart` window.
+ * Decide which phase the LABEL stream is in: a stored cursor continues its crawl,
+ * a `query.since` opens the two-sweep delta, and neither crawls the whole period.
  */
-export function readLabelCursor(
-  state: { cursor?: unknown; updatedSince?: unknown },
-  config: ShipstationConnectorConfig
-): ShipstationLabelCursor {
-  if (isWindowCursor(state.cursor)) return state.cursor
-  if (decodeLabelWatermark(state.updatedSince)) return openDeltaCursor(state.updatedSince, config)
-  return readCursor(undefined, config)
+export function readLabelCursor(cursor: unknown, query: ConnectorQuery): ShipstationLabelCursor {
+  if (isWindowCursor(cursor)) return cursor
+  const since = readLabelSince(query.since)
+  return since ? openDeltaCursor(since, query) : openCrawlCursor(query)
 }
 
-/** The same phase decision for the `shipment` stream, whose watermark is plain. */
+/** The same phase decision for the `shipment` stream, whose `since` is a plain ISO instant. */
 export function readShipmentCursor(
-  state: { cursor?: unknown; updatedSince?: unknown },
-  config: ShipstationConnectorConfig
+  cursor: unknown,
+  query: ConnectorQuery
 ): ShipstationShipmentCursor {
-  if (isWindowCursor(state.cursor)) return state.cursor as ShipstationShipmentCursor
-  const importStart = resolveImportStart(config)
-  const since =
-    typeof state.updatedSince === 'string' && Number.isFinite(Date.parse(state.updatedSince))
-      ? state.updatedSince
-      : null
+  if (isWindowCursor(cursor)) return cursor as ShipstationShipmentCursor
+  const since = typeof query.since === 'string' ? isoOrNull(query.since) : null
+  // Windows run over `modified_at`, which is never before `created_at`, so the floor holds.
   const end = new Date().toISOString()
-  return { runEnd: end, windows: openWindows(since ?? importStart, end), page: 1, pagesFetched: 0 }
+  return {
+    runEnd: end,
+    windows: openWindows(since ?? createdFloor(query), end),
+    page: 1,
+    pagesFetched: 0,
+  }
 }
 
 /**
@@ -1054,21 +973,20 @@ function asRateLimit(err: unknown): RateLimitError | null {
 }
 
 /**
- * Turn a 429 into the SDK's throttle signal, holding the cursor where it is.
+ * Turn a 429 into the SDK's throttle signal.
  *
  * Return, never throw and never sleep: the platform pauses the chain and
- * re-enqueues after the wait. The cursor points at the SAME page, so the
- * throttled page is retried rather than skipped, and NO watermark is returned,
- * so neither half of the delta advances past a window that was not read.
+ * re-invokes with the SAME cursor after the wait, so the throttled page is
+ * retried rather than skipped, and no `since` moves past a window that was not
+ * read.
  *
  * Only a POSITIVE server hint is passed on. ShipStation sending no `Retry-After`
  * reaches the client as `undefined`, and forwarding a 0 would ask the platform
  * to retry instantly, straight back into the throttle.
  */
-function throttled(cursor: unknown, limited: RateLimitError): ConnectorFetchResult {
+function throttled(limited: RateLimitError): ConnectorFetchResult {
   return {
     records: [],
-    nextState: { cursor },
     rateLimited: {
       retryAfterMs:
         typeof limited.retryAfterSeconds === 'number' && limited.retryAfterSeconds > 0
@@ -1085,7 +1003,7 @@ function throttled(cursor: unknown, limited: RateLimitError): ConnectorFetchResu
  * to the ambient `getConnection()` helper here: that resolves a default account,
  * and a sync that silently picks an account is worse than one that fails.
  */
-function requireApiKey(args: ConnectorExecuteArgs<ShipstationConnectorConfig>): string {
+function requireApiKey(args: ConnectorExecuteArgs): string {
   const apiKey = args.connection?.value
   if (!apiKey) throw new Error('shipstation: missing connection (requiresConnection)')
   return apiKey
@@ -1096,7 +1014,7 @@ function requireApiKey(args: ConnectorExecuteArgs<ShipstationConnectorConfig>): 
  * means the cursor is misbehaving, since the probed account holds 4,290 labels
  * in total against a 100,000-row budget.
  *
- * The caller must return WITHOUT a watermark when this fires. History may be
+ * The caller must return WITHOUT a `since` when this fires. History may be
  * incomplete, and advancing a delta floor over a window that was never read is
  * the one failure this connector cannot detect afterwards.
  */
@@ -1104,7 +1022,7 @@ function pageBudgetSpent(cursor: { pagesFetched: number }, what: string): boolea
   if (cursor.pagesFetched < MAX_PAGES_PER_RUN) return false
   console.warn(
     `[shipstation] ${what} stopped at the ${MAX_PAGES_PER_RUN}-page budget; ` +
-      'history may be incomplete and no watermark is advanced'
+      'history may be incomplete and no since is returned'
   )
   return true
 }
@@ -1144,7 +1062,7 @@ async function crawlWindowPage<TRow>(opts: {
     const limited = asRateLimit(err)
     if (limited) return { kind: 'throttled', limited }
     // Every other provider error rethrows, which is exactly what PRESERVES the
-    // last successful cursor AND both watermarks: nothing advanced is ever
+    // last successful cursor AND the previous `since`: nothing advanced is ever
     // returned on a failure. Build plan §2 overrides app-implementation-template
     // v3 here, which recommends advancing polling state on a provider error, and
     // for a reconciliation crawl that would skip the window that failed.
@@ -1193,9 +1111,9 @@ async function crawlWindowPage<TRow>(opts: {
  * time, ascending, over the window at the head of the cursor.
  *
  * One page per `execute` call: the platform drives the loop, re-invoking with
- * `state.cursor = nextState.cursor` until `backfillComplete`. Exactly one HTTP
- * request is issued per call, which is the whole request budget; there is no
- * inner drain loop to run away.
+ * the returned `cursor` until a page returns none. Exactly one HTTP request is
+ * issued per call, which is the whole request budget; there is no inner drain
+ * loop to run away.
  */
 async function fetchCreatedLabelPage(
   apiKey: string,
@@ -1221,53 +1139,35 @@ async function fetchCreatedLabelPage(
     }),
   })
 
-  if (step.kind === 'throttled') return throttled(cursor, step.limited)
+  if (step.kind === 'throttled') return throttled(step.limited)
 
+  const records = step.rows.map((row) => projectLabelRecord(row))
   const pagesFetched = cursor.pagesFetched + 1
 
   if (step.kind === 'page') {
     return {
-      records: step.rows.map((row) => projectLabelRecord(row)),
-      nextState: {
-        cursor: { ...cursor, windows: step.cursor.windows, page: step.cursor.page, pagesFetched },
-      },
+      records,
+      cursor: { ...cursor, windows: step.cursor.windows, page: step.cursor.page, pagesFetched },
     }
   }
 
-  // The new-labels half is exhausted. In the BACKFILL there is nothing after it,
-  // so the run is done and both floors advance to the frozen horizon: every
-  // label created in the window was read, and every void applied before the
-  // horizon was read with it, since the fetch happens after the horizon is
-  // frozen.
+  // The new-labels half is exhausted. In a FULL crawl there is nothing after it,
+  // so both floors advance to the frozen horizon: every label created in the
+  // window was read, and every void applied before the horizon was read with it,
+  // since the fetch happens after the horizon is frozen.
   if (!cursor.delta) {
-    return {
-      records: step.rows.map((row) => projectLabelRecord(row)),
-      nextState: {
-        cursor: undefined,
-        backfillComplete: true,
-        updatedSince: encodeLabelWatermark({ created: cursor.runEnd, voided: cursor.runEnd }),
-      },
-    }
+    return { records, since: { created: cursor.runEnd, voided: cursor.runEnd } }
   }
 
-  // In the STEADY delta the void sweep runs next. The created half is proven
-  // complete, so its floor advances HERE, on a non-terminal checkpoint — if the
-  // void sweep then fails, the created half is not re-read for nothing and the
-  // void half has not moved.
+  // In the STEADY delta the void sweep runs next.
   return {
-    records: step.rows.map((row) => projectLabelRecord(row)),
-    nextState: {
-      cursor: {
-        ...cursor,
-        windows: [],
-        page: 1,
-        pagesFetched,
-        delta: { ...cursor.delta, sweep: 'voided', createdSince: cursor.runEnd },
-      },
-      updatedSince: encodeLabelWatermark({
-        created: cursor.runEnd,
-        voided: cursor.delta.voidedSince,
-      }),
+    records,
+    cursor: {
+      ...cursor,
+      windows: [],
+      page: 1,
+      pagesFetched,
+      delta: { ...cursor.delta, sweep: 'voided', createdSince: cursor.runEnd },
     },
   }
 }
@@ -1275,10 +1175,10 @@ async function fetchCreatedLabelPage(
 /**
  * The label stream's VOID sweep: one page of `/v2/labels?label_status=voided`,
  * sorted by `voided_at` DESCENDING, stopping at the first label whose `voided_at`
- * is at or before the void watermark.
+ * is at or before `since.voided`.
  *
  * Descending is what makes the stop cheap: the newest voids come first, so the
- * sweep reads only as far back as the watermark and then stops, however large
+ * sweep reads only as far back as the marker and then stops, however large
  * the account's void history is. There is no `voided_at_start` filter to lean on
  * — `created_at_start` / `created_at_end` are the only date filters `/v2/labels`
  * has — so the stop has to be read off the rows.
@@ -1288,20 +1188,20 @@ async function fetchCreatedLabelPage(
  * - A row with NO parseable `voided_at` does not stop the sweep. Stopping on one
  *   would truncate the sweep on a data quirk and silently drop every older void;
  *   continuing over-reads, which is idempotent.
- * - A label created before `importStart` is SKIPPED, not emitted. The import
- *   start is a floor on what this connector imports at all, and a void sweep is
+ * - A label created before `query.period.from` is SKIPPED, not emitted. The
+ *   floor bounds what this connector imports at all, and a void sweep is
  *   unbounded in creation time by construction, so without this the delta would
- *   import history the snapshot deliberately excluded.
+ *   import history the full crawl deliberately excluded.
  */
 async function fetchVoidedLabelPage(
   apiKey: string,
   cursor: ShipstationLabelCursor,
-  config: ShipstationConnectorConfig
+  query: ConnectorQuery
 ): Promise<ConnectorFetchResult> {
   const delta = cursor.delta
   if (!delta) throw new Error('shipstation: void sweep reached without a delta cursor')
 
-  const importStartMs = Date.parse(resolveImportStart(config))
+  const floorMs = Date.parse(createdFloor(query))
   const sinceMs = Date.parse(delta.voidedSince)
 
   let body: RawLabelPage
@@ -1315,21 +1215,21 @@ async function fetchVoidedLabelPage(
     })
   } catch (err) {
     const limited = asRateLimit(err)
-    if (limited) return throttled(cursor, limited)
+    if (limited) return throttled(limited)
     throw err
   }
 
   const rows = body.labels ?? []
   const records: ConnectorRecord[] = []
-  let reachedWatermark = false
+  let reachedMarker = false
   for (const row of rows) {
     const voidedAtMs = row.voided_at ? Date.parse(row.voided_at) : Number.NaN
     if (Number.isFinite(voidedAtMs) && Number.isFinite(sinceMs) && voidedAtMs <= sinceMs) {
-      reachedWatermark = true
+      reachedMarker = true
       break
     }
     const createdAtMs = row.created_at ? Date.parse(row.created_at) : Number.NaN
-    if (Number.isFinite(createdAtMs) && createdAtMs < importStartMs) continue
+    if (Number.isFinite(createdAtMs) && createdAtMs < floorMs) continue
     // 🛑 No master tracking number from this sweep. It runs after the created
     // sweep and is sorted by `voided_at`, so a voided label re-read here arrives
     // AFTER the live label that replaced it and would overwrite the shipment's
@@ -1345,61 +1245,38 @@ async function fetchVoidedLabelPage(
     (totalPages !== undefined && cursor.page >= totalPages) ||
     (cursor.page + 1) * PAGE_SIZE > MAX_OFFSET
 
-  const pagesFetched = cursor.pagesFetched + 1
-
-  if (reachedWatermark || lastPage) {
-    // Both halves are now proven complete for this run, so both floors advance
+  if (reachedMarker || lastPage) {
+    // Both sweeps are now proven complete for this run, so both floors advance
     // to the frozen horizon. A void applied after the horizon simply sorts above
     // it next run and is read again; a re-upsert of an identical record is free.
-    return {
-      records,
-      nextState: {
-        cursor: undefined,
-        backfillComplete: true,
-        updatedSince: encodeLabelWatermark({ created: delta.createdSince, voided: cursor.runEnd }),
-      },
-    }
+    return { records, since: { created: delta.createdSince, voided: cursor.runEnd } }
   }
 
   return {
     records,
-    nextState: { cursor: { ...cursor, page: cursor.page + 1, pagesFetched } },
+    cursor: { ...cursor, page: cursor.page + 1, pagesFetched: cursor.pagesFetched + 1 },
   }
 }
 
-/** Dispatch one page of the `label` stream to whichever cursor is in progress. */
-async function fetchLabelPage(
-  args: ConnectorExecuteArgs<ShipstationConnectorConfig>
-): Promise<ConnectorFetchResult> {
+/** Dispatch one page of the `label` stream to whichever sweep is in progress. */
+async function fetchLabelPage(args: ConnectorExecuteArgs): Promise<ConnectorFetchResult> {
   const apiKey = requireApiKey(args)
-  const config = args.config ?? {}
-  const cursor = readLabelCursor(args.state ?? {}, config)
+  const cursor = readLabelCursor(args.cursor, args.query)
 
-  if (pageBudgetSpent(cursor, 'label crawl')) {
-    return { records: [], nextState: { cursor: undefined, backfillComplete: true } }
-  }
+  if (pageBudgetSpent(cursor, 'label crawl')) return { records: [] }
 
-  if (cursor.delta?.sweep === 'voided') return fetchVoidedLabelPage(apiKey, cursor, config)
+  if (cursor.delta?.sweep === 'voided') return fetchVoidedLabelPage(apiKey, cursor, args.query)
   if (cursor.windows.length === 0) {
-    // No window to crawl. In the backfill that means `importStart` is in the
-    // future and nothing has been proven, so no watermark is returned; in the
-    // delta it means no new labels since the last run, and the void sweep still
-    // has to run.
-    if (!cursor.delta) {
-      return { records: [], nextState: { cursor: undefined, backfillComplete: true } }
-    }
+    // No window to crawl. In a full crawl that means the floor is in the future
+    // and nothing has been proven, so no `since` is returned; in the delta it
+    // means no new labels since the last run, and the void sweep still has to run.
+    if (!cursor.delta) return { records: [] }
     return {
       records: [],
-      nextState: {
-        cursor: {
-          ...cursor,
-          page: 1,
-          delta: { ...cursor.delta, sweep: 'voided', createdSince: cursor.runEnd },
-        },
-        updatedSince: encodeLabelWatermark({
-          created: cursor.runEnd,
-          voided: cursor.delta.voidedSince,
-        }),
+      cursor: {
+        ...cursor,
+        page: 1,
+        delta: { ...cursor.delta, sweep: 'voided', createdSince: cursor.runEnd },
       },
     }
   }
@@ -1412,26 +1289,18 @@ async function fetchLabelPage(
  * `GET /v2/shipments` is a GENUINE `modified_at` delta, unlike labels:
  * `modified_at_start` / `modified_at_end` are real filters, `modified_at` is a
  * legal `sort_by`, and it is returned on the shipment object. So this stream
- * needs one cursor, not two.
+ * needs one marker, not two.
  *
- * `created_at_start` is sent on every request as well, so the `importStart`
- * floor bounds this stream exactly as it bounds the labels: a shipment created
- * before the configured start never enters, however recently it was touched.
+ * `created_at_start` / `created_at_end` carry `query.period` on every request,
+ * so the floor bounds this stream exactly as it bounds the labels: a shipment
+ * created before it never enters, however recently it was touched.
  */
-async function fetchShipmentPage(
-  args: ConnectorExecuteArgs<ShipstationConnectorConfig>
-): Promise<ConnectorFetchResult> {
+async function fetchShipmentPage(args: ConnectorExecuteArgs): Promise<ConnectorFetchResult> {
   const apiKey = requireApiKey(args)
-  const config = args.config ?? {}
-  const importStart = resolveImportStart(config)
-  const cursor = readShipmentCursor(args.state ?? {}, config)
+  const cursor = readShipmentCursor(args.cursor, args.query)
 
-  if (pageBudgetSpent(cursor, 'shipment crawl')) {
-    return { records: [], nextState: { cursor: undefined, backfillComplete: true } }
-  }
-  if (cursor.windows.length === 0) {
-    return { records: [], nextState: { cursor: undefined, backfillComplete: true } }
-  }
+  if (pageBudgetSpent(cursor, 'shipment crawl')) return { records: [] }
+  if (cursor.windows.length === 0) return { records: [] }
 
   const step = await crawlWindowPage<RawShipment>({
     apiKey,
@@ -1441,7 +1310,8 @@ async function fetchShipmentPage(
     query: (window, page) => ({
       modified_at_start: window.start,
       modified_at_end: window.end,
-      created_at_start: importStart,
+      created_at_start: args.query.period?.from,
+      created_at_end: args.query.period?.to,
       page,
       page_size: PAGE_SIZE,
       sort_by: 'modified_at',
@@ -1449,24 +1319,17 @@ async function fetchShipmentPage(
     }),
   })
 
-  if (step.kind === 'throttled') return throttled(cursor, step.limited)
+  if (step.kind === 'throttled') return throttled(step.limited)
 
   const records = step.rows
     .filter((row) => SHIPMENT_STATUSES_WITH_A_LABEL.has(row.shipment_status ?? ''))
     .map(projectShipmentRecord)
   const pagesFetched = cursor.pagesFetched + 1
 
-  if (step.kind === 'exhausted') {
-    return {
-      records,
-      nextState: { cursor: undefined, backfillComplete: true, updatedSince: cursor.runEnd },
-    }
-  }
+  if (step.kind === 'exhausted') return { records, since: cursor.runEnd }
   return {
     records,
-    nextState: {
-      cursor: { ...cursor, windows: step.cursor.windows, page: step.cursor.page, pagesFetched },
-    },
+    cursor: { ...cursor, windows: step.cursor.windows, page: step.cursor.page, pagesFetched },
   }
 }
 
@@ -1486,7 +1349,7 @@ async function fetchShipmentPage(
  * and none should be added until the V2 event contract is proved.
  */
 export default async function shipstationSync(
-  args: ConnectorExecuteArgs<ShipstationConnectorConfig>
+  args: ConnectorExecuteArgs
 ): Promise<ConnectorFetchResult> {
   if (args.streamKey === LABEL_STREAM_KEY) return fetchLabelPage(args)
   if (args.streamKey === SHIPMENT_STREAM_KEY) return fetchShipmentPage(args)

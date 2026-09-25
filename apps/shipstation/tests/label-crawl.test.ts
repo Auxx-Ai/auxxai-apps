@@ -11,12 +11,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import shipstationSync, {
+  openCrawlCursor,
+  readLabelCursor,
   type ShipstationLabelCursor,
-  readCursor,
   subdivideWindow,
 } from '../src/shipstation.connector.server'
 
 const PAGE_SIZE = 50
+const QUERY = { period: { from: '2025-10-01T00:00:00.000Z' } }
 
 function label(n: number) {
   return {
@@ -50,16 +52,14 @@ const fetchMock = vi.fn()
 function args(overrides: Record<string, unknown> = {}) {
   return {
     streamKey: 'label',
-    mode: 'snapshot',
-    state: {},
+    query: QUERY,
     connection: { value: 'test-api-key' },
-    config: { importStart: '2025-10-01T00:00:00.000Z' },
+    config: {},
     ...overrides,
   } as unknown as Parameters<typeof shipstationSync>[0]
 }
 
-const cursorOf = (result: { nextState: { cursor?: unknown } }) =>
-  result.nextState.cursor as ShipstationLabelCursor
+const cursorOf = (result: { cursor?: unknown }) => result.cursor as ShipstationLabelCursor
 
 beforeEach(() => {
   fetchMock.mockReset()
@@ -106,8 +106,35 @@ describe('request shape', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('refuses to guess an import window when the config has no importStart', async () => {
-    await expect(shipstationSync(args({ config: {} }))).rejects.toThrow(/importStart/)
+  it('reads everything from the epoch when the query sets no floor', async () => {
+    fetchMock.mockResolvedValueOnce(page(1, { pages: 1, total: 1 }))
+    await shipstationSync(args({ query: {} }))
+    const url = new URL(String(fetchMock.mock.calls[0][0]))
+    expect(url.searchParams.get('created_at_start')).toBe('1970-01-01T00:00:00.000Z')
+  })
+
+  it('ends the crawl at an earlier exclusive period end', async () => {
+    const to = '2026-01-01T00:00:00.000Z'
+    fetchMock.mockResolvedValueOnce(page(1, { pages: 1, total: 1 }))
+    await shipstationSync(args({ query: { period: { ...QUERY.period, to } } }))
+    const url = new URL(String(fetchMock.mock.calls[0][0]))
+    expect(url.searchParams.get('created_at_end')).toBe(to)
+  })
+
+  it('stamps the period path on every record', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          labels: [{ ...label(1), created_at: '2026-09-10T06:00:00.000Z' }],
+          pages: 1,
+          total: 1,
+        }),
+        { status: 200 }
+      )
+    )
+    const result = await shipstationSync(args())
+    const [record] = result.records as { fields: Record<string, unknown> }[]
+    expect(record!.fields.createdAt).toBe('2026-09-10T06:00:00.000Z')
   })
 })
 
@@ -117,7 +144,7 @@ describe('paging', () => {
     const result = await shipstationSync(args())
 
     expect(Array.isArray(result.records) && result.records).toHaveLength(PAGE_SIZE)
-    expect(result.nextState.backfillComplete).toBeFalsy()
+    expect(result.cursor).toBeDefined()
     expect(cursorOf(result).page).toBe(2)
     expect(cursorOf(result).windows).toHaveLength(1)
   })
@@ -126,8 +153,11 @@ describe('paging', () => {
     fetchMock.mockResolvedValueOnce(page(3, { pages: 1, total: 3 }))
     const result = await shipstationSync(args())
 
-    expect(result.nextState.backfillComplete).toBe(true)
-    expect(result.nextState.cursor).toBeUndefined()
+    expect(result.cursor).toBeUndefined()
+    // Both floors advance to the frozen horizon on the last page.
+    const since = result.since as { created: string; voided: string }
+    expect(since.created).toBe(since.voided)
+    expect(Number.isFinite(Date.parse(since.created))).toBe(true)
   })
 
   it('stops at the reported page count even on a full page', async () => {
@@ -136,8 +166,8 @@ describe('paging', () => {
     expect(cursorOf(first).page).toBe(2)
 
     fetchMock.mockResolvedValueOnce(page(PAGE_SIZE, { pages: 2, total: 100 }))
-    const second = await shipstationSync(args({ state: { cursor: cursorOf(first) } }))
-    expect(second.nextState.backfillComplete).toBe(true)
+    const second = await shipstationSync(args({ cursor: cursorOf(first) }))
+    expect(second.cursor).toBeUndefined()
   })
 
   it('keeps paginating when a page yields no records', async () => {
@@ -151,7 +181,7 @@ describe('paging', () => {
     // Zero rows returned IS short of a full page, so this window is done, but
     // the decision came from the raw row count, not from the projection.
     expect(Array.isArray(result.records) && result.records).toHaveLength(0)
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
   })
 
   it('freezes the window end for the whole run', async () => {
@@ -161,7 +191,7 @@ describe('paging', () => {
     const windowEnd = cursorOf(first).windows[0].end
 
     fetchMock.mockResolvedValueOnce(page(PAGE_SIZE, { pages: 5, total: 250 }))
-    const second = await shipstationSync(args({ state: { cursor: cursorOf(first) } }))
+    const second = await shipstationSync(args({ cursor: cursorOf(first) }))
     expect(cursorOf(second).runEnd).toBe(frozen)
     expect(cursorOf(second).windows[0].end).toBe(windowEnd)
 
@@ -183,9 +213,9 @@ describe('throttling and failure', () => {
 
     expect(result.rateLimited?.retryAfterMs).toBe(7000)
     expect(Array.isArray(result.records) && result.records).toHaveLength(0)
-    // The SAME page is retried, not skipped.
-    expect(cursorOf(result).page).toBe(1)
-    expect(result.nextState.backfillComplete).toBeFalsy()
+    // No cursor and no `since`: the platform retries the SAME page.
+    expect(result.cursor).toBeUndefined()
+    expect(result.since).toBeUndefined()
   })
 
   it('retries the same page it was throttled on, mid-window', async () => {
@@ -194,16 +224,20 @@ describe('throttling and failure', () => {
     expect(cursorOf(first).page).toBe(2)
 
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429 }))
-    const throttled = await shipstationSync(args({ state: { cursor: cursorOf(first) } }))
+    const throttled = await shipstationSync(args({ cursor: cursorOf(first) }))
     expect(throttled.rateLimited).toBeDefined()
-    expect(cursorOf(throttled).page).toBe(2)
-    expect(cursorOf(throttled).windows).toEqual(cursorOf(first).windows)
+    expect(throttled.cursor).toBeUndefined()
+
+    // The platform re-invokes with the cursor it already holds.
+    fetchMock.mockResolvedValueOnce(page(PAGE_SIZE, { pages: 9, total: 450 }))
+    await shipstationSync(args({ cursor: cursorOf(first) }))
+    expect(new URL(String(fetchMock.mock.calls[2][0])).searchParams.get('page')).toBe('2')
   })
 
   it('preserves the last successful cursor on a provider error by never returning one', async () => {
     // Template v3 recommends advancing polling state on a provider error; build
     // plan §2 overrides that for this reconciliation crawl. Throwing is what
-    // preserves the cursor: no advanced `nextState` is ever produced.
+    // preserves the cursor: no advanced cursor or `since` is ever produced.
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 500 }))
     await expect(shipstationSync(args())).rejects.toThrow()
 
@@ -225,7 +259,7 @@ describe('window subdivision', () => {
     expect(cursor.windows[1].end).toBe(cursor.runEnd)
     // Rows already fetched are still emitted; a re-upsert of the same record is free.
     expect(Array.isArray(result.records) && result.records).toHaveLength(PAGE_SIZE)
-    expect(result.nextState.backfillComplete).toBeFalsy()
+    expect(result.cursor).toBeDefined()
   })
 
   it('crawls each subdivided window in turn before finishing', async () => {
@@ -234,14 +268,14 @@ describe('window subdivision', () => {
     expect(cursorOf(split).windows).toHaveLength(2)
 
     fetchMock.mockResolvedValueOnce(page(2, { pages: 1, total: 2 }))
-    const firstHalf = await shipstationSync(args({ state: { cursor: cursorOf(split) } }))
+    const firstHalf = await shipstationSync(args({ cursor: cursorOf(split) }))
     expect(cursorOf(firstHalf).windows).toHaveLength(1)
-    expect(firstHalf.nextState.backfillComplete).toBeFalsy()
+    expect(firstHalf.cursor).toBeDefined()
 
     fetchMock.mockResolvedValueOnce(page(2, { pages: 1, total: 2 }))
-    const secondHalf = await shipstationSync(args({ state: { cursor: cursorOf(firstHalf) } }))
-    expect(secondHalf.nextState.backfillComplete).toBe(true)
-    expect(secondHalf.nextState.cursor).toBeUndefined()
+    const secondHalf = await shipstationSync(args({ cursor: cursorOf(firstHalf) }))
+    expect(secondHalf.cursor).toBeUndefined()
+    expect(secondHalf.since).toBeDefined()
   })
 
   it('refuses to subdivide below the one-minute floor', () => {
@@ -257,9 +291,9 @@ describe('window subdivision', () => {
   })
 })
 
-describe('readCursor', () => {
-  it('opens one window from importStart to a frozen now', () => {
-    const cursor = readCursor(undefined, { importStart: '2025-10-01' })
+describe('openCrawlCursor', () => {
+  it('opens one window from the period floor to a frozen now', () => {
+    const cursor = openCrawlCursor({ period: { from: '2025-10-01' } })
     expect(cursor.windows).toHaveLength(1)
     expect(cursor.windows[0].start).toBe('2025-10-01T00:00:00.000Z')
     expect(cursor.page).toBe(1)
@@ -273,11 +307,11 @@ describe('readCursor', () => {
       page: 7,
       pagesFetched: 6,
     }
-    expect(readCursor(stored, { importStart: '2025-10-01' })).toEqual(stored)
+    expect(readLabelCursor(stored, QUERY)).toEqual(stored)
   })
 
-  it('opens no window when importStart is in the future', () => {
-    const cursor = readCursor(undefined, { importStart: '2099-01-01' })
+  it('opens no window when the floor is in the future', () => {
+    const cursor = openCrawlCursor({ period: { from: '2099-01-01' } })
     expect(cursor.windows).toHaveLength(0)
   })
 })

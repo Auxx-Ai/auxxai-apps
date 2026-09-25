@@ -3,6 +3,7 @@
 // `offset` is 1-based; every fixture is synthetic, since no live probe has run
 // (see `ASSUMPTIONS.md`).
 
+import type { ConnectorQuery } from '@auxx/sdk/data-connectors'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fetchAuthorizeNetStream } from '../src/authorize-net.connector.server'
 
@@ -54,7 +55,7 @@ const CONNECTION = {
   fields: { api_login_id: '5KP3u95bQpv', transaction_key: '346HZ32z3fP4hTG2', environment: 'live' },
 }
 
-const CONFIG = { settlementHistoryStartDate: '2026-01-01' }
+const QUERY: ConnectorQuery = { period: { from: '2026-01-01T00:00:00.000Z' } }
 
 interface Cursor {
   phase: string
@@ -69,14 +70,14 @@ interface Cursor {
   batches?: { batchId: string }[]
 }
 
-function run(state: Record<string, unknown>, config: object = CONFIG) {
+function run(state: { cursor?: unknown }, query: ConnectorQuery = QUERY) {
   return fetchAuthorizeNetStream({
     streamKey: 'payout',
-    mode: 'incremental',
-    state,
+    query,
+    cursor: state.cursor,
     connection: CONNECTION,
-    config,
-  } as any)
+    config: {},
+  })
 }
 
 const asRecords = (result: { records: unknown }) =>
@@ -117,8 +118,8 @@ const page = (count: number, start: number) =>
 async function openMembership() {
   const opened = await run({})
   responses.push(jsonResponse({ batchList: [batch('10198080', '2.00')], messages: OK }))
-  const headers = await run({ cursor: opened.nextState.cursor })
-  return headers.nextState.cursor as Cursor
+  const headers = await run({ cursor: opened.cursor })
+  return headers.cursor as Cursor
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +130,7 @@ describe('acquisition identity', () => {
 
     expect(result.records).toEqual([])
     expect(requests.map((entry) => entry.request)).toEqual(['getMerchantDetailsRequest'])
-    const cursor = result.nextState.cursor as Cursor
+    const cursor = result.cursor as Cursor
     expect(cursor.phase).toBe('headers')
     expect(cursor.accountId).toBe('565697')
     expect(cursor.currency).toBe('USD')
@@ -139,7 +140,7 @@ describe('acquisition identity', () => {
 
   it('falls back to the API Login ID when the gateway names no id', async () => {
     responses = [jsonResponse({ merchantName: 'Auxx Lift', messages: OK })]
-    const cursor = (await run({})).nextState.cursor as Cursor
+    const cursor = (await run({})).cursor as Cursor
     expect(cursor.accountId).toBe('5KP3u95bQpv')
     expect(cursor.currency).toBeUndefined()
   })
@@ -150,18 +151,17 @@ describe('acquisition identity', () => {
         messages: { resultCode: 'Error', message: [{ code: 'E00011', text: 'Access denied.' }] },
       }),
     ]
-    expect(((await run({})).nextState.cursor as Cursor).accountId).toBe('5KP3u95bQpv')
+    expect(((await run({})).cursor as Cursor).accountId).toBe('5KP3u95bQpv')
   })
 
   it('refuses a connection with no credentials', async () => {
     await expect(
       fetchAuthorizeNetStream({
         streamKey: 'payout',
-        mode: 'incremental',
-        state: {},
+        query: QUERY,
         connection: { value: '', fields: {} },
-        config: CONFIG,
-      } as any)
+        config: {},
+      })
     ).rejects.toThrow(/not connected/i)
   })
 })
@@ -170,7 +170,7 @@ describe('window paging', () => {
   it('asks for at most 31 days and walks forward on resume', async () => {
     const opened = await run({})
     responses.push(jsonResponse({ batchList: [], messages: OK }))
-    const first = await run({ cursor: opened.nextState.cursor })
+    const first = await run({ cursor: opened.cursor })
 
     const firstCall = requests[1]!
     expect(firstCall.request).toBe('getSettledBatchListRequest')
@@ -180,26 +180,45 @@ describe('window paging', () => {
 
     // An empty window is not the end of the scan; the cursor moves to the next.
     expect(first.records).toEqual([])
-    expect((first.nextState.cursor as Cursor).windowIndex).toBe(1)
+    expect((first.cursor as Cursor).windowIndex).toBe(1)
 
     responses.push(jsonResponse({ batchList: [], messages: OK }))
-    await run({ cursor: first.nextState.cursor })
+    await run({ cursor: first.cursor })
     expect(requests[2]!.body.firstSettlementDate).toBe('2026-02-01T00:00:00Z')
     expect(requests[2]!.body.lastSettlementDate).toBe('2026-03-03T23:59:59Z')
   })
 
-  it('finishes the backfill once the windows run out', async () => {
+  it('finishes the scan once the windows run out', async () => {
     const opened = await run({})
-    const cursor = { ...(opened.nextState.cursor as Cursor), windowIndex: 9999 }
+    const cursor = { ...(opened.cursor as Cursor), windowIndex: 9999 }
     const result = await run({ cursor })
-    expect(result.nextState).toEqual({ backfillComplete: true })
+    expect(result).toEqual({ records: [] })
+  })
+
+  it('ends the last window just before the exclusive period end', async () => {
+    const query = {
+      period: { from: '2026-01-01T00:00:00.000Z', to: '2026-01-11T00:00:00.000Z' },
+    }
+    const opened = await run({}, query)
+    responses.push(jsonResponse({ batchList: [], messages: OK }))
+    const first = await run({ cursor: opened.cursor }, query)
+
+    expect(requests[1]!.body.firstSettlementDate).toBe('2026-01-01T00:00:00Z')
+    expect(requests[1]!.body.lastSettlementDate).toBe('2026-01-10T23:59:59Z')
+    const done = await run({ cursor: first.cursor }, query)
+    expect(done).toEqual({ records: [] })
+  })
+
+  it('refuses a query with no start, since the batch list has no unbounded read', async () => {
+    await expect(run({}, {})).rejects.toThrow(/Import history from/)
+    expect(requests).toHaveLength(0)
   })
 
   it('parses a BOM-prefixed body', async () => {
     const opened = await run({})
     responses.push(bomResponse({ batchList: [batch('10198080', '2.00')], messages: OK }))
-    const result = await run({ cursor: opened.nextState.cursor })
-    const cursor = result.nextState.cursor as Cursor
+    const result = await run({ cursor: opened.cursor })
+    const cursor = result.cursor as Cursor
     expect(cursor.phase).toBe('members')
     expect(cursor.batches?.[0]?.batchId).toBe('10198080')
   })
@@ -214,7 +233,7 @@ describe('window paging', () => {
         },
       })
     )
-    await expect(run({ cursor: opened.nextState.cursor })).rejects.toThrow(/E00003/)
+    await expect(run({ cursor: opened.cursor })).rejects.toThrow(/E00003/)
   })
 })
 
@@ -233,7 +252,7 @@ describe('member paging', () => {
     expect(firstMembership.complete).toBe(false)
     expect(firstMembership.reason).toMatch(/more transaction pages/)
     expect(firstMembership.entries).toHaveLength(250)
-    const resumed = firstPage.nextState.cursor as Cursor
+    const resumed = firstPage.cursor as Cursor
     expect(resumed.offset).toBe(251)
 
     responses.push(
@@ -246,8 +265,8 @@ describe('member paging', () => {
     expect(lastMembership.reason).toBeNull()
     expect(lastMembership.page.terminal).toBe(true)
     // The window held one batch, so the scan returns to the header phase.
-    expect((lastPage.nextState.cursor as Cursor).phase).toBe('headers')
-    expect((lastPage.nextState.cursor as Cursor).windowIndex).toBe(1)
+    expect((lastPage.cursor as Cursor).phase).toBe('headers')
+    expect((lastPage.cursor as Cursor).windowIndex).toBe(1)
   })
 
   it('terminates on a short page even when the total disagrees', async () => {
@@ -260,7 +279,7 @@ describe('member paging', () => {
     const membership = asRecords(result)[0]!.fields.membership
     expect(membership.complete).toBe(true)
     expect(membership.entries).toHaveLength(3)
-    expect((result.nextState.cursor as Cursor).phase).toBe('headers')
+    expect((result.cursor as Cursor).phase).toBe('headers')
   })
 
   it('treats a page that delivers nothing while claiming more as a fault', async () => {
@@ -272,7 +291,7 @@ describe('member paging', () => {
     expect(membership.complete).toBe(false)
     expect(membership.reason).toMatch(/reports more/)
     // And it moves on rather than re-asking for the same offset forever.
-    expect((result.nextState.cursor as Cursor).phase).toBe('headers')
+    expect((result.cursor as Cursor).phase).toBe('headers')
   })
 
   it('records an unavailable membership rather than dropping the batch', async () => {
@@ -319,12 +338,12 @@ describe('member paging', () => {
         messages: OK,
       })
     )
-    const headers = await run({ cursor: opened.nextState.cursor })
+    const headers = await run({ cursor: opened.cursor })
 
     responses.push(jsonResponse({ transactions: page(1, 1), totalNumInResultSet: 1, messages: OK }))
-    const first = await run({ cursor: headers.nextState.cursor })
+    const first = await run({ cursor: headers.cursor })
     expect(asRecords(first)[0]!.externalId).toBe('10198080')
-    const next = first.nextState.cursor as Cursor
+    const next = first.cursor as Cursor
     expect(next.phase).toBe('members')
     expect(next.batchIndex).toBe(1)
     expect(next.offset).toBe(1)
@@ -332,25 +351,25 @@ describe('member paging', () => {
     responses.push(jsonResponse({ transactions: page(1, 2), totalNumInResultSet: 1, messages: OK }))
     const second = await run({ cursor: next })
     expect(asRecords(second)[0]!.externalId).toBe('10198081')
-    expect((second.nextState.cursor as Cursor).phase).toBe('headers')
+    expect((second.cursor as Cursor).phase).toBe('headers')
   })
 })
 
 describe('throttling', () => {
-  it('returns rateLimited with the SAME cursor and reads nothing more', async () => {
+  it('returns rateLimited with no cursor, so the platform retries the same page', async () => {
     const cursor = await openMembership()
     responses.push(jsonResponse({}, 429, { 'retry-after': '30' }))
     const result = await run({ cursor })
 
     expect(result.records).toEqual([])
-    expect(result.nextState).toEqual({ cursor })
+    expect(result.cursor).toBeUndefined()
     expect(result.rateLimited).toEqual({ retryAfterMs: 30_000 })
   })
 
   it('never reports a retry delay it was not given', async () => {
     const opened = await run({})
     responses.push(jsonResponse({}, 429))
-    const result = await run({ cursor: opened.nextState.cursor })
+    const result = await run({ cursor: opened.cursor })
     expect(result.rateLimited).toEqual({ retryAfterMs: undefined })
   })
 })
@@ -365,8 +384,8 @@ describe('identity', () => {
         jsonResponse({ transactions: page(2, 1), totalNumInResultSet: 2, messages: OK }),
       ]
       const opened = await run({})
-      const headers = await run({ cursor: opened.nextState.cursor })
-      const record = asRecords(await run({ cursor: headers.nextState.cursor }))[0]!
+      const headers = await run({ cursor: opened.cursor })
+      const record = asRecords(await run({ cursor: headers.cursor }))[0]!
       return [
         record.fields.sourceKey,
         ...record.fields.processorTransactions.map((child: any) => child.sourceKey),
@@ -389,11 +408,11 @@ describe('identity', () => {
     await expect(
       fetchAuthorizeNetStream({
         streamKey: 'payout',
-        mode: 'incremental',
-        state: { cursor: opened.nextState.cursor },
+        query: QUERY,
+        cursor: opened.cursor,
         connection: { ...CONNECTION, fields: { ...CONNECTION.fields, environment: 'test' } },
-        config: CONFIG,
-      } as any)
+        config: {},
+      })
     ).rejects.toThrow(/environment changed/)
   })
 

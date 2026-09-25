@@ -19,6 +19,7 @@ import shipstationSync, {
 const PAGE_SIZE = 50
 const IMPORT_START = '2025-10-01T00:00:00.000Z'
 const SINCE = '2026-09-09T00:00:00.000Z'
+const QUERY = { period: { from: IMPORT_START } }
 
 function shipment(n: number, extra: Partial<RawShipment> = {}): RawShipment {
   return {
@@ -44,16 +45,14 @@ const fetchMock = vi.fn()
 function args(overrides: Record<string, unknown> = {}) {
   return {
     streamKey: 'shipment',
-    mode: 'snapshot',
-    state: {},
+    query: QUERY,
     connection: { value: 'test-api-key' },
-    config: { importStart: IMPORT_START },
+    config: {},
     ...overrides,
   } as unknown as Parameters<typeof shipstationSync>[0]
 }
 
-const cursorOf = (result: { nextState: { cursor?: unknown } }) =>
-  result.nextState.cursor as ShipstationShipmentCursor
+const cursorOf = (result: { cursor?: unknown }) => result.cursor as ShipstationShipmentCursor
 
 const urlOf = (call: number) => new URL(String(fetchMock.mock.calls[call][0]))
 
@@ -92,7 +91,7 @@ describe('request shape', () => {
     // `modified_at_start` alone would admit a shipment created years before the
     // configured import start the moment anyone touched it.
     fetchMock.mockResolvedValueOnce(jsonPage({ shipments: [], pages: 1, total: 0 }))
-    await shipstationSync(args({ state: { updatedSince: SINCE } }))
+    await shipstationSync(args({ query: { ...QUERY, since: SINCE } }))
 
     const url = urlOf(0)
     expect(url.searchParams.get('modified_at_start')).toBe(SINCE)
@@ -104,8 +103,18 @@ describe('request shape', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('refuses to guess an import window when the config has no importStart', async () => {
-    await expect(shipstationSync(args({ config: {} }))).rejects.toThrow(/importStart/)
+  it('sends the exclusive period end as the creation-time ceiling', async () => {
+    const to = '2026-01-01T00:00:00.000Z'
+    fetchMock.mockResolvedValueOnce(jsonPage({ shipments: [], pages: 1, total: 0 }))
+    await shipstationSync(args({ query: { period: { from: IMPORT_START, to } } }))
+    expect(urlOf(0).searchParams.get('created_at_end')).toBe(to)
+  })
+
+  it('reads everything when the query sets no floor', async () => {
+    fetchMock.mockResolvedValueOnce(jsonPage({ shipments: [], pages: 1, total: 0 }))
+    await shipstationSync(args({ query: {} }))
+    expect(urlOf(0).searchParams.get('modified_at_start')).toBe('1970-01-01T00:00:00.000Z')
+    expect(urlOf(0).searchParams.get('created_at_start')).toBeNull()
   })
 })
 
@@ -119,6 +128,8 @@ describe('projection', () => {
       shipmentId: 'se-ship-1',
       shipmentNumber: '14501',
       storeId: 'se-2943015',
+      // Not mapped: the stream's `query.period` path, for the platform's re-check.
+      createdAt: '2026-09-08T00:00:00.000Z',
     })
   })
 
@@ -183,12 +194,12 @@ describe('the local status filter', () => {
     )
     const result = await shipstationSync(args())
     expect(Array.isArray(result.records) && result.records).toHaveLength(0)
-    expect(result.nextState.backfillComplete).toBeFalsy()
+    expect(result.cursor).toBeDefined()
     expect(cursorOf(result).page).toBe(2)
   })
 })
 
-describe('paging and the watermark', () => {
+describe('paging and since', () => {
   it('returns one page and a cursor pointing at the next', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonPage({
@@ -200,11 +211,11 @@ describe('paging and the watermark', () => {
     const result = await shipstationSync(args())
     expect(Array.isArray(result.records) && result.records).toHaveLength(PAGE_SIZE)
     expect(cursorOf(result).page).toBe(2)
-    // Mid-crawl: no watermark, so a run that dies here re-reads rather than skips.
-    expect(result.nextState.updatedSince).toBeUndefined()
+    // Mid-crawl: no `since`, so a run that dies here re-reads rather than skips.
+    expect(result.since).toBeUndefined()
   })
 
-  it('freezes the horizon for the whole run and advances the watermark to it', async () => {
+  it('freezes the horizon for the whole run and returns it as since', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonPage({
         shipments: Array.from({ length: PAGE_SIZE }, (_, i) => shipment(i + 1)),
@@ -217,10 +228,10 @@ describe('paging and the watermark', () => {
     expect(cursorOf(first).windows[0].end).toBe(frozen)
 
     fetchMock.mockResolvedValueOnce(jsonPage({ shipments: [shipment(51)], pages: 2, total: 100 }))
-    const done = await shipstationSync(args({ state: { cursor: cursorOf(first) } }))
+    const done = await shipstationSync(args({ cursor: cursorOf(first) }))
     expect(urlOf(1).searchParams.get('modified_at_end')).toBe(frozen)
-    expect(done.nextState.backfillComplete).toBe(true)
-    expect(done.nextState.updatedSince).toBe(frozen)
+    expect(done.cursor).toBeUndefined()
+    expect(done.since).toBe(frozen)
   })
 
   it('subdivides a window holding more rows than the offset ceiling', async () => {
@@ -238,7 +249,7 @@ describe('paging and the watermark', () => {
     // The halves abut, so a shipment on the boundary is re-read rather than lost.
     expect(cursor.windows[0].end).toBe(cursor.windows[1].start)
     expect(cursor.windows[1].end).toBe(cursor.runEnd)
-    expect(result.nextState.updatedSince).toBeUndefined()
+    expect(result.since).toBeUndefined()
   })
 })
 
@@ -252,19 +263,19 @@ describe('throttling and failure', () => {
     )
     const result = await shipstationSync(args())
     expect(result.rateLimited?.retryAfterMs).toBe(3000)
-    expect(cursorOf(result).page).toBe(1)
-    expect(result.nextState.updatedSince).toBeUndefined()
+    expect(result.cursor).toBeUndefined()
+    expect(result.since).toBeUndefined()
   })
 
-  it('preserves the watermark on a provider error by never returning one', async () => {
+  it('preserves since on a provider error by never returning one', async () => {
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 500 }))
-    await expect(shipstationSync(args({ state: { updatedSince: SINCE } }))).rejects.toThrow()
+    await expect(shipstationSync(args({ query: { ...QUERY, since: SINCE } }))).rejects.toThrow()
 
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 401 }))
-    await expect(shipstationSync(args({ state: { updatedSince: SINCE } }))).rejects.toThrow()
+    await expect(shipstationSync(args({ query: { ...QUERY, since: SINCE } }))).rejects.toThrow()
   })
 
-  it('advances no watermark when the run stops at the page budget', async () => {
+  it('returns no since when the run stops at the page budget', async () => {
     const spent: ShipstationShipmentCursor = {
       runEnd: '2026-09-11T00:00:00.000Z',
       windows: [{ start: IMPORT_START, end: '2026-09-11T00:00:00.000Z' }],
@@ -272,9 +283,9 @@ describe('throttling and failure', () => {
       pagesFetched: 2_000,
     }
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = await shipstationSync(args({ state: { cursor: spent } }))
+    const result = await shipstationSync(args({ cursor: spent }))
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(result.nextState.updatedSince).toBeUndefined()
+    expect(result.since).toBeUndefined()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })

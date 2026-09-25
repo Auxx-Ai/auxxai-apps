@@ -80,7 +80,7 @@ function mockFetch(
   graphqlNodes: unknown[] = orders.map((order) => ({
     legacyResourceId: String((order as { id: number }).id),
     transactions: [],
-  })),
+  }))
 ) {
   const calls: Array<{ url: string; body?: unknown }> = []
   const fetchMock = (url: string, init?: { body?: string }) => {
@@ -88,18 +88,18 @@ function mockFetch(
     const transactions = new Map(
       (
         graphqlNodes as Array<{ legacyResourceId: string; transactions: OrderTransactionLike[] }>
-      ).map((node) => [node.legacyResourceId, node.transactions]),
+      ).map((node) => [node.legacyResourceId, node.transactions])
     )
     return Promise.resolve(jsonResponse(ordersPageBody(orders, transactions)))
   }
   return { calls, fetchMock }
 }
 
-async function syncOrders(state: Record<string, unknown> = {}) {
+async function syncOrders(cursor?: unknown) {
   return shopifySync({
     streamKey: 'order',
-    mode: 'backfill',
-    state,
+    query: {},
+    cursor,
     connection: {
       value: 'shpat_test',
       metadata: { connectionVariables: { shop: 'test-shop' } },
@@ -153,7 +153,7 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
             },
           ],
         },
-      ],
+      ]
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -210,7 +210,7 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
             },
           ],
         },
-      ],
+      ]
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -226,7 +226,7 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
     vi.stubGlobal('fetch', (url: string) => {
       if (url.includes('/graphql.json')) {
         return Promise.resolve(
-          jsonResponse({ errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }] }),
+          jsonResponse({ errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }] })
         )
       }
       return Promise.resolve(jsonResponse({ orders: [order] }))
@@ -236,7 +236,7 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
 
     expect(result.records).toHaveLength(0)
     expect(result.rateLimited).toBeDefined()
-    expect(result.nextState.backfillComplete).toBeUndefined()
+    expect(result.cursor).toBeUndefined()
   })
 
   it('pages orders 25 at a time and preserves the cursor for the next page', async () => {
@@ -248,9 +248,9 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
 
     const first = await syncOrders()
     expect(calls[0]!.variables.first).toBe(25)
-    expect(first.nextState.cursor).toEqual({ v: 3, after: 'next-token' })
+    expect(first.cursor).toEqual({ v: 3, after: 'next-token' })
 
-    await syncOrders({ cursor: first.nextState.cursor })
+    await syncOrders(first.cursor)
     expect(calls[1]!.variables).toMatchObject({ first: 25, after: 'next-token' })
   })
 })
@@ -268,7 +268,7 @@ describe('resolvePaidTransaction', () => {
         { kind: 'sale', status: 'pending', gateway: 'b', processedAt: '2024-01-02T00:00:00Z' },
         { kind: 'refund', status: 'success', gateway: 'c', processedAt: '2024-01-03T00:00:00Z' },
         { kind: 'CAPTURE', status: 'SUCCESS', gateway: 'd', processedAt: '2024-01-04T00:00:00Z' },
-      ]),
+      ])
     ).toEqual({ paidAt: '2024-01-04T00:00:00Z', paidGateway: 'd' })
   })
 
@@ -277,7 +277,7 @@ describe('resolvePaidTransaction', () => {
       resolvePaidTransaction([
         { kind: 'capture', status: 'success', gateway: 'x', processedAt: '2024-01-05T00:00:00Z' },
         { kind: 'capture', status: 'success', gateway: 'x', processedAt: '2024-01-02T00:00:00Z' },
-      ])?.paidAt,
+      ])?.paidAt
     ).toBe('2024-01-05T00:00:00Z')
   })
 
@@ -300,7 +300,7 @@ describe('resolveOrderPayment', () => {
     expect(needsPaidTransactionLookup(paidSingle)).toBe(false)
     expect(needsPaidTransactionLookup({ ...paidSingle, financial_status: 'pending' })).toBe(false)
     expect(
-      needsPaidTransactionLookup({ ...paidSingle, payment_gateway_names: ['affirm', 'card'] }),
+      needsPaidTransactionLookup({ ...paidSingle, payment_gateway_names: ['affirm', 'card'] })
     ).toBe(true)
     expect(needsPaidTransactionLookup({ ...paidSingle, payment_terms: {} })).toBe(true)
   })
@@ -355,7 +355,7 @@ describe('42C actual transaction source projection', () => {
           legacyResourceId: String(order.id),
           transactions: [tx(1, '60.00'), tx(2, '40.00'), tx(3, '10.00', 'REFUND')],
         },
-      ],
+      ]
     )
     vi.stubGlobal('fetch', fetchMock)
     const result = await syncOrders()
@@ -412,7 +412,7 @@ describe('the gateway ids on a projected transaction', () => {
             },
           ],
         },
-      ],
+      ]
     )
     vi.stubGlobal('fetch', fetchMock)
     const result = await syncOrders()
