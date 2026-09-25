@@ -464,6 +464,7 @@ export const shopifyConnector = defineDataConnector({
     {
       key: 'order',
       syncMode: 'incremental',
+      periodField: 'createdAt',
       mappings: [
         {
           rootPath: '',

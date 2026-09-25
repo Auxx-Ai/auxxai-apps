@@ -107,6 +107,7 @@ import {
   toProductRow,
   toRawProduct,
 } from './graphql/product'
+import { CUSTOMER_PUSHDOWN, ORDER_PUSHDOWN, PRODUCT_PUSHDOWN } from './graphql/pushdown'
 import { fetchPaymentsStream } from './payments.connector.server'
 
 const PAGE_SIZE = 250
@@ -1558,6 +1559,7 @@ export default async function shopifySync(
         connection: (data) => data.customers,
         toRaw: toRawCustomer,
         toRecord: toCustomerRecord,
+        pushdown: CUSTOMER_PUSHDOWN,
       })
     case 'order': {
       const shopDomain = shopifyHttp(args.connection).shopDomain
@@ -1570,12 +1572,13 @@ export default async function shopifySync(
         toRaw: toRawOrder,
         toRecord: (order) =>
           toOrderRecord(order, new Map([[String(order.id), order.transactions]]), shopDomain),
+        pushdown: ORDER_PUSHDOWN,
       })
     }
     case 'product':
-      // ⚠️ EXPLICITLY UNFILTERED: a snapshot stream archives every product missing from
-      // the crawl, so any filter turns "filtered out" into "deleted". Forcing `snapshot`
-      // keeps an `updated_at` term out of the query; an unknown status throws in the adapter.
+      // Forced `snapshot` keeps an `updated_at` term out of the query. The platform withholds
+      // the stored stream filter here (a filtered crawl would archive by absence), so only
+      // engine clauses like an `id` run arrive. An unknown status throws in the adapter.
       return fetchGraphqlPage<ProductsData, GqlProduct, ProductRow>(
         { ...args, mode: 'snapshot' },
         {
@@ -1585,6 +1588,7 @@ export default async function shopifySync(
           complete: completeVariants,
           toRaw: toProductRow,
           toRecord: (row) => toProductRecord(row.product, row.costs),
+          pushdown: PRODUCT_PUSHDOWN,
         },
       )
     default:
