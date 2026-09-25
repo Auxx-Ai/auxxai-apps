@@ -132,20 +132,14 @@ export const affirmConnector = defineDataConnector({
     'weekly deposit_id can be reconciled against the bank line it produced.',
   requiresConnection: true,
   iconKey: 'banknote',
-  config: z.object({
-    settlementHistoryStartDate: z
-      .string()
-      .regex(/^(\d{4}-\d{2}-\d{2})?$/)
-      .optional()
-      .describe('Settlement history start date (YYYY-MM-DD). Leave blank to import everything.'),
-  }),
+  config: z.object({}),
   streams: [
-    // Incremental preserves the cursor between slices. The fetch deliberately
-    // revisits historical deposits to detect membership and lifecycle changes;
-    // identity is `sourceKey`, so a second sync creates no duplicate rows.
+    // No `since`: every run re-reads from the history floor to catch membership and
+    // lifecycle changes; identity is `sourceKey`, so a second sync creates no duplicates.
     {
       key: 'payout',
-      syncMode: 'incremental',
+      // The settlement date; Affirm sends no settlement timestamp (`issuedAt` is null).
+      query: { period: 'issuedOn' },
       mappings: [
         {
           rootPath: '',
@@ -207,7 +201,7 @@ export const affirmConnector = defineDataConnector({
     // are emitted here with `payoutId: null` — the contract tolerates it.
     {
       key: 'balance_transaction',
-      syncMode: 'incremental',
+      query: { period: 'transactionDate' },
       mappings: [
         {
           rootPath: '',

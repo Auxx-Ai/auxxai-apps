@@ -82,7 +82,7 @@ describe('toRawCustomer', () => {
   it('rejects an unsafe legacyResourceId', () => {
     expect(() => toRawCustomer({ ...customer, legacyResourceId: '9007199254740993' })).toThrow()
     expect(() =>
-      toRawCustomer({ ...customer, legacyResourceId: 'gid://shopify/Customer/1' }),
+      toRawCustomer({ ...customer, legacyResourceId: 'gid://shopify/Customer/1' })
     ).toThrow()
   })
 
@@ -108,8 +108,7 @@ describe('shopifySync customer stream', () => {
     ])
     const result = await shopifySync({
       streamKey: 'customer',
-      mode: 'incremental',
-      state: { updatedSince: '2026-08-01T00:00:00Z' },
+      query: { since: '2026-08-01T00:00:00Z' },
       config: {},
       connection,
     })
@@ -143,9 +142,7 @@ describe('shopifySync customer stream', () => {
         },
       },
     ])
-    expect(result.nextState).toEqual({
-      cursor: { v: 3, after: 'cursor-1' },
-      updatedSince: '2026-08-01T00:00:00Z',
-    })
+    expect(result.cursor).toEqual({ v: 3, after: 'cursor-1' })
+    expect(result.since).toBeUndefined()
   })
 })

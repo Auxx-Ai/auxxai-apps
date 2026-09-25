@@ -21,6 +21,7 @@
 // calls it; the merchant portal says `settlements` / `events`, and the tolerant
 // reader still accepts those. Both are pinned below.
 
+import type { ConnectorQuery } from '@auxx/sdk/data-connectors'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fetchAffirmStream } from '../src/affirm.connector.server'
 
@@ -167,13 +168,13 @@ interface Cursor {
   summary?: Record<string, unknown>
 }
 
-function run(streamKey: string, state: Record<string, unknown>, config: object = {}) {
+function run(streamKey: string, state: { cursor?: unknown }, query: ConnectorQuery = {}) {
   return fetchAffirmStream({
     streamKey,
-    mode: 'incremental',
-    state,
+    query,
+    cursor: state.cursor,
     connection: CONNECTION,
-    config,
+    config: {},
   })
 }
 
@@ -190,14 +191,14 @@ describe('acquisition identity', () => {
     // Nothing was fetched: the acquisition identity is persisted first, so a
     // retry reuses it rather than minting a second one over the same money.
     expect(requests).toHaveLength(0)
-    const cursor = result.nextState.cursor as Cursor
+    const cursor = result.cursor as Cursor
     expect(cursor.phase).toBe('headers')
     expect(cursor.scanId).toBeTruthy()
   })
 
   it('opens the balance_transaction stream in its own phase', async () => {
     const result = await run('balance_transaction', {})
-    expect((result.nextState.cursor as Cursor).phase).toBe('balance')
+    expect((result.cursor as Cursor).phase).toBe('balance')
   })
 
   it('refuses a cursor from another stream rather than reading it as progress', async () => {
@@ -212,7 +213,7 @@ describe('headers phase', () => {
     responses.push(jsonResponse({ data: [SUMMARY], next_page: null }))
     const open = await run('payout', {})
 
-    const result = await run('payout', { cursor: open.nextState.cursor }, {})
+    const result = await run('payout', { cursor: open.cursor }, {})
     const [record] = asRecords(result)
 
     expect(record!.fields.externalId).toBe(DEPOSIT_ID)
@@ -224,43 +225,57 @@ describe('headers phase', () => {
     expect(record!.fields.membership.entries).toEqual([])
     expect(record!.fields.processorTransactions).toEqual([])
 
-    const cursor = result.nextState.cursor as Cursor
+    const cursor = result.cursor as Cursor
     expect(cursor.phase).toBe('members')
     // A day either side of the settlement date. Build plan §3.4 rule 2.
     expect(cursor.window).toEqual({ after: '2026-09-14', before: '2026-09-16' })
   })
 
-  it('applies the configured start date, then does NOT re-apply it on a resumed page', async () => {
+  it('applies the period floor, then does NOT re-apply it on a resumed page', async () => {
+    const query = { period: { from: '2026-09-01T00:00:00.000Z' } }
     responses.push(jsonResponse({ data: [SUMMARY], next_page: 'from_cursor_uuid=abc' }))
-    const open = await run('payout', {})
-    await run(
-      'payout',
-      { cursor: open.nextState.cursor },
-      { settlementHistoryStartDate: '2026-09-01' }
-    )
+    const open = await run('payout', {}, query)
+    await run('payout', { cursor: open.cursor }, query)
 
     expect(requests[0]!.searchParams.get('after')).toBe('2026-09-01')
+    expect(requests[0]!.searchParams.get('before')).toBeNull()
     expect(requests[0]!.searchParams.get('merchant_id')).toBe(MERCHANT_ID)
 
     // Resume: the provider's own cursor carries the position, and re-sending
     // the start date alongside it would re-anchor the scan to the beginning.
     responses.push(jsonResponse({ data: [], next_page: null }))
     const resumed = {
-      ...(open.nextState.cursor as Cursor),
+      ...(open.cursor as Cursor),
       outerCursor: 'from_cursor_uuid=abc',
       headerIndex: 1,
     }
-    await run('payout', { cursor: resumed }, { settlementHistoryStartDate: '2026-09-01' })
+    await run('payout', { cursor: resumed }, query)
 
     expect(requests[1]!.searchParams.get('after')).toBeNull()
     expect(requests[1]!.searchParams.get('from_cursor_uuid')).toBe('abc')
   })
 
-  it('rejects a start date that is not a calendar date', async () => {
-    const open = await run('payout', {})
-    await expect(
-      run('payout', { cursor: open.nextState.cursor }, { settlementHistoryStartDate: 'last week' })
-    ).rejects.toThrow(/YYYY-MM-DD/)
+  it('reads a closed period through the day its exclusive end covers', async () => {
+    responses.push(jsonResponse({ data: [], next_page: null }))
+    const query = {
+      period: { from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' },
+    }
+    const open = await run('payout', {}, query)
+    await run('payout', { cursor: open.cursor }, query)
+
+    expect(requests[0]!.searchParams.get('after')).toBe('2026-08-01')
+    // `to` is exclusive and Affirm's `before` is unproven: read through Aug 31 either way.
+    expect(requests[0]!.searchParams.get('before')).toBe('2026-09-01')
+  })
+
+  it('widens a balance period end by the member window, since events predate settlement', async () => {
+    responses.push(jsonResponse({ data: [], next_page: null }))
+    const query = { period: { to: '2026-09-01T00:00:00.000Z' } }
+    const open = await run('balance_transaction', {}, query)
+    await run('balance_transaction', { cursor: open.cursor }, query)
+
+    expect(requests[0]!.searchParams.get('after')).toBeNull()
+    expect(requests[0]!.searchParams.get('before')).toBe('2026-09-02')
   })
 })
 
@@ -286,11 +301,11 @@ describe('the response envelope', () => {
     responses.push(jsonResponse({ data: [SUMMARY], next_page: null }))
     const open = await run('payout', {})
 
-    const result = await run('payout', { cursor: open.nextState.cursor })
+    const result = await run('payout', { cursor: open.cursor })
     expect(requests[0]!.pathname).toMatch(/\/settlements\/daily$/)
     expect(asRecords(result)[0]!.fields.externalId).toBe(DEPOSIT_ID)
     expect(asRecords(result)[0]!.fields.amount).toBe('3579.30')
-    expect((result.nextState.cursor as Cursor).phase).toBe('members')
+    expect((result.cursor as Cursor).phase).toBe('members')
   })
 
   it('reads /settlements/events rows out of `data`', async () => {
@@ -306,7 +321,7 @@ describe('the response envelope', () => {
   it('still accepts the portal’s `settlements` and `events` names', async () => {
     responses.push(jsonResponse({ settlements: [SUMMARY], next_page: null }))
     const open = await run('payout', {})
-    const header = await run('payout', { cursor: open.nextState.cursor })
+    const header = await run('payout', { cursor: open.cursor })
     expect(asRecords(header)[0]!.fields.externalId).toBe(DEPOSIT_ID)
 
     responses.push(jsonResponse({ events: [MEMBER_EVENT], next_page: null }))
@@ -317,7 +332,7 @@ describe('the response envelope', () => {
   it('refuses a body with no collection at all rather than reporting an empty page', async () => {
     responses.push(jsonResponse({ next_page: null }))
     const open = await run('payout', {})
-    await expect(run('payout', { cursor: open.nextState.cursor })).rejects.toThrow(/no rows/i)
+    await expect(run('payout', { cursor: open.cursor })).rejects.toThrow(/no rows/i)
   })
 })
 
@@ -375,7 +390,7 @@ describe('membership — the widened window, grouped locally', () => {
 
     expect(membership.complete).toBe(true)
     expect(membership.reason).toBeNull()
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
 
     // The child rows the connector fans onto processor_balance_entry.
     expect(record!.fields.processorTransactions).toHaveLength(1)
@@ -393,8 +408,8 @@ describe('membership — the widened window, grouped locally', () => {
     expect(membership.page).toMatchObject({ terminal: false, nextCursor: 'to_cursor_uuid=next' })
     // The entries seen so far are still emitted — incomplete, not discarded.
     expect(membership.entries).toHaveLength(1)
-    expect((result.nextState.cursor as Cursor).memberCursor).toBe('to_cursor_uuid=next')
-    expect((result.nextState.cursor as Cursor).pageIndex).toBe(1)
+    expect((result.cursor as Cursor).memberCursor).toBe('to_cursor_uuid=next')
+    expect((result.cursor as Cursor).pageIndex).toBe(1)
   })
 
   it('refuses to treat a repeated page cursor as progress', async () => {
@@ -405,7 +420,7 @@ describe('membership — the widened window, grouped locally', () => {
 
     expect(membership.complete).toBe(false)
     expect(membership.reason).toMatch(/repeated a membership page cursor/i)
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
   })
 
   it('records a failed membership read as incomplete rather than losing the deposit', async () => {
@@ -461,7 +476,7 @@ describe('balance_transaction — the standalone feed', () => {
     expect(records[0]!.fields.rejectionReason).toBeNull()
     // The same row that belongs to a deposit is emitted here too, carrying it.
     expect(records[1]!.fields.payoutId).toBe(DEPOSIT_ID)
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
   })
 
   it('retains an unreadable row under a scan-local id instead of dropping it', async () => {
@@ -475,8 +490,8 @@ describe('balance_transaction — the standalone feed', () => {
   it('advances its page cursor and stops on a repeat', async () => {
     responses.push(jsonResponse({ data: [], next_page: 'page2' }))
     const first = await run('balance_transaction', { cursor: balanceCursor() })
-    expect((first.nextState.cursor as Cursor).outerCursor).toBe('page2')
-    expect((first.nextState.cursor as Cursor).pageIndex).toBe(1)
+    expect((first.cursor as Cursor).outerCursor).toBe('page2')
+    expect((first.cursor as Cursor).pageIndex).toBe(1)
 
     responses.push(jsonResponse({ data: [], next_page: 'page2' }))
     await expect(
@@ -505,11 +520,10 @@ describe('429', () => {
 
     expect(result.records).toEqual([])
     expect(result.rateLimited).toEqual({ retryAfterMs: 30_000 })
-    // The cursor is handed back UNCHANGED — the throttled page is retried, and
-    // no watermark moves past a page that was never read.
-    expect(result.nextState.cursor).toEqual(cursor)
-    expect(result.nextState.backfillComplete).toBeUndefined()
-    expect(result.nextState.updatedSince).toBeUndefined()
+    // No cursor and no `since`: the platform retries the SAME page, and no marker
+    // moves past a page that was never read.
+    expect(result.cursor).toBeUndefined()
+    expect(result.since).toBeUndefined()
     expect(Date.now() - started).toBeLessThan(1000)
   })
 
@@ -533,7 +547,7 @@ describe('429', () => {
     expect(result.records).toEqual([])
     // A missing Retry-After must not become 0 — that reads as "retry now".
     expect(result.rateLimited).toEqual({ retryAfterMs: undefined })
-    expect(result.nextState.cursor).toEqual(cursor)
+    expect(result.cursor).toBeUndefined()
   })
 })
 
@@ -542,8 +556,7 @@ describe('connection', () => {
     await expect(
       fetchAffirmStream({
         streamKey: 'payout',
-        mode: 'incremental',
-        state: {},
+        query: {},
         connection: { value: '', fields: { merchant_id: MERCHANT_ID } },
         config: {},
       })

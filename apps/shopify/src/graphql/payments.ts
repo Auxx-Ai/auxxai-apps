@@ -43,11 +43,11 @@ export const PAYOUT_MEMBERS_QUERY = `query PayoutMembers($after: String, $query:
   }
 }`
 
-/** The whole balance history by processing date. */
-export const BALANCE_TRANSACTIONS_QUERY = `query BalanceTransactions($after: String) {
+/** The balance history by processing date; `$query` carries the `processed_at` period. */
+export const BALANCE_TRANSACTIONS_QUERY = `query BalanceTransactions($after: String, $query: String) {
   shopifyPaymentsAccount {
     id
-    balanceTransactions(first: 250, after: $after, sortKey: PROCESSED_AT) {
+    balanceTransactions(first: 250, after: $after, query: $query, sortKey: PROCESSED_AT) {
       pageInfo { hasNextPage endCursor }
       nodes { ${BALANCE_NODE} }
     }

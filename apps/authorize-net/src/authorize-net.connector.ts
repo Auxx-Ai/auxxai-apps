@@ -11,9 +11,7 @@ import {
   processorFieldMappings,
 } from '@auxx/sdk/financial-source'
 import { z } from '@auxx/sdk/tools'
-import authorizeNetSync, {
-  AUTHORIZE_NET_DEFAULT_HISTORY_START,
-} from './authorize-net.connector.server'
+import authorizeNetSync from './authorize-net.connector.server'
 
 // Synthetic: no live probe has run, so the preview uses the vendor reference's examples.
 const EXAMPLE_BATCH_ID = '10198080'
@@ -86,21 +84,14 @@ export const authorizeNetConnector = defineDataConnector({
     'batch can be reconciled against the bank deposit it produced.',
   requiresConnection: true,
   iconKey: 'banknote',
-  config: z.object({
-    settlementHistoryStartDate: z
-      .string()
-      .regex(/^(\d{4}-\d{2}-\d{2})?$/)
-      .optional()
-      .describe(
-        `Settlement history start date (YYYY-MM-DD). Defaults to ${AUTHORIZE_NET_DEFAULT_HISTORY_START}.`
-      ),
-  }),
+  config: z.object({}),
   streams: [
-    // History is deliberately re-read to catch membership changes; identity is
-    // `sourceKey`, so a second sync creates no duplicate rows.
+    // No `since`: every run re-reads from the history floor to catch membership changes;
+    // identity is `sourceKey`, so a second sync creates no duplicate rows.
     {
       key: 'payout',
-      syncMode: 'incremental',
+      // `settlementTimeUTC`, the field `getSettledBatchList`'s date range filters on.
+      query: { period: 'issuedAt' },
       mappings: [
         {
           rootPath: '',

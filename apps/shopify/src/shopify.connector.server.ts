@@ -11,10 +11,11 @@
 //   • `product`  → GraphQL `products` (src/graphql/product.ts), contributes into the
 //                  native `product` / `part` entities (money plan 37 §7.1).
 //
-// Every stream returns ONE page of records plus a flat cursor (`fetchGraphqlPage`,
-// src/graphql/paged.ts) and the platform re-invokes with `state.cursor` until
-// `backfillComplete`. A throttle is surfaced as `rateLimited` (not thrown) so the
-// platform pauses + re-enqueues from the same cursor.
+// Every stream fetches exactly `args.query` (`searchQuery`, src/graphql/paged.ts),
+// returning ONE page of records plus a cursor; the platform re-invokes with it until
+// a page returns none, and a `since` stream's last page returns its max `updated_at`.
+// A throttle is surfaced as `rateLimited` (not thrown) so the platform pauses and
+// retries the same cursor.
 //
 // Connection contract: resolve from `args.connection` — `value` is the Admin API
 // access token, `metadata` carries the shop domain.
@@ -107,7 +108,6 @@ import {
   toProductRow,
   toRawProduct,
 } from './graphql/product'
-import { CUSTOMER_PUSHDOWN, ORDER_PUSHDOWN, PRODUCT_PUSHDOWN } from './graphql/pushdown'
 import { fetchPaymentsStream } from './payments.connector.server'
 
 const PAGE_SIZE = 250
@@ -334,7 +334,7 @@ function lineTaxTotal(taxLines: RawTaxLine[] | null | undefined): number | null 
   if (!taxLines) return null
   return taxLines.reduce(
     (sum, tl) => sum + (decimalToMinorUnits(tl.price_set?.shop_money?.amount ?? null) ?? 0),
-    0,
+    0
   )
 }
 
@@ -525,7 +525,7 @@ interface ProjectedFulfillmentLine {
  */
 function projectFulfillmentLine(
   fulfillmentId: string | null,
-  li: RawFulfillmentLine,
+  li: RawFulfillmentLine
 ): ProjectedFulfillmentLine {
   const lineItemId = li.id != null ? String(li.id) : null
   return {
@@ -727,7 +727,7 @@ function lineDisposition(restockType: string | null | undefined): CreditMemoLine
  * settled yet") and must stay distinguishable from "not supplied".
  */
 function refundAmountRefunded(
-  transactions: RawRefundTransaction[] | null | undefined,
+  transactions: RawRefundTransaction[] | null | undefined
 ): number | null {
   if (!transactions) return null
   return transactions
@@ -752,7 +752,7 @@ function refundMoneyPending(transactions: RawRefundTransaction[] | null | undefi
  * a resync does not put it back.
  */
 function creditMemoReason(
-  dispositions: ReadonlyArray<CreditMemoLineDisposition | null>,
+  dispositions: ReadonlyArray<CreditMemoLineDisposition | null>
 ): ChannelCreditMemoReason {
   return dispositions.length > 0 && dispositions.every((d) => d === 'cancelled')
     ? 'cancellation'
@@ -837,7 +837,7 @@ function projectRefundLine(rl: RawRefundLineItem, sortOrder: number): ProjectedC
 function adjustmentLine(
   refundId: string,
   amountRefunded: number | null,
-  lines: ReadonlyArray<ProjectedCreditMemoLine>,
+  lines: ReadonlyArray<ProjectedCreditMemoLine>
 ): ProjectedCreditMemoLine | null {
   if (amountRefunded == null) return null
   const credited = lines.reduce((sum, l) => sum + (l.subtotal ?? 0) + (l.taxTotal ?? 0), 0)
@@ -982,7 +982,7 @@ function isPaid(o: Pick<RawOrder, 'financial_status'>): boolean {
  * an unpaid order: there is nothing to look up yet.
  */
 export function needsPaidTransactionLookup(
-  o: Pick<RawOrder, 'financial_status' | 'payment_gateway_names' | 'payment_terms'>,
+  o: Pick<RawOrder, 'financial_status' | 'payment_gateway_names' | 'payment_terms'>
 ): boolean {
   if (!isPaid(o)) return false
   return (o.payment_gateway_names ?? []).length > 1 || o.payment_terms != null
@@ -1038,7 +1038,7 @@ export function resolveOrderPayment(
     RawOrder,
     'id' | 'financial_status' | 'payment_gateway_names' | 'payment_terms' | 'processed_at'
   >,
-  transactionsByOrderId: ReadonlyMap<string, OrderTransactionLike[]>,
+  transactionsByOrderId: ReadonlyMap<string, OrderTransactionLike[]>
 ): OrderPayment {
   if (!isPaid(o)) return UNPAID
   if (needsPaidTransactionLookup(o)) {
@@ -1124,7 +1124,7 @@ export interface RawOrder {
 function toOrderRecord(
   o: RawOrder,
   transactionsByOrderId: ReadonlyMap<string, OrderTransactionLike[]> = new Map(),
-  sourceShopDomain: string,
+  sourceShopDomain: string
 ): ConnectorRecord {
   const fulfilled = deriveFulfillments(o)
   const payment = resolveOrderPayment(o, transactionsByOrderId)
@@ -1178,8 +1178,8 @@ function toOrderRecord(
             (o.refunds ?? [])
               .find((refund) =>
                 (refund.transactions ?? []).some(
-                  (leg) => String(leg.id) === transaction.id?.split('/').slice(-1)[0],
-                ),
+                  (leg) => String(leg.id) === transaction.id?.split('/').slice(-1)[0]
+                )
               )
               ?.id?.toString() ?? null,
           paymentId: transaction.paymentId ?? null,
@@ -1210,10 +1210,9 @@ function toOrderRecord(
       // Rule 1's single gateway has nothing to filter; a rule-2 lookup projects
       // only its successful transactions' gateways (58 §7, D12), dropping a
       // declined attempt's name.
-      paymentGateways: (
-        needsPaidTransactionLookup(o)
-          ? resolveSuccessfulGateways(transactionsByOrderId.get(String(o.id)) ?? [])
-          : (o.payment_gateway_names ?? [])
+      paymentGateways: (needsPaidTransactionLookup(o)
+        ? resolveSuccessfulGateways(transactionsByOrderId.get(String(o.id)) ?? [])
+        : (o.payment_gateway_names ?? [])
       ).join(','),
       // The paid instant and the gateway that actually took the money
       // (`order_paid_at` / `order_paid_gateway`, accounting plan 29 §3.1).
@@ -1257,7 +1256,7 @@ function toOrderRecord(
         const quantity = typeof li.quantity === 'number' ? li.quantity : 0
         const discountMinor = (li.discount_allocations ?? []).reduce(
           (sum, allocation) => sum + (decimalToMinorUnits(allocation.amount) ?? 0),
-          0,
+          0
         )
         // Per-line fulfillment rollup. A line never touched by a live
         // fulfillment gets an explicit zeroed shape rather than a missing
@@ -1371,7 +1370,7 @@ function toOrderRecord(
           (li.discount_allocations ?? []).map((allocation) => ({
             line_item_id: li.id != null ? String(li.id) : null,
             amount: allocation.amount,
-          })),
+          }))
         ),
       },
     },
@@ -1455,7 +1454,7 @@ function productQualifiedTitle(productTitle: string, variantTitle: string | null
  */
 export function toProductRecord(
   p: RawProduct,
-  costs: ReadonlyMap<string, string | null>,
+  costs: ReadonlyMap<string, string | null>
 ): ConnectorRecord {
   // Image URLs pass through verbatim: the CDN's `?v=` changes when an image is
   // replaced, and the platform compares the URL exactly to skip re-downloads.
@@ -1507,47 +1506,52 @@ export function toProductRecord(
   }
 }
 
-// ── webhook-steered product fetch ────────────────────────────────────────────────
+// ── product fetch ────────────────────────────────────────────────────────────────
 
 /**
- * Steered fetch for an `inventory_levels/update` delivery, which carries only the
- * `inventory_item_id`: one query resolves item → variant → product with the crawl's
- * selection, so the `variants[]` fan-out refreshes every sibling variant.
+ * The product stream: `ids` of kind `inventoryItem` come from an `inventory_levels/update`
+ * delivery, which carries only the `inventory_item_id`. One query per id resolves
+ * item → variant → product with the crawl's selection, so the `variants[]` fan-out
+ * refreshes every sibling variant. Any other query is a plain product search.
  */
-async function fetchSteeredProduct(
-  args: ConnectorExecuteArgs,
-  inventoryItemId: string,
-): Promise<ConnectorFetchResult> {
-  const http = shopifyHttp(args.connection)
-  const res = await shopifyGraphql<SteeredProductData>(http, STEERED_PRODUCT_QUERY, {
-    id: `gid://shopify/InventoryItem/${legacyId(inventoryItemId)}`,
-  })
-  if (!res.ok) {
-    return { records: [], nextState: {}, rateLimited: { retryAfterMs: res.retryAfterMs } }
+async function fetchProducts(args: ConnectorExecuteArgs): Promise<ConnectorFetchResult> {
+  if (args.query.idKind === undefined) {
+    return fetchGraphqlPage<ProductsData, GqlProduct, ProductRow>(args, {
+      query: PRODUCTS_QUERY,
+      first: PRODUCT_PAGE_SIZE,
+      connection: (data) => data.products,
+      complete: completeVariants,
+      toRaw: toProductRow,
+      toRecord: (row) => toProductRecord(row.product, row.costs),
+    })
   }
-  const product = res.data.inventoryItem?.variant?.product
-  // Item deleted/detached between the delivery and this fetch — nothing to refresh.
-  if (!product) return { records: [], nextState: { backfillComplete: true } }
+  if (args.query.idKind !== 'inventoryItem') {
+    throw new Error(`shopify: product stream cannot fetch ids of kind "${args.query.idKind}"`)
+  }
 
-  const completed = await completeVariants([product], http)
-  if (!completed.ok) {
-    return { records: [], nextState: {}, rateLimited: { retryAfterMs: completed.retryAfterMs } }
+  const http = shopifyHttp(args.connection)
+  const products = new Map<string, GqlProduct>()
+  for (const inventoryItemId of args.query.ids ?? []) {
+    const res = await shopifyGraphql<SteeredProductData>(http, STEERED_PRODUCT_QUERY, {
+      id: `gid://shopify/InventoryItem/${legacyId(inventoryItemId)}`,
+    })
+    if (!res.ok) return { records: [], rateLimited: { retryAfterMs: res.retryAfterMs } }
+    // Item deleted/detached between the delivery and this fetch — nothing to refresh.
+    const product = res.data.inventoryItem?.variant?.product
+    if (product) products.set(product.id, product)
   }
+  if (products.size === 0) return { records: [] }
+
+  const completed = await completeVariants([...products.values()], http)
+  if (!completed.ok) return { records: [], rateLimited: { retryAfterMs: completed.retryAfterMs } }
   return {
     records: completed.data.map((p) => toProductRecord(toRawProduct(p), inventoryItemCosts(p))),
-    nextState: { backfillComplete: true },
   }
 }
 
 export default async function shopifySync(
-  args: ConnectorExecuteArgs,
+  args: ConnectorExecuteArgs
 ): Promise<ConnectorFetchResult> {
-  // Webhook-steered partial fetch (inventory_levels/update → product stream): the
-  // platform passes the delivery's declared paths as triggerContext — fetch ONLY the
-  // affected product instead of crawling the collection.
-  if (args.streamKey === 'product' && args.triggerContext?.resourceId) {
-    return fetchSteeredProduct(args, args.triggerContext.resourceId)
-  }
   switch (args.streamKey) {
     case 'payout':
     case 'balance_transaction':
@@ -1559,7 +1563,7 @@ export default async function shopifySync(
         connection: (data) => data.customers,
         toRaw: toRawCustomer,
         toRecord: toCustomerRecord,
-        pushdown: CUSTOMER_PUSHDOWN,
+        since: true,
       })
     case 'order': {
       const shopDomain = shopifyHttp(args.connection).shopDomain
@@ -1572,25 +1576,11 @@ export default async function shopifySync(
         toRaw: toRawOrder,
         toRecord: (order) =>
           toOrderRecord(order, new Map([[String(order.id), order.transactions]]), shopDomain),
-        pushdown: ORDER_PUSHDOWN,
+        since: true,
       })
     }
     case 'product':
-      // Forced `snapshot` keeps an `updated_at` term out of the query. The platform withholds
-      // the stored stream filter here (a filtered crawl would archive by absence), so only
-      // engine clauses like an `id` run arrive. An unknown status throws in the adapter.
-      return fetchGraphqlPage<ProductsData, GqlProduct, ProductRow>(
-        { ...args, mode: 'snapshot' },
-        {
-          query: PRODUCTS_QUERY,
-          first: PRODUCT_PAGE_SIZE,
-          connection: (data) => data.products,
-          complete: completeVariants,
-          toRaw: toProductRow,
-          toRecord: (row) => toProductRecord(row.product, row.costs),
-          pushdown: PRODUCT_PUSHDOWN,
-        },
-      )
+      return fetchProducts(args)
     default:
       throw new Error(`shopify: unknown stream "${args.streamKey}"`)
   }

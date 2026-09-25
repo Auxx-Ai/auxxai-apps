@@ -1,6 +1,6 @@
 // apps/shopify/tests/graphql-payments.test.ts
 
-import type { ConnectorRecord } from '@auxx/sdk/data-connectors'
+import type { ConnectorQuery, ConnectorRecord } from '@auxx/sdk/data-connectors'
 import { InsufficientPermissionsError } from '@auxx/sdk/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { balanceEvidence, payoutEvidence } from '../src/blocks/shopify/shared/payments-evidence'
@@ -56,8 +56,8 @@ function account(key: 'payouts' | 'balanceTransactions', nodes: unknown[], next?
   return { body: { data: { shopifyPaymentsAccount: { id: ACCOUNT, [key]: { nodes, pageInfo } } } } }
 }
 
-function run(streamKey: string, state: Record<string, unknown> = {}) {
-  return shopifySync({ streamKey, mode: 'incremental', state, config: {}, connection })
+function run(streamKey: string, prev: { cursor?: unknown } = {}, query: ConnectorQuery = {}) {
+  return shopifySync({ streamKey, query, cursor: prev.cursor, config: {}, connection })
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -108,10 +108,10 @@ describe('toRawPayout', () => {
     const raw = toRawPayout({ ...payoutNode, net: { amount: '0.10000', currencyCode: 'JPY' } })
     expect(raw).toMatchObject({ amount: '0.10000', currency: 'JPY' })
     expect(toRawPayout({ ...payoutNode, legacyResourceId: '9007199254740993' }).id).toBe(
-      '9007199254740993',
+      '9007199254740993'
     )
     expect(() =>
-      payoutEvidence(toRawPayout({ ...payoutNode, legacyResourceId: 'gid://x/1' })),
+      payoutEvidence(toRawPayout({ ...payoutNode, legacyResourceId: 'gid://x/1' }))
     ).toThrow('source ID')
   })
 })
@@ -187,8 +187,8 @@ describe('shopifySync payments streams over GraphQL', () => {
     ]) {
       const result = await run('payout', { cursor })
       expect(result.records).toEqual([])
-      expect(result.nextState.cursor).toMatchObject({ version: 3, phase: 'headers', pageIndex: 0 })
-      expect((result.nextState.cursor as { scanId: string }).scanId).not.toBe('old')
+      expect(result.cursor).toMatchObject({ version: 3, phase: 'headers', pageIndex: 0 })
+      expect((result.cursor as { scanId: string }).scanId).not.toBe('old')
     }
     expect(calls).toHaveLength(0)
   })
@@ -199,7 +199,7 @@ describe('shopifySync payments streams over GraphQL', () => {
       account('balanceTransactions', [transactionNode]),
     ])
     const seed = await run('payout')
-    const header = await run('payout', seed.nextState)
+    const header = await run('payout', seed)
     expect(calls[0]!.url).toBe('https://test-shop.myshopify.com/admin/api/2026-07/graphql.json')
     expect(calls[0]!.body.query).toContain('payouts(first: 1')
     expect(calls[0]!.body.variables).toEqual({ after: null, query: null })
@@ -208,7 +208,7 @@ describe('shopifySync payments streams over GraphQL', () => {
       fields: { amount: '97.00', issuedOn: '2026-09-12', externalAccountId: ACCOUNT },
     })
 
-    const members = await run('payout', header.nextState)
+    const members = await run('payout', header)
     expect(calls[1]!.body.query).toContain('balanceTransactions(first: 250')
     expect(calls[1]!.body.variables).toEqual({ after: null, query: 'payments_transfer_id:10' })
     expect((members.records as ConnectorRecord[])[0]!.fields).toMatchObject({
@@ -217,7 +217,7 @@ describe('shopifySync payments streams over GraphQL', () => {
         entries: [{ id: '21', payoutId: '10', sourceOrderId: '41', net: '97.00' }],
       },
     })
-    expect(members.nextState.cursor).toMatchObject({
+    expect(members.cursor).toMatchObject({
       phase: 'headers',
       outerCursor: 'payout-cursor',
       headerIndex: 1,
@@ -232,14 +232,48 @@ describe('shopifySync payments streams over GraphQL', () => {
       ]),
     ])
     const seed = await run('balance_transaction')
-    const first = await run('balance_transaction', seed.nextState)
+    const first = await run('balance_transaction', seed)
     expect(calls[0]!.body.query).toContain('sortKey: PROCESSED_AT')
-    expect(calls[0]!.body.variables).toEqual({ after: null })
+    expect(calls[0]!.body.variables).toEqual({ after: null, query: null })
     expect((first.records as ConnectorRecord[]).map((r) => r.externalId)).toEqual(['21'])
-    const second = await run('balance_transaction', first.nextState)
-    expect(calls[1]!.body.variables).toEqual({ after: 'bt-1' })
+    const second = await run('balance_transaction', first)
+    expect(calls[1]!.body.variables).toEqual({ after: 'bt-1', query: null })
     expect((second.records as ConnectorRecord[]).map((r) => r.externalId)).toEqual(['22'])
-    expect(second.nextState).toEqual({ backfillComplete: true })
+    expect(second.cursor).toBeUndefined()
+  })
+
+  it('bounds the balance stream by the period, whole days upstream and exact per row', async () => {
+    const calls = stubGraphql([
+      account('balanceTransactions', [
+        transactionNode,
+        {
+          ...transactionNode,
+          id: 'gid://shopify/ShopifyPaymentsBalanceTransaction/22',
+          transactionDate: '2026-09-11T13:00:00Z',
+        },
+      ]),
+    ])
+    const query = { period: { from: '2026-09-01T00:00:00Z', to: '2026-09-11T12:00:00Z' } }
+    const seed = await run('balance_transaction', {}, query)
+    const result = await run('balance_transaction', seed, query)
+    expect(calls[0]!.body.variables).toEqual({
+      after: null,
+      query: 'processed_at:>=2026-09-01 AND processed_at:<2026-09-12',
+    })
+    // The whole-day search over-reads to the 12th; the exclusive `to` drops the later row.
+    expect((result.records as ConnectorRecord[]).map((r) => r.externalId)).toEqual(['21'])
+  })
+
+  it('bounds payout headers by issued date', async () => {
+    const calls = stubGraphql([account('payouts', [])])
+    const query = { period: { from: '2026-01-01T00:00:00Z', to: '2026-02-01T00:00:00Z' } }
+    const seed = await run('payout', {}, query)
+    const result = await run('payout', seed, query)
+    expect(calls[0]!.body.variables).toEqual({
+      after: null,
+      query: 'issued_at:>=2026-01-01 AND issued_at:<2026-02-01',
+    })
+    expect(result).toEqual({ records: [] })
   })
 
   it('keeps the cursor on a THROTTLED response', async () => {
@@ -257,10 +291,9 @@ describe('shopifySync payments streams over GraphQL', () => {
       },
     ])
     const seed = await run('balance_transaction')
-    const result = await run('balance_transaction', seed.nextState)
+    const result = await run('balance_transaction', seed)
     expect(result).toEqual({
       records: [],
-      nextState: { cursor: seed.nextState.cursor },
       rateLimited: { retryAfterMs: 2000 },
     })
   })
@@ -271,16 +304,14 @@ describe('shopifySync payments streams over GraphQL', () => {
       { body: { errors: [{ message: 'denied', extensions: { code: 'ACCESS_DENIED' } }] } },
     ])
     const seed = await run('payout')
-    const header = await run('payout', seed.nextState)
-    await expect(run('payout', header.nextState)).rejects.toBeInstanceOf(
-      InsufficientPermissionsError,
-    )
+    const header = await run('payout', seed)
+    await expect(run('payout', header)).rejects.toBeInstanceOf(InsufficientPermissionsError)
   })
 
   it('records an unknown payout status as a rejected header and skips its membership', async () => {
     const calls = stubGraphql([account('payouts', [{ ...payoutNode, status: 'ACTION_REQUIRED' }])])
     const seed = await run('payout')
-    const result = await run('payout', seed.nextState)
+    const result = await run('payout', seed)
     expect((result.records as ConnectorRecord[])[0]).toMatchObject({
       externalId: expect.stringMatching(/^rejected:/),
       fields: {
@@ -288,7 +319,7 @@ describe('shopifySync payments streams over GraphQL', () => {
         raw: { status: 'ACTION_REQUIRED' },
       },
     })
-    expect(result.nextState).toEqual({ backfillComplete: true })
+    expect(result.cursor).toBeUndefined()
     expect(calls).toHaveLength(1)
   })
 })

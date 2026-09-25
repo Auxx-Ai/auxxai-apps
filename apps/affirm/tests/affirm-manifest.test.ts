@@ -20,9 +20,12 @@ import { fetchAffirmStream } from '../src/affirm.connector.server'
 const stream = (key: string) => affirmConnector.streams.find((s) => s.key === key)!
 
 describe('the two streams', () => {
-  it('declares exactly two, both incremental', () => {
+  it('declares exactly two, both period-bounded rescans', () => {
     expect(affirmConnector.streams.map((s) => s.key)).toEqual(['payout', 'balance_transaction'])
-    expect(affirmConnector.streams.map((s) => s.syncMode)).toEqual(['incremental', 'incremental'])
+    expect(affirmConnector.streams.map((s) => s.query)).toEqual([
+      { period: 'issuedOn' },
+      { period: 'transactionDate' },
+    ])
     expect(affirmConnector.requiresConnection).toBe(true)
   })
 
@@ -197,30 +200,28 @@ describe('what the connector actually emits', () => {
 
     const result = await fetchAffirmStream({
       streamKey: 'payout',
-      mode: 'incremental',
+      query: {},
       connection: {
         value: '',
         fields: { merchant_id: '07JVNWWI5PZM8L7Y', public_key: 'p', private_key: 's' },
       },
       config: {},
-      state: {
-        cursor: {
-          version: 1,
-          streamKey: 'payout',
-          scanId: 'scan',
-          startedAt: '2026-09-15T00:00:00Z',
-          phase: 'members',
-          merchantId: '07JVNWWI5PZM8L7Y',
-          pageIndex: 0,
-          headerIndex: 0,
-          summary: {
-            deposit_id: 'I5Y8PHAWWSSS2WJ',
-            date: '2026-09-15',
-            total_settled: 357930,
-            currency: 'USD',
-          },
-          window: { after: '2026-09-14', before: '2026-09-16' },
+      cursor: {
+        version: 1,
+        streamKey: 'payout',
+        scanId: 'scan',
+        startedAt: '2026-09-15T00:00:00Z',
+        phase: 'members',
+        merchantId: '07JVNWWI5PZM8L7Y',
+        pageIndex: 0,
+        headerIndex: 0,
+        summary: {
+          deposit_id: 'I5Y8PHAWWSSS2WJ',
+          date: '2026-09-15',
+          total_settled: 357930,
+          currency: 'USD',
         },
+        window: { after: '2026-09-14', before: '2026-09-16' },
       },
     })
 

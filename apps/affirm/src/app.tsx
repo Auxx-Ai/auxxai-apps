@@ -108,8 +108,8 @@ export function App() {
       </TextBlock>
       <TextBlock align="left">
         Connect with your Merchant ID and the public and private API keys from the API Keys tab of
-        the Affirm merchant portal. Deposits are imported from the start date set on the connector,
-        or from the beginning if you leave it blank.
+        the Affirm merchant portal. Deposits are imported from the Import history from date set on
+        the connector, or from the beginning if you leave it blank.
       </TextBlock>
     </>
   )

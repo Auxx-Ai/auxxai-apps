@@ -1,5 +1,6 @@
 // apps/shopify/tests/graphql-order.test.ts
 
+import type { ConnectorQuery } from '@auxx/sdk/data-connectors'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CANCEL_REASON,
@@ -45,7 +46,7 @@ const fulfillment = (
   status: string,
   displayStatus: string | null,
   createdAt: string,
-  quantity: number,
+  quantity: number
 ): GqlFulfillment => ({
   id: `gid://shopify/Fulfillment/${id}`,
   legacyResourceId: String(id),
@@ -214,8 +215,8 @@ const ordersPage = (nodes: GqlOrder[], endCursor: string | null = null) => ({
   },
 })
 
-function syncOrders(state: Record<string, unknown> = { updatedSince: '2026-09-01T00:00:00Z' }) {
-  return shopifySync({ streamKey: 'order', mode: 'incremental', state, config: {}, connection })
+function syncOrders(cursor?: unknown, query: ConnectorQuery = { since: '2026-09-01T00:00:00Z' }) {
+  return shopifySync({ streamKey: 'order', query, cursor, config: {}, connection })
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -576,7 +577,7 @@ describe('no silent truncation', () => {
 
   it('re-queries a full plain list at the maximum and projects the complete list', async () => {
     const full = Array.from({ length: 50 }, (_, i) =>
-      capture(20000 + i, '1.00', GUEST.processedAt!),
+      capture(20000 + i, '1.00', GUEST.processedAt!)
     )
     const calls = stubGraphql([
       ordersPage([{ ...GUEST, transactions: full }]),
@@ -618,11 +619,9 @@ describe('no silent truncation', () => {
         },
       },
     ])
-    const state = { cursor: { v: 3, after: 'prev' }, updatedSince: '2026-09-01T00:00:00Z' }
-    const result = await syncOrders(state)
-    expect(result.records).toEqual([])
-    expect(result.rateLimited).toEqual({ retryAfterMs: 2000 })
-    expect(result.nextState).toEqual(state)
+    const result = await syncOrders({ v: 3, after: 'prev' })
+    // No cursor and no since: the platform retries the same page.
+    expect(result).toEqual({ records: [], rateLimited: { retryAfterMs: 2000 } })
   })
 })
 
@@ -641,10 +640,8 @@ describe('shopifySync order stream', () => {
       after: null,
       query: "updated_at:>='2026-09-01T00:00:00.000Z'",
     })
-    expect(result.nextState).toEqual({
-      cursor: { v: 3, after: 'c-1' },
-      updatedSince: '2026-09-01T00:00:00Z',
-    })
+    expect(result.cursor).toEqual({ v: 3, after: 'c-1' })
+    expect(result.since).toBeUndefined()
 
     const [order, guest] = result.records
     expect(order).toMatchObject({ streamKey: 'order', externalId: '1001', displayName: '#1001' })
@@ -673,13 +670,22 @@ describe('shopifySync order stream', () => {
     expect(guest!.fields.customer).toBeNull()
   })
 
-  it('advances the watermark to the page max on the last page', async () => {
+  it('returns the page max as since on the last page', async () => {
     stubGraphql([ordersPage([ORDER, GUEST])])
     const result = await syncOrders()
-    expect(result.nextState).toEqual({
-      cursor: undefined,
-      updatedSince: '2026-09-06T09:00:00Z',
-      backfillComplete: true,
+    expect(result.cursor).toBeUndefined()
+    expect(result.since).toBe('2026-09-06T09:00:00Z')
+  })
+
+  it('sends a period re-import as created_at bounds, and ids as an id search', async () => {
+    const calls = stubGraphql([ordersPage([]), ordersPage([])])
+    await syncOrders(undefined, {
+      period: { from: '2026-08-01T00:00:00Z', to: '2026-09-01T00:00:00Z' },
     })
+    await syncOrders(undefined, { ids: ['1001', '1002'] })
+    expect(calls[0]!.body.variables.query).toBe(
+      "created_at:>='2026-08-01T00:00:00.000Z' AND created_at:<'2026-09-01T00:00:00.000Z'"
+    )
+    expect(calls[1]!.body.variables.query).toBe('(id:1001 OR id:1002)')
   })
 })

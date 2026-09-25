@@ -35,8 +35,7 @@ async function main() {
 
   const result = await shopifySync({
     streamKey: 'order',
-    mode: 'backfill',
-    state: {},
+    query: {},
     connection: { value: TOKEN, metadata: { connectionVariables: { shop: SHOP } } },
   } as never)
 
@@ -44,9 +43,9 @@ async function main() {
   console.log(`\nFetched ${records.length} order records from ${SHOP}\n`)
 
   // ── watermark ───────────────────────────────────────────────────────────────
-  const next = (result as any).nextState
-  console.log('WATERMARK')
-  console.log(`  nextState.updatedSince = ${next.updatedSince}`)
+  const since = (result as any).since
+  console.log('SINCE')
+  console.log(`  since = ${since}`)
   // `updated_at` is not a declared order field, so recompute the truth from the API.
   const raw = await fetch(`https://${SHOP}/admin/api/2024-10/orders.json?status=any&limit=250`, {
     headers: { 'X-Shopify-Access-Token': TOKEN },
@@ -57,7 +56,7 @@ async function main() {
   const apiLast = raw.orders[raw.orders.length - 1].updated_at
   console.log(`  true max across page  = ${apiMax}`)
   console.log(`  OLD behaviour (last row) would have been = ${apiLast}`)
-  assert(Date.parse(next.updatedSince) === Date.parse(apiMax), 'watermark equals page max')
+  assert(Date.parse(since) === Date.parse(apiMax), 'since equals page max')
   assert(Date.parse(apiMax) !== Date.parse(apiLast), 'last row differs from max (bug was real)')
 
   // ── tags / gateways are comma strings, never arrays ─────────────────────────

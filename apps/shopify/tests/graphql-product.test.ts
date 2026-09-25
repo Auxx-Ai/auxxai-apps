@@ -1,5 +1,6 @@
 // apps/shopify/tests/graphql-product.test.ts
 
+import type { ConnectorQuery } from '@auxx/sdk/data-connectors'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   type GqlProduct,
@@ -74,8 +75,8 @@ const throttled = {
   },
 }
 
-function crawl(state: Record<string, unknown> = {}, mode: 'snapshot' | 'incremental' = 'snapshot') {
-  return shopifySync({ streamKey: 'product', mode, state, config: {}, connection })
+function crawl(cursor?: unknown, query: ConnectorQuery = {}) {
+  return shopifySync({ streamKey: 'product', query, cursor, config: {}, connection })
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -154,7 +155,7 @@ describe('toRawProduct', () => {
             media: null,
           }),
         ]),
-      }),
+      })
     )
     expect(raw).toMatchObject({
       title: null,
@@ -174,7 +175,7 @@ describe('toRawProduct', () => {
     })
     expect(() => toRawProduct(product({ legacyResourceId: '9007199254740993' }))).toThrow()
     expect(() =>
-      toRawProduct(product({ variants: page([variant(1, { legacyResourceId: 'x' })]) })),
+      toRawProduct(product({ variants: page([variant(1, { legacyResourceId: 'x' })]) }))
     ).toThrow()
   })
 
@@ -188,7 +189,7 @@ describe('toRawProduct', () => {
           }),
           variant(3, { inventoryItem: null }),
         ]),
-      }),
+      })
     )
     expect([...costs]).toEqual([
       ['501', '2.50'],
@@ -216,7 +217,7 @@ describe('shopifySync product stream', () => {
             ]),
           }),
         ],
-        'p1',
+        'p1'
       ),
     ])
     const result = await crawl()
@@ -243,25 +244,32 @@ describe('shopifySync product stream', () => {
     expect(variants.map((v) => v.unitCost)).toEqual([250, 250, 1235])
     expect(variants.map((v) => v.partKind)).toEqual(['finished_good', 'finished_good', 'service'])
     expect(variants.map((v) => v.option1)).toEqual(['C11', 'C12', 'C13'])
-    expect(result.nextState).toEqual({ cursor: { v: 3, after: 'p1' }, updatedSince: undefined })
+    expect(result.cursor).toEqual({ v: 3, after: 'p1' })
   })
 
-  it('never sends an updated_at term, even when handed incremental mode and a watermark', async () => {
+  it('crawls unbounded on an empty query and returns no since on the last page', async () => {
     const calls = stubGraphql([productsBody([product()])])
-    const result = await crawl({ updatedSince: '2026-08-01T00:00:00Z' }, 'incremental')
+    const result = await crawl()
     expect(calls[0]!.body.variables).toEqual({ first: 50, after: null, query: null })
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
+    expect(result.since).toBeUndefined()
+  })
+
+  it('refreshes products by id', async () => {
+    const calls = stubGraphql([productsBody([product()])])
+    await crawl(undefined, { ids: ['987654321'] })
+    expect(calls[0]!.body.variables).toEqual({ first: 50, after: null, query: '(id:987654321)' })
   })
 
   it('restarts the crawl from scratch on a legacy REST cursor', async () => {
     const calls = stubGraphql([productsBody([product()], 'p1')])
-    await crawl({ cursor: 'eyJsYXN0X2lkIjo0fQ' })
+    await crawl('eyJsYXN0X2lkIjo0fQ')
     expect(calls[0]!.body.variables).toEqual({ first: 50, after: null, query: null })
   })
 
   it('passes a v3 cursor as after', async () => {
     const calls = stubGraphql([productsBody([product()])])
-    await crawl({ cursor: { v: 3, after: 'p1' } })
+    await crawl({ v: 3, after: 'p1' })
     expect(calls[0]!.body.variables).toEqual({ first: 50, after: 'p1', query: null })
   })
 
@@ -289,11 +297,11 @@ describe('shopifySync product stream', () => {
       variantsBody([variant(2)], 'v2'),
       throttled,
     ])
-    const state = { cursor: { v: 3, after: 'p1' } }
-    const result = await crawl(state)
+
+    const result = await crawl({ v: 3, after: 'p1' })
     expect(result.records).toEqual([])
     expect(result.rateLimited).toEqual({ retryAfterMs: 2000 })
-    expect(result.nextState.cursor).toEqual({ v: 3, after: 'p1' })
+    expect(result.cursor).toBeUndefined()
   })
 
   it('drops a product deleted between the page and its variant follow-up', async () => {
@@ -303,7 +311,7 @@ describe('shopifySync product stream', () => {
     ])
     const result = await crawl()
     expect(result.records).toEqual([])
-    expect(result.nextState.backfillComplete).toBe(true)
+    expect(result.cursor).toBeUndefined()
   })
 
   it('throws on an unknown product status instead of skipping it', async () => {
@@ -316,13 +324,22 @@ describe('shopifySync steered product fetch', () => {
   function steer(resourceId = '55555') {
     return shopifySync({
       streamKey: 'product',
-      mode: 'incremental',
-      state: {},
+      query: { ids: [resourceId], idKind: 'inventoryItem' },
       config: {},
       connection,
-      triggerContext: { resourceId },
     })
   }
+
+  it('refuses an id kind it does not know', async () => {
+    await expect(
+      shopifySync({
+        streamKey: 'product',
+        query: { ids: ['1'], idKind: 'variant' },
+        config: {},
+        connection,
+      })
+    ).rejects.toThrow(/kind "variant"/)
+  })
 
   it('fetches the owning product in one query with the crawl selection', async () => {
     const calls = stubGraphql([
@@ -349,7 +366,7 @@ describe('shopifySync steered product fetch', () => {
     expect(calls[0]!.body.query).toContain('inventoryItem(id: $id)')
     expect(calls[0]!.body.query).toContain('...ProductFields')
     expect(calls[0]!.body.variables).toEqual({ id: 'gid://shopify/InventoryItem/55555' })
-    expect(result.nextState).toEqual({ backfillComplete: true })
+    expect(result.cursor).toBeUndefined()
     const fields = result.records[0]!.fields as Record<string, unknown>
     expect(fields.imageUrl).toBe(FEATURED)
     const variants = fields.variants as Array<Record<string, unknown>>
@@ -359,7 +376,7 @@ describe('shopifySync steered product fetch', () => {
 
   it('returns no records when the inventory item no longer resolves to a product', async () => {
     stubGraphql([{ body: { data: { inventoryItem: null } } }])
-    expect(await steer()).toEqual({ records: [], nextState: { backfillComplete: true } })
+    expect(await steer()).toEqual({ records: [] })
   })
 
   it('surfaces a throttle as rateLimited', async () => {

@@ -83,8 +83,7 @@ function mockOrdersFetch(orders: unknown[]) {
 async function syncLineItems(order: unknown) {
   const result = await shopifySync({
     streamKey: 'order',
-    mode: 'backfill',
-    state: {},
+    query: {},
     connection: {
       value: 'shpat_test',
       metadata: { connectionVariables: { shop: 'test-shop' } },
@@ -170,7 +169,7 @@ describe('line item name', () => {
       const [line] = await syncLineItems(order)
 
       expect(line!.name).toBe('Red T-Shirt')
-    },
+    }
   )
 
   it('binds name to line_item_name and nothing to line_item_description', () => {

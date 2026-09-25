@@ -30,7 +30,8 @@ export const templateConnector = defineDataConnector({
   streams: [
     {
       key: 'item',
-      syncMode: 'incremental',
+      // What `execute` can be asked for: one record by id, and deltas after the first read.
+      query: { ids: true, since: true },
       exampleRecord: {
         id: '1',
         name: 'Example item',

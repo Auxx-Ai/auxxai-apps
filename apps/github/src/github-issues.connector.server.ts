@@ -3,8 +3,8 @@
 // Server handler for the GitHub Issues connector. Runs inside the app-runtime
 // sandbox: fetches ONE page of issues from the REST /issues endpoint using the
 // bound connection, and returns the page's records + a flat `page=N` cursor. The
-// platform (Step 11 adapter) wraps that cursor into a resume checkpoint and
-// re-invokes for the next page until `backfillComplete`.
+// platform re-invokes with that cursor until a page returns none; the last page
+// returns `since` (max `updated_at`) for the next run's `query.since`.
 //
 // Why raw `fetch` (not the shared `githubApi` helper): that helper returns parsed
 // JSON with no response headers, but pagination needs the `Link` header's
@@ -105,7 +105,7 @@ function nextPage(linkHeader: string | null): string | undefined {
 export default async function githubIssuesSync(
   args: ConnectorExecuteArgs<GithubConfig>
 ): Promise<ConnectorFetchResult> {
-  const { streamKey, mode, state, connection, config } = args
+  const { streamKey, query, cursor, connection, config } = args
 
   if (streamKey !== 'issue') {
     throw new Error(`github.issues: unknown stream "${streamKey}"`)
@@ -117,17 +117,16 @@ export default async function githubIssuesSync(
   const { owner, repo } = parseRepo(config.repo)
 
   // Page oldest-`updated_at`-first so the last issue on the last page is the
-  // high-water mark; `since` filters incremental runs to that floor.
+  // high-water mark; `since` floors a delta run at the previous run's mark.
+  const since = typeof query.since === 'string' ? query.since : undefined
   const params = new URLSearchParams({
     state: 'all',
     sort: 'updated',
     direction: 'asc',
     per_page: String(PAGE_SIZE),
-    page: state.cursor ? String(state.cursor) : '1',
+    page: cursor ? String(cursor) : '1',
   })
-  if (mode === 'incremental' && state.updatedSince) {
-    params.set('since', String(state.updatedSince))
-  }
+  if (since) params.set('since', since)
 
   const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/issues?${params}`, {
     headers: {
@@ -138,31 +137,18 @@ export default async function githubIssuesSync(
     },
   })
   if (!res.ok) {
-    // Throttled → RETURN the signal (don't throw, don't sleep). The platform pauses
-    // the chain and re-enqueues after the wait; we hold the current page cursor so the
-    // throttled page is retried, not skipped.
+    // Throttled → RETURN the signal (don't throw, don't sleep); the platform retries
+    // this same cursor after the wait.
     const rateLimited = parseRateLimit(res)
-    if (rateLimited) {
-      return {
-        records: [],
-        nextState: { cursor: state.cursor, updatedSince: state.updatedSince },
-        rateLimited,
-      }
-    }
+    if (rateLimited) return { records: [], rateLimited }
     throw new Error(`github.issues: REST API responded ${res.status}`)
   }
 
   const issues = (await res.json()) as RawIssue[]
+  const records = issues.map(toRecord)
   const next = nextPage(res.headers.get('Link'))
-  // Ascending `updated_at` → the last issue carries the high-water mark.
-  const lastUpdated = issues[issues.length - 1]?.updated_at ?? state.updatedSince
+  if (next) return { records, cursor: next }
 
-  return {
-    records: issues.map(toRecord),
-    nextState: next
-      ? // More pages in this chain — advance the page cursor, hold the watermark.
-        { cursor: next, updatedSince: state.updatedSince }
-      : // Chain done — drop the cursor, advance the watermark for the next run.
-        { cursor: undefined, updatedSince: lastUpdated, backfillComplete: true },
-  }
+  // Ascending `updated_at` → the last issue carries the high-water mark.
+  return { records, since: issues[issues.length - 1]?.updated_at ?? since }
 }

@@ -9,7 +9,7 @@
 // Owned (not contributing): GitHub issues are their own entity type, not an
 // enrichment of an existing Contact. External id = the GitHub issue id
 // (`githubId`, `identity: true` on the entity); idempotent re-sync binds on it.
-// `incremental` so the backfill runs once then steady `since`-floored delta runs.
+// `query.since`: one full read, then steady `updated_at`-floored delta runs.
 
 import { defineDataConnector } from '@auxx/sdk/data-connectors'
 import { z } from '@auxx/sdk/tools'
@@ -53,8 +53,7 @@ export const githubIssuesConnector = defineDataConnector({
   streams: [
     {
       key: 'issue',
-      // `incremental`: backfill once, then steady `updated_at`-floored delta runs.
-      syncMode: 'incremental',
+      query: { since: true },
       mappings: [
         {
           // Root record — owned `issues`. Each field's `key` names a field

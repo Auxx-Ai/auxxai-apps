@@ -85,8 +85,7 @@ describe('the synthetic tax line key', () => {
 
     const result = await shopifySync({
       streamKey: 'order',
-      mode: 'backfill',
-      state: {},
+      query: {},
       connection: { value: 'shpat_test', metadata: { connectionVariables: { shop: 'test-shop' } } },
     } as never)
     const fields = result.records[0]!.fields as Record<string, unknown>

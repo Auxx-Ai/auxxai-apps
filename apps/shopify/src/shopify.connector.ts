@@ -92,20 +92,14 @@ export const shopifyConnector = defineDataConnector({
   // multiplexes all topics through this one triggerId — per-stream
   // `webhookTrigger.filter` discriminates on `triggerData.topic`).
   webhookTrigger: { triggerId: 'shopify.shopify-trigger' },
-  config: z.object({
-    payoutHistoryStartDate: z
-      .string()
-      .regex(/^(\d{4}-\d{2}-\d{2})?$/)
-      .optional()
-      .describe('Payout history start date (YYYY-MM-DD). Leave blank to import all payouts.'),
-  }),
+  config: z.object({}),
   streams: [
-    // Normalized financial fields and child records use the standard mapper. Incremental mode
-    // preserves the cursor between slices; the fetch deliberately revisits
-    // historical evidence to detect lifecycle and membership changes.
+    // Normalized financial fields and child records use the standard mapper. No `since`:
+    // every run re-reads from the history floor to detect lifecycle and membership changes.
     {
       key: 'payout',
-      syncMode: 'incremental',
+      // The payout's date; Shopify's `issuedAt` evidence is date-only (`issuedOn`).
+      query: { period: 'issuedOn' },
       mappings: [
         {
           rootPath: '',
@@ -178,7 +172,7 @@ export const shopifyConnector = defineDataConnector({
     },
     {
       key: 'balance_transaction',
-      syncMode: 'incremental',
+      query: { period: 'transactionDate' },
       mappings: [
         {
           rootPath: '',
@@ -222,13 +216,12 @@ export const shopifyConnector = defineDataConnector({
     // External id = Shopify customer id; `email` and `phone` are the secondary
     // identity-match keys, so an imported customer merges into an existing contact on
     // first link — phone included, because a phone-signup customer has no email.
-    // Incremental, like the other two streams: the customers endpoint honours
-    // `updated_at_min`, and a snapshot stream can never finish a large customer list
-    // because a snapshot backfill restarts from page one on every resume while the
-    // platform's per-run ingest ceiling parks it partway through.
+    // `since`, like orders: the customers search honours `updated_at`, and a snapshot stream
+    // can never finish a large customer list because a snapshot backfill restarts from page
+    // one on every resume while the platform's per-run ingest ceiling parks it partway through.
     {
       key: 'customer',
-      syncMode: 'incremental',
+      query: { ids: true, since: true },
       // Only customers who have ordered: a storefront account that never bought is
       // not a contact anyone works, and the order stream's embedded customer brings
       // a first-time buyer in on its own.
@@ -337,23 +330,25 @@ export const shopifyConnector = defineDataConnector({
       // retry for 48h and are then dropped for good, and none arrives at all if the app
       // was reinstalled, the connector was paused, or the product was deleted before
       // the connector existed. A crawl re-answers the question every night; a missed
-      // webhook is never redelivered. `reconcileOrphans` gates on this exact value,
-      // because absence only means deletion when the fetch saw everything.
+      // webhook is never redelivered. Reconciliation runs only after an unbounded `{}`
+      // query, because absence only means deletion when the fetch saw everything.
       //
       // Affordable here in a way it is not for orders/customers: the product catalog is
       // the small collection, the crawl RESUMES from its cursor when the per-run ingest
       // ceiling parks it (slice-orchestrator `resumable`), and `listBackfillRunIds`
       // spans those runs so a resumed crawl never archives what an earlier run saw.
-      // v9's brief always intended `variants → snapshot`; this is that, applied.
-      syncMode: 'snapshot',
+      // v9's brief always intended `variants → snapshot`; this is that, applied. No `since`
+      // is what makes it a snapshot; `ids` serves refresh and the webhook steer below.
+      query: { ids: true },
       // Webhook STEERING: an `inventory_levels/update` delivery carries the changed
       // inventory_item_id as `resourceId` (extractTriggerData) — the platform debounces
-      // same-item bursts, then re-invokes `execute` with `triggerContext.resourceId` for
-      // a targeted single-product partial fetch (the variants[] fan-out refreshes all
-      // sibling variants' quantities in the same page).
+      // same-item bursts, then fetches `{ ids: [resourceId], idKind: 'inventoryItem' }`, a
+      // targeted single-product fetch (the variants[] fan-out refreshes all sibling
+      // variants' quantities in the same page).
       webhookTrigger: {
         filter: { topic: 'inventory_levels/update' },
-        paths: ['resourceId'],
+        idPath: 'resourceId',
+        idKind: 'inventoryItem',
         debounceMs: 10_000,
       },
       mappings: [
@@ -463,8 +458,7 @@ export const shopifyConnector = defineDataConnector({
     // of that stand-down is out of this app's scope.
     {
       key: 'order',
-      syncMode: 'incremental',
-      periodField: 'createdAt',
+      query: { ids: true, period: 'createdAt', since: true },
       mappings: [
         {
           rootPath: '',
