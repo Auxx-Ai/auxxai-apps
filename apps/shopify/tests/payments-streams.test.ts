@@ -329,6 +329,9 @@ describe('bounded Shopify Payments source acquisition', () => {
       ['payout_cancellation', 'returned_transfer'],
       ['payout_cancel', 'unknown'],
       ['dispute', 'unknown'],
+      ['tax_adjustment_debit', 'tax_withheld'],
+      ['tax_adjustment_credit', 'tax_withheld'],
+      ['shop_cash_credit', 'charge'],
     ]) {
       expect(balanceEvidence({ ...transaction, type: providerType! })).toMatchObject({
         providerType,

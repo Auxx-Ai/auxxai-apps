@@ -146,6 +146,8 @@ describe('toRawBalanceTransaction', () => {
       ['ADJUSTMENT', 'adjustment', 'adjustment'],
       ['SHOPIFY_COLLECTIVE_DEBIT', 'shopify_collective_debit', 'unknown'],
       ['DISPUTE', 'dispute', 'unknown'],
+      ['TAX_ADJUSTMENT_DEBIT', 'tax_adjustment_debit', 'tax_withheld'],
+      ['SHOP_CASH_CREDIT', 'shop_cash_credit', 'charge'],
     ]) {
       const raw = toRawBalanceTransaction({ ...transactionNode, type: gql })
       expect(raw.type).toBe(providerType)
