@@ -248,7 +248,7 @@ describe('order stream paid instant and paying gateway (accounting plan 29 §3.1
 
     const first = await syncOrders()
     expect(calls[0]!.variables.first).toBe(25)
-    expect(first.cursor).toEqual({ v: 3, after: 'next-token' })
+    expect(first.cursor).toMatchObject({ v: 4, after: 'next-token' })
 
     await syncOrders(first.cursor)
     expect(calls[1]!.variables).toMatchObject({ first: 25, after: 'next-token' })
