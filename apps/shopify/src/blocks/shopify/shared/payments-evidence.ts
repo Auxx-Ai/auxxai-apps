@@ -72,6 +72,13 @@ export function balanceActivity(type: string) {
     case 'payout_failure':
     case 'payout_cancellation':
       return 'returned_transfer'
+    // Marketplace tax Shopify withholds from (debit) or returns to (credit) the payout.
+    case 'tax_adjustment_debit':
+    case 'tax_adjustment_credit':
+      return 'tax_withheld'
+    // Shopify funding the Shop Cash part of an order: settles like a card charge.
+    case 'shop_cash_credit':
+      return 'charge'
     default:
       return 'unknown'
   }
