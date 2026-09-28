@@ -39,11 +39,9 @@
  *
  * ## No `PayoutSource`
  *
- * Build plan §5.3, resolved: the registry path and this one are mutually
- * exclusive by construction. `assertLegacyPayoutIngestionOwner` refuses the
- * legacy writer once a connector holds an enabled `upsert` mapping into
- * `payout` / `processor_balance_entry` — which is precisely what
- * `affirm.connector.ts` declares. That refusal is the designed outcome.
+ * Build plan §5.3. The payout records this connector writes are the only
+ * payout record per settlement; the platform stamps and posts them in place
+ * (auxx-ai brief 114).
  */
 
 import type {
