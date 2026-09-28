@@ -56,9 +56,12 @@ export const ORDER_LIST_MAX = 250
 /** Page size of a nested-connection follow-up. */
 const FOLLOW_UP_FIRST = 100
 
-/** Orders page, oldest update first (plan §6.2). No `paymentTerms`: see D9. */
-export const ORDERS_QUERY = `query OrdersPage($first: Int!, $after: String, $query: String) {
-  orders(first: $first, after: $after, query: $query, sortKey: UPDATED_AT) {
+/** How the order stream sorts: a backfill newest created first, a delta oldest update first. */
+export const ORDERS_SORT = { newestFirst: 'CREATED_AT', ascending: 'UPDATED_AT' } as const
+
+/** Orders page (plan §6.2), sorted per `ORDERS_SORT`. No `paymentTerms`: see D9. */
+export const ORDERS_QUERY = `query OrdersPage($first: Int!, $after: String, $query: String, $sortKey: OrderSortKeys!, $reverse: Boolean!) {
+  orders(first: $first, after: $after, query: $query, sortKey: $sortKey, reverse: $reverse) {
     ${PAGE_INFO}
     nodes {
       id legacyResourceId name number email currencyCode

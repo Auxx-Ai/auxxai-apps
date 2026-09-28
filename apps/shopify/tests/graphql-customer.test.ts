@@ -116,11 +116,13 @@ describe('shopifySync customer stream', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0]!.url).toBe('https://test-shop.myshopify.com/admin/api/2026-07/graphql.json')
     expect(calls[0]!.body.query).toContain('customers(first: $first')
-    expect(calls[0]!.body.query).toContain('sortKey: UPDATED_AT')
+    expect(calls[0]!.body.query).toContain('sortKey: $sortKey, reverse: $reverse')
     expect(calls[0]!.body.variables).toEqual({
       first: 250,
       after: null,
       query: "updated_at:>='2026-08-01T00:00:00.000Z'",
+      sortKey: 'UPDATED_AT',
+      reverse: false,
     })
     expect(result.records).toEqual([
       {
@@ -137,6 +139,7 @@ describe('shopifySync customer stream', () => {
           total_spent: '1234.10',
           note: 'dealer',
           created_at: '2025-01-02T03:04:05Z',
+          updated_at: customer.updatedAt,
           tax_exempt: true,
           default_address: { city: 'Testville', province: 'Oregon', country: 'United States' },
         },
@@ -144,5 +147,37 @@ describe('shopifySync customer stream', () => {
     ])
     expect(result.cursor).toEqual({ v: 3, after: 'cursor-1' })
     expect(result.since).toBeUndefined()
+  })
+
+  it('crawls a backfill most recently active first, its period bounding updated_at', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-28T12:00:00Z'), toFake: ['Date'] })
+    try {
+      const calls = stubGraphql([
+        {
+          body: {
+            data: {
+              customers: { nodes: [customer], pageInfo: { hasNextPage: true, endCursor: 'c-1' } },
+            },
+          },
+        },
+      ])
+      const result = await shopifySync({
+        streamKey: 'customer',
+        query: { period: { from: '2026-01-01T00:00:00Z' } },
+        config: {},
+        connection,
+      })
+      expect(calls[0]!.body.variables).toEqual({
+        first: 250,
+        after: null,
+        query: "updated_at:>='2026-01-01T00:00:00.000Z'",
+        sortKey: 'UPDATED_AT',
+        reverse: true,
+      })
+      expect(result.cursor).toEqual({ v: 4, after: 'c-1', t0: '2026-09-28T11:55:00.000Z' })
+      expect(result.since).toBe('2026-09-28T11:55:00.000Z')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

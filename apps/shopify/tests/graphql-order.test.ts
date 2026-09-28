@@ -633,12 +633,14 @@ describe('shopifySync order stream', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0]!.url).toBe('https://test-shop.myshopify.com/admin/api/2026-07/graphql.json')
     expect(calls[0]!.body.query).toContain('orders(first: $first, after: $after, query: $query')
-    expect(calls[0]!.body.query).toContain('sortKey: UPDATED_AT')
+    expect(calls[0]!.body.query).toContain('sortKey: $sortKey, reverse: $reverse')
     expect(calls[0]!.body.query).not.toContain('paymentTerms')
     expect(calls[0]!.body.variables).toEqual({
       first: 25,
       after: null,
       query: "updated_at:>='2026-09-01T00:00:00.000Z'",
+      sortKey: 'UPDATED_AT',
+      reverse: false,
     })
     expect(result.cursor).toEqual({ v: 3, after: 'c-1' })
     expect(result.since).toBeUndefined()
@@ -687,5 +689,18 @@ describe('shopifySync order stream', () => {
       "created_at:>='2026-08-01T00:00:00.000Z' AND created_at:<'2026-09-01T00:00:00.000Z'"
     )
     expect(calls[1]!.body.variables.query).toBe('(id:1001 OR id:1002)')
+  })
+
+  it('crawls a backfill newest created first and returns t0 as since', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-28T12:00:00Z'), toFake: ['Date'] })
+    try {
+      const calls = stubGraphql([ordersPage([ORDER], 'c-1')])
+      const result = await syncOrders(undefined, {})
+      expect(calls[0]!.body.variables).toMatchObject({ sortKey: 'CREATED_AT', reverse: true })
+      expect(result.cursor).toEqual({ v: 4, after: 'c-1', t0: '2026-09-28T11:55:00.000Z' })
+      expect(result.since).toBe('2026-09-28T11:55:00.000Z')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

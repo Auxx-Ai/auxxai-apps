@@ -219,9 +219,11 @@ export const shopifyConnector = defineDataConnector({
     // `since`, like orders: the customers search honours `updated_at`, and a snapshot stream
     // can never finish a large customer list because a snapshot backfill restarts from page
     // one on every resume while the platform's per-run ingest ceiling parks it partway through.
+    // `period` is `updated_at`, so the history floor means "active since", not "signed up since";
+    // `limit`: the backfill runs most recently active first (history-window §3.3).
     {
       key: 'customer',
-      query: { ids: true, since: true },
+      query: { ids: true, period: 'updated_at', since: true, limit: true },
       // Only customers who have ordered: a storefront account that never bought is
       // not a contact anyone works, and the order stream's embedded customer brings
       // a first-time buyer in on its own.
@@ -458,7 +460,8 @@ export const shopifyConnector = defineDataConnector({
     // of that stand-down is out of this app's scope.
     {
       key: 'order',
-      query: { ids: true, period: 'createdAt', since: true },
+      // `limit`: the backfill runs newest created first (history-window §3.3).
+      query: { ids: true, period: 'createdAt', since: true, limit: true },
       mappings: [
         {
           rootPath: '',

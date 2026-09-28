@@ -13,7 +13,8 @@
 //
 // Every stream fetches exactly `args.query` (`searchQuery`, src/graphql/paged.ts),
 // returning ONE page of records plus a cursor; the platform re-invokes with it until
-// a page returns none, and a `since` stream's last page returns its max `updated_at`.
+// a page returns none. A `since` stream's backfill runs newest first and returns the
+// crawl's start (t0) as `since` on every page; a delta returns its max `updated_at`.
 // A throttle is surfaced as `rateLimited` (not thrown) so the platform pauses and
 // retries the same cursor.
 //
@@ -81,6 +82,7 @@ import { orderPaymentSourceFields } from '@auxx/sdk/financial-source'
 import { shopifyGraphql, shopifyHttp } from './graphql/client'
 import {
   CUSTOMERS_QUERY,
+  CUSTOMERS_SORT,
   type CustomersData,
   type GqlCustomer,
   toRawCustomer,
@@ -91,6 +93,7 @@ import {
   type GqlOrder,
   ORDERS_FIRST,
   ORDERS_QUERY,
+  ORDERS_SORT,
   type OrdersData,
   type RawOrderWithTransactions,
   toRawOrder,
@@ -224,6 +227,8 @@ function toCustomerRecord(c: RawCustomer): ConnectorRecord {
       total_spent: c.total_spent,
       note: c.note,
       created_at: c.created_at,
+      // The declared `query.period` path; a period re-import re-checks its bounds here.
+      updated_at: c.updated_at,
       // Resale/dealer exemption (plans/money/tasks/48-shopify-tax-data.md §4.4).
       // Emitted HERE as well as on the order's embedded customer: a contact the
       // customer stream syncs before it has ever ordered would otherwise carry
@@ -1563,7 +1568,9 @@ export default async function shopifySync(
         connection: (data) => data.customers,
         toRaw: toRawCustomer,
         toRecord: toCustomerRecord,
-        since: true,
+        since: CUSTOMERS_SORT,
+        // The declared period is "active since", so it bounds `updated_at`.
+        periodField: 'updated_at',
       })
     case 'order': {
       const shopDomain = shopifyHttp(args.connection).shopDomain
@@ -1576,7 +1583,7 @@ export default async function shopifySync(
         toRaw: toRawOrder,
         toRecord: (order) =>
           toOrderRecord(order, new Map([[String(order.id), order.transactions]]), shopDomain),
-        since: true,
+        since: ORDERS_SORT,
       })
     }
     case 'product':

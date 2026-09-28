@@ -4,9 +4,12 @@ import type { RawCustomer } from '../shopify.connector.server'
 import { legacyId } from './legacy-id'
 import type { GraphqlConnection } from './paged'
 
-/** Customers page, oldest update first (plan §6.4). */
-export const CUSTOMERS_QUERY = `query CustomersPage($first: Int!, $after: String, $query: String) {
-  customers(first: $first, after: $after, query: $query, sortKey: UPDATED_AT) {
+/** How the customer stream sorts: a backfill most recently active first, a delta ascending. */
+export const CUSTOMERS_SORT = { newestFirst: 'UPDATED_AT', ascending: 'UPDATED_AT' } as const
+
+/** Customers page (plan §6.4), sorted per `CUSTOMERS_SORT`. */
+export const CUSTOMERS_QUERY = `query CustomersPage($first: Int!, $after: String, $query: String, $sortKey: CustomerSortKeys!, $reverse: Boolean!) {
+  customers(first: $first, after: $after, query: $query, sortKey: $sortKey, reverse: $reverse) {
     pageInfo { hasNextPage endCursor }
     nodes {
       legacyResourceId firstName lastName note createdAt updatedAt taxExempt
