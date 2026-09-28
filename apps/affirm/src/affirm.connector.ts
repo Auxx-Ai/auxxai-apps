@@ -28,11 +28,8 @@
  * payment and `order_payment_source_count` would disagree with its own
  * children (build plan §8).
  *
- * ⚠️ Declaring an enabled `upsert` mapping into `payout` /
- * `processor_balance_entry` is exactly the condition under which
- * `assertLegacyPayoutIngestionOwner` refuses the legacy `PayoutSource` writer.
- * That is intended: the two paths are mutually exclusive by construction, and
- * this app registers no `PayoutSource` (build plan §5.3).
+ * This app registers no `PayoutSource` (build plan §5.3). The platform promotes
+ * the payout records written here into posted payouts (auxx-ai brief 114).
  */
 
 import { defineDataConnector } from '@auxx/sdk/data-connectors'
