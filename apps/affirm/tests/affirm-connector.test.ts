@@ -23,7 +23,7 @@
 
 import type { ConnectorQuery } from '@auxx/sdk/data-connectors'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { fetchAffirmStream } from '../src/affirm.connector.server'
+import { AFFIRM_HISTORY_FLOOR, fetchAffirmStream } from '../src/affirm.connector.server'
 
 // ---------------------------------------------------------------------------
 // A stubbed Affirm
@@ -274,8 +274,25 @@ describe('headers phase', () => {
     const open = await run('balance_transaction', {}, query)
     await run('balance_transaction', { cursor: open.cursor }, query)
 
-    expect(requests[0]!.searchParams.get('after')).toBeNull()
+    expect(requests[0]!.searchParams.get('after')).toBe(AFFIRM_HISTORY_FLOOR)
     expect(requests[0]!.searchParams.get('before')).toBe('2026-09-02')
+  })
+
+  it('sends the history floor when the query has no period, since Affirm defaults to recent only', async () => {
+    responses.push(
+      jsonResponse({ data: [], next_page: null }),
+      jsonResponse({ data: [], next_page: null })
+    )
+    for (const stream of ['payout', 'balance_transaction'] as const) {
+      const open = await run(stream, {}, {})
+      await run(stream, { cursor: open.cursor }, {})
+    }
+
+    expect(requests.map((r) => r.searchParams.get('after'))).toEqual([
+      AFFIRM_HISTORY_FLOOR,
+      AFFIRM_HISTORY_FLOOR,
+    ])
+    expect(requests.map((r) => r.searchParams.get('before'))).toEqual([null, null])
   })
 })
 
