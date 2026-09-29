@@ -264,7 +264,13 @@ function settlementCurrency(raw: AffirmSettlementSummary): string | undefined {
 }
 
 /** A settlement date window, `YYYY-MM-DD`, covering the query's UTC period. */
-type DateWindow = { after?: string; before?: string }
+type DateWindow = { after: string; before?: string }
+
+/**
+ * `after` when the platform sends no floor ("Everything"): with no `after`, Affirm returns
+ * only its recent default window, not full history. Affirm settled nothing before 2012.
+ */
+export const AFFIRM_HISTORY_FLOOR = '2012-01-01'
 
 /**
  * `after` is inclusive; `before` is unproven either way, so it lands `1 + slackDays` past
@@ -275,7 +281,7 @@ function periodWindow(query: ConnectorQuery, slackDays = 0): DateWindow {
   const from = query.period?.from ? Date.parse(query.period.from) : Number.NaN
   const to = query.period?.to ? Date.parse(query.period.to) : Number.NaN
   return {
-    after: Number.isFinite(from) ? utcDate(from) : undefined,
+    after: Number.isFinite(from) ? utcDate(from) : AFFIRM_HISTORY_FLOOR,
     before: Number.isFinite(to) ? utcDate(to - 1 + (1 + slackDays) * 86_400_000) : undefined,
   }
 }
