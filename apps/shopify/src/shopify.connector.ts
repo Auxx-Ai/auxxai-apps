@@ -599,16 +599,10 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'taxable', target: 'line_item_taxable' },
             { sourcePath: 'taxTotal', target: 'line_item_tax_total' },
             // `sku` / `vendor` bind nothing — the part already carries both.
-            // The fulfillment rollup, all app fields (§5.2/§7.3).
-            { sourcePath: 'fulfilledAt', appField: 'fulfilledAt' },
-            { sourcePath: 'lastFulfilledAt', appField: 'lastFulfilledAt' },
-            { sourcePath: 'fulfilledQuantity', appField: 'fulfilledQuantity' },
-            { sourcePath: 'shipmentCount', appField: 'shipmentCount' },
-            // ...and NATIVELY, the same three, into entity migration 137's
-            // fields (money plan 49 §8.4 decision 4). The app fields stay:
-            // `lastFulfilledAt`, `fulfillableQuantity` and `trackingNumber`
-            // have no native home, and dropping the app copies of these three
-            // would break every mapping already bound to them.
+            // The fulfillment rollup. First ship date, shipped qty and shipment
+            // count are native only (entity migration 137, money plan 49 §8.4);
+            // `lastFulfilledAt`, `fulfillableQuantity` and `trackingNumber` have
+            // no native home and stay app fields.
             //
             // The native trio is what lets auxx post an imported order at all.
             // 530 of 545 orders arrive already `fulfilled`, which hides the one
@@ -620,6 +614,7 @@ export const shopifyConnector = defineDataConnector({
             { sourcePath: 'fulfilledAt', target: 'line_item_fulfilled_at' },
             { sourcePath: 'fulfilledQuantity', target: 'line_item_fulfilled_qty' },
             { sourcePath: 'shipmentCount', target: 'line_item_shipment_count' },
+            { sourcePath: 'lastFulfilledAt', appField: 'lastFulfilledAt' },
             { sourcePath: 'fulfillableQuantity', appField: 'fulfillableQuantity' },
             { sourcePath: 'trackingNumber', appField: 'trackingNumber' },
           ],

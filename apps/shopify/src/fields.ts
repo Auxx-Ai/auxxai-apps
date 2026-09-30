@@ -45,9 +45,10 @@ import { defineFields } from '@auxx/sdk/fields'
  *   visible field in the table so a synced order's Shopify name can be a grid
  *   column / filter / saved view.
  * - `firstFulfilledAt` / `lastFulfilledAt` / `shipmentCount` / `isSplitShipment`
- *   (order) and `fulfilledAt` / `lastFulfilledAt` / `fulfilledQuantity` /
- *   `shipmentCount` / `fulfillableQuantity` / `trackingNumber` (line_item) —
- *   the fulfillment rollup. Shopify's summary, not a fact at auxx's grain: a
+ *   (order) and `lastFulfilledAt` / `fulfillableQuantity` / `trackingNumber`
+ *   (line_item) — the fulfillment rollup. A line's first ship date, shipped qty
+ *   and shipment count are native (`line_item_fulfilled_at` / `_qty` /
+ *   `_shipment_count`), not app fields. Shopify's summary, not a fact at auxx's grain: a
  *   line that ships twice has two ship dates and one DATETIME column holds
  *   one, so these are convenience columns rather than the (fulfillment, line)
  *   grain a real fulfillment entity would carry (§5.2, out of scope here).
@@ -314,53 +315,11 @@ export const shopifyFields = defineFields([
     },
   },
   {
-    key: 'fulfilledAt',
-    type: 'DATETIME',
-    targetEntity: 'line_item',
-    scope: 'connection',
-    name: 'Line Fulfilled At',
-    capabilities: {
-      hidden: true,
-      filterable: true,
-      sortable: true,
-      creatable: false,
-      updatable: false,
-    },
-  },
-  {
     key: 'lastFulfilledAt',
     type: 'DATETIME',
     targetEntity: 'line_item',
     scope: 'connection',
     name: 'Line Last Fulfilled At',
-    capabilities: {
-      hidden: true,
-      filterable: true,
-      sortable: true,
-      creatable: false,
-      updatable: false,
-    },
-  },
-  {
-    key: 'fulfilledQuantity',
-    type: 'NUMBER',
-    targetEntity: 'line_item',
-    scope: 'connection',
-    name: 'Line Fulfilled Qty',
-    capabilities: {
-      hidden: true,
-      filterable: true,
-      sortable: true,
-      creatable: false,
-      updatable: false,
-    },
-  },
-  {
-    key: 'shipmentCount',
-    type: 'NUMBER',
-    targetEntity: 'line_item',
-    scope: 'connection',
-    name: 'Line Shipments',
     capabilities: {
       hidden: true,
       filterable: true,
